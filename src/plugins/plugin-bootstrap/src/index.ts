@@ -1615,7 +1615,7 @@ const controlMessageHandler = async ({
 
 const events: PluginEvents = {
   [EventType.MESSAGE_RECEIVED]: [
-    async (payload: any) => {
+    async (payload: MessagePayload) => {
       if (!payload.callback) {
         payload.runtime.logger.error('No callback provided for message');
         return;
