@@ -23,6 +23,7 @@
     "@coinbase/cdp-core": "^0.0.45",
     "@coinbase/cdp-hooks": "^0.0.45",
     "@coinbase/cdp-react": "^0.0.45",
+    "@coinbase/cdp-sdk": "^1.38.4",
     "@elizaos/api-client": "workspace:*",
     "@elizaos/cli": "latest",
     "@elizaos/core": "latest",
