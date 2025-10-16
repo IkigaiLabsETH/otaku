@@ -8,6 +8,7 @@ import { SendModal } from './SendModal';
 import { TokenDetailModal } from './TokenDetailModal';
 import { NFTDetailModal } from './NFTDetailModal';
 import { elizaClient } from '../../../lib/elizaClient';
+import { getTokenIconBySymbol } from '../../../constants/chains';
 
 interface Token {
   symbol: string;
@@ -248,17 +249,12 @@ export function CDPWalletCard({ userId, walletAddress, onBalanceChange }: CDPWal
       );
     }
 
-    // Native tokens - use local SVGs
-    const nativeTokens: Record<string, string> = {
-      'ETH': 'assets/eth.svg',
-      'MATIC': 'assets/polygon.svg',
-      'POL': 'assets/polygon.svg',
-    };
-
-    if (nativeTokens[token.symbol]) {
+    // Try to get icon from constants
+    const iconPath = getTokenIconBySymbol(token.symbol);
+    if (iconPath) {
       return (
         <img 
-          src={nativeTokens[token.symbol]} 
+          src={iconPath} 
           alt={token.symbol} 
           className="w-full h-full object-contain p-0.5"
         />

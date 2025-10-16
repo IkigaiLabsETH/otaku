@@ -36,6 +36,7 @@ export interface Transaction {
   timestamp: number;
   blockNum: string;
   explorerUrl: string;
+  direction: 'sent' | 'received';
 }
 
 export interface WalletInfo {

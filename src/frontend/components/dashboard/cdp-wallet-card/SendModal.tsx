@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { elizaClient } from '../../../lib/elizaClient';
+import { getTokenIconBySymbol } from '../../../constants/chains';
 
 interface Token {
   symbol: string;
@@ -80,13 +81,10 @@ export function SendModal({ isOpen, onClose, tokens, userId, onSuccess }: SendMo
       return token.icon;
     }
     
-    // Fallback icons for native tokens
-    if (!token.contractAddress) {
-      if (token.chain === 'polygon') {
-        return '/assets/polygon.svg';
-      }
-      // ETH for base and ethereum
-      return '/assets/eth.svg';
+    // Try to get from constants by symbol
+    const iconPath = getTokenIconBySymbol(token.symbol);
+    if (iconPath) {
+      return iconPath;
     }
     
     return null;

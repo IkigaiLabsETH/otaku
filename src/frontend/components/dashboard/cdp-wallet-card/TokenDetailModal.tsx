@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Copy, Check, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '../../ui/button';
+import { getTokenIconBySymbol } from '../../../constants/chains';
 import { XAxis, YAxis, CartesianGrid, Area, AreaChart } from 'recharts';
 import {
   ChartConfig,
@@ -226,15 +227,10 @@ export function TokenDetailModal({ isOpen, onClose, token }: TokenDetailModalPro
                   return <img src={token.icon} alt={token.symbol} className="w-10 h-10 rounded-full" />;
                 }
                 
-                // Native tokens - use local SVGs
-                const nativeTokens: Record<string, string> = {
-                  'ETH': '/assets/eth.svg',
-                  'MATIC': '/assets/polygon.svg',
-                  'POL': '/assets/polygon.svg',
-                };
-                
-                if (nativeTokens[token.symbol]) {
-                  return <img src={nativeTokens[token.symbol]} alt={token.symbol} className="w-10 h-10 rounded-full" />;
+                // Try to get icon from constants
+                const iconPath = getTokenIconBySymbol(token.symbol);
+                if (iconPath) {
+                  return <img src={iconPath} alt={token.symbol} className="w-10 h-10 rounded-full" />;
                 }
                 
                 // Fallback: gray circle with first letter
