@@ -12,6 +12,7 @@ import { CDPWalletCard } from './components/dashboard/cdp-wallet-card';
 import AccountPage from './components/dashboard/account/page';
 import { SignInModal } from './components/auth/SignInModal';
 import { MobileHeader } from './components/dashboard/mobile-header';
+import { LoadingPanel } from './components/ui/loading-panel';
 import { MessageSquare } from 'lucide-react';
 import mockDataJson from './mock.json';
 import type { MockData } from './types/dashboard';
@@ -101,6 +102,19 @@ function App() {
   const [currentView, setCurrentView] = useState<'chat' | 'account' | 'settings'>('chat');
   const [totalBalance, setTotalBalance] = useState(0);
   const [isLoadingUserProfile, setIsLoadingUserProfile] = useState(true);
+
+  // Determine loading state and message
+  const getLoadingMessage = (): string[] | null => {
+    if (!isInitialized && import.meta.env.VITE_CDP_PROJECT_ID) {
+      return ['Connecting to Coinbase...', 'Setting up secure authentication'];
+    }
+    if (isSignedIn && isLoadingUserProfile) {
+      return ['Loading Profile...', 'Syncing user profile...'];
+    }
+    return null;
+  };
+
+  const loadingMessage = getLoadingMessage();
   const [userProfile, setUserProfile] = useState<{
     avatarUrl: string;
     displayName: string;
@@ -621,15 +635,8 @@ function App() {
         <SignInModal isOpen={!isSignedIn} />
       )}
       
-      {/* Loading User Profile Modal - Shows while user profile is being synced */}
-      {isSignedIn &&isLoadingUserProfile && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-card border-2 border-border rounded-lg p-8 flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            <p className="text-lg font-mono uppercase tracking-wider text-center">Loading Profile...</p>
-          </div>
-        </div>
-      )}
+      {/* Unified Loading Panel - Shows during initialization or profile loading */}
+      {loadingMessage && <LoadingPanel title="Initializing..." messages={loadingMessage} />}
       
       {/* Mobile Header */}
       <MobileHeader mockData={mockData} />
@@ -715,8 +722,7 @@ function App() {
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
                       <p className="mt-4 text-muted-foreground uppercase tracking-wider text-sm font-mono">
-                        {!isInitialized && import.meta.env.VITE_CDP_PROJECT_ID ? 'Initializing wallet...' :
-                         !userId ? 'Initializing user...' : 
+                        {!userId ? 'Initializing user...' : 
                          !connected ? 'Connecting to server...' :
                          isLoadingChannels ? 'Loading channels...' : 
                          'Select a chat'}

@@ -40,32 +40,6 @@ export function SignInModal({ isOpen }: SignInModalProps) {
   // Don't render if not open
   if (!isOpen) return null;
 
-  // Show loading state while CDP is initializing
-  if (!isInitialized) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-        <Card className="w-full max-w-md mx-4 bg-background">
-          <CardHeader className="flex items-center justify-between pl-3 pr-1">
-            <CardTitle className="flex items-center gap-2.5 text-sm font-medium uppercase">
-                <Bullet />
-                Initializing...
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="bg-pop">
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0052FF]"></div>
-              <p className="text-sm text-muted-foreground text-center">
-                Connecting to Coinbase...
-              </p>
-              <p className="text-xs text-muted-foreground text-center">
-                Setting up secure authentication
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Handle email submission (first step)
   const handleEmailSubmit = async () => {
