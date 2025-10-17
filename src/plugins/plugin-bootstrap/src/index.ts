@@ -486,8 +486,7 @@ const messageReceivedHandler = async ({
   onComplete,
 }: MessagePayload): Promise<void> => {
   // Set up timeout monitoring
-  const useMultiStep = runtime.getSetting('USE_MULTI_STEP');
-  console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ useMultiStep', useMultiStep);
+  const useMultiStep = true;
   const timeoutDuration = 60 * 60 * 1000; // 1 hour
   let timeoutId: NodeJS.Timeout | undefined = undefined;
 
