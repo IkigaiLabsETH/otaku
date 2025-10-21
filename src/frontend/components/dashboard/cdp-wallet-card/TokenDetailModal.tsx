@@ -459,7 +459,7 @@ export function TokenDetailModal({ isOpen, onClose, token }: TokenDetailModalPro
                     </AreaChart>
                   </ChartContainer>
                 ) : (
-                  <div className="flex items-center justify-center h-[40vh] min-h-[240px] text-muted-foreground">
+                  <div className="flex items-center justify-center h-[20vh] min-h-[200px] text-muted-foreground">
                     No price data available
                   </div>
                 )}
