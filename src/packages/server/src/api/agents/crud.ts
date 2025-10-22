@@ -64,8 +64,8 @@ export function createAgentCrudRouter(
     }
   });
 
-  // Get specific agent details
-  router.get('/:agentId', requireAuth, async (req: AuthenticatedRequest, res) => {
+  // Get specific agent details (public)
+  router.get('/:agentId', async (req: express.Request, res) => {
     const agentId = validateUuid(req.params.agentId);
     if (!agentId) {
       return sendError(res, 400, 'INVALID_ID', 'Invalid agent ID format');
@@ -81,8 +81,19 @@ export function createAgentCrudRouter(
       }
 
       const runtime = elizaOS.getAgent(agentId);
+      // Sanitize sensitive fields before returning publicly
+      const { settings, ...rest } = agent as any;
+      const safeSettings = settings
+        ? {
+            ...settings,
+            // Never expose secrets
+            secrets: undefined,
+          }
+        : undefined;
+
       const response = {
-        ...agent,
+        ...rest,
+        ...(safeSettings ? { settings: safeSettings } : {}),
         status: runtime ? 'active' : 'inactive',
       };
 
