@@ -343,7 +343,6 @@ export function createChannelsRouter(
   // GET /central-servers/:serverId/channels
   (router as any).get(
     '/central-servers/:serverId/channels',
-    requireAuthenticated(),
     async (req: express.Request, res: express.Response) => {
       const serverId =
         req.params.serverId === DEFAULT_SERVER_ID

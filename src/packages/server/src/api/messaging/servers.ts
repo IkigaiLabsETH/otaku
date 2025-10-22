@@ -12,8 +12,7 @@ const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID;
 export function createServersRouter(serverInstance: AgentServer): express.Router {
   const router = express.Router();
 
-  // Apply authentication to all server routes
-  router.use(requireAuthOrApiKey);
+  // NOTE: Do NOT apply global auth here. Keep read-only endpoints public for UI and services.
 
   // GET /central-servers
   (router as any).get('/central-servers', async (_req: AuthenticatedRequest, res: express.Response) => {
@@ -30,7 +29,7 @@ export function createServersRouter(serverInstance: AgentServer): express.Router
   });
 
   // POST /servers - Create a new server
-  (router as any).post('/servers', async (req: AuthenticatedRequest, res: express.Response) => {
+  (router as any).post('/servers', requireAuthOrApiKey, async (req: AuthenticatedRequest, res: express.Response) => {
     const { id, name, sourceType, sourceId, metadata } = req.body;
 
     if (!name || !sourceType) {
@@ -65,6 +64,7 @@ export function createServersRouter(serverInstance: AgentServer): express.Router
   // POST /servers/:serverId/agents - Add agent to server
   (router as any).post(
     '/servers/:serverId/agents',
+    requireAuthOrApiKey,
     async (req: AuthenticatedRequest, res: express.Response) => {
       const serverId =
         req.params.serverId === DEFAULT_SERVER_ID
@@ -112,6 +112,7 @@ export function createServersRouter(serverInstance: AgentServer): express.Router
   // DELETE /servers/:serverId/agents/:agentId - Remove agent from server
   (router as any).delete(
     '/servers/:serverId/agents/:agentId',
+    requireAuthOrApiKey,
     async (req: AuthenticatedRequest, res: express.Response) => {
       const serverId =
         req.params.serverId === DEFAULT_SERVER_ID
