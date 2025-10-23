@@ -34,9 +34,6 @@ export function convertActionMessageToToolPart(message: any): ToolPart {
   // Create input data from available action properties
   const inputData: Record<string, unknown> = {}
   inputData.input = rawMessage?.actionResult?.input || {};
-  // if (rawMessage.actions) inputData.actions = rawMessage.actions
-  // if (rawMessage.action) inputData.action = rawMessage.action
-  // if (rawMessage.thought) inputData.thought = rawMessage.thought
 
   // Create output data based on status and content
   const outputData: Record<string, unknown> = {}
@@ -44,7 +41,6 @@ export function convertActionMessageToToolPart(message: any): ToolPart {
     outputData.text = rawMessage.text || message.content
   }
   if (actionStatus) outputData.status = actionStatus
-  // if (rawMessage.thought) outputData.thought = rawMessage.thought
   if (rawMessage.actionResult) outputData.result = rawMessage.actionResult
 
   // Handle error cases
