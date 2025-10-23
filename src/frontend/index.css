@@ -179,6 +179,9 @@
   [role="checkbox"],
   [role="radio"],
   [role="switch"],
+  [role="combobox"],
+  [role="listbox"],
+  [role="gridcell"],
   label,
   select,
   input[type="checkbox"],
@@ -188,7 +191,7 @@
   input[type="reset"],
   input[type="file"],
   summary,
-  [onclick],
+  details,
   .cursor-pointer {
     cursor: pointer;
   }
@@ -196,8 +199,21 @@
   /* Ensure disabled elements don't show pointer cursor */
   button:disabled,
   a:disabled,
+  [aria-disabled="true"],
   [disabled] {
     cursor: not-allowed;
+  }
+
+  /* Ensure text inputs don't get pointer cursor */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="url"],
+  input[type="tel"],
+  input[type="number"],
+  textarea {
+    cursor: text;
   }
 }
 
