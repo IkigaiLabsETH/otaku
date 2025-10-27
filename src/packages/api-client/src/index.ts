@@ -14,6 +14,7 @@ export * from './types/server';
 export * from './types/system';
 export * from './types/sessions';
 export * from './types/runs';
+export * from './types/jobs';
 
 // Services (for advanced usage)
 export { AgentsService } from './services/agents';
