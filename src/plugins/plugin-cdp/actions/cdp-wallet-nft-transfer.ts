@@ -142,6 +142,14 @@ export const cdpWalletNftTransfer: ActionWithParams = {
       const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
       const params = composedState?.data?.actionParams || {};
 
+      // Store input parameters early for debugging (even if validation fails)
+      const inputParams = {
+        to: params?.to,
+        contractAddress: params?.contractAddress,
+        tokenId: params?.tokenId,
+        network: params?.network,
+      };
+
       // Validate required parameters
       const toParam = params?.to?.trim();
       const contractAddressParam = params?.contractAddress?.trim();
@@ -155,8 +163,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "missing_required_parameter",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "missing_required_parameter", details: errorMsg }
@@ -172,8 +180,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "invalid_address",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "invalid_address", details: errorMsg }
@@ -188,8 +196,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "missing_required_parameter",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "missing_required_parameter", details: errorMsg }
@@ -205,8 +213,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "invalid_address",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "invalid_address", details: errorMsg }
@@ -221,8 +229,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "missing_required_parameter",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "missing_required_parameter", details: errorMsg }
@@ -237,8 +245,8 @@ export const cdpWalletNftTransfer: ActionWithParams = {
           text: `❌ ${errorMsg}`,
           success: false,
           error: "missing_required_parameter",
-          input: params,
-        } as ActionResult & { input: typeof params };
+          input: inputParams,
+        } as ActionResult & { input: typeof inputParams };
         callback?.({ 
           text: errorResult.text,
           content: { error: "missing_required_parameter", details: errorMsg }
@@ -252,14 +260,6 @@ export const cdpWalletNftTransfer: ActionWithParams = {
         to: toParam as `0x${string}`,
         contractAddress: contractAddressParam,
         tokenId: tokenIdParam,
-      };
-
-      // Store input parameters for return
-      const inputParams = {
-        to: transferParams.to,
-        contractAddress: transferParams.contractAddress,
-        tokenId: transferParams.tokenId,
-        network: transferParams.network,
       };
 
       logger.info(`[USER_WALLET_NFT_TRANSFER] NFT transfer parameters: ${JSON.stringify(transferParams)}`);
@@ -354,15 +354,26 @@ export const cdpWalletNftTransfer: ActionWithParams = {
       
       const errorText = `❌ ${errorMessage}`;
       
-      // Try to capture input params even in failure
-      const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
-      const params = composedState?.data?.actionParams || {};
-      const failureInputParams = {
-        to: params?.to,
-        contractAddress: params?.contractAddress,
-        tokenId: params?.tokenId,
-        network: params?.network,
-      };
+      // Try to capture input params for debugging (in case error happened very early)
+      let failureInputParams;
+      try {
+        const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
+        const params = composedState?.data?.actionParams || {};
+        failureInputParams = {
+          to: params?.to,
+          contractAddress: params?.contractAddress,
+          tokenId: params?.tokenId,
+          network: params?.network,
+        };
+      } catch (stateError) {
+        // If we can't get state, use empty object
+        failureInputParams = {
+          to: undefined,
+          contractAddress: undefined,
+          tokenId: undefined,
+          network: undefined,
+        };
+      }
       
       callback?.({
         text: errorText,
