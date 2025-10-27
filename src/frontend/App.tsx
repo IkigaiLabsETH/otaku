@@ -171,7 +171,7 @@ function App() {
       const result = await elizaClient.agents.listAgents();
       return result.agents;
     },
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 
   const agentId = agentsData?.[0]?.id;
@@ -298,7 +298,7 @@ function App() {
       return await elizaClient.agents.getAgent(agentId);
     },
     enabled: !!agentId,
-    refetchInterval: 10000,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
   });
 
   // Connect to socket
