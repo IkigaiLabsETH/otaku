@@ -169,17 +169,10 @@ export const recentMessagesProvider: Provider = {
         : false;
 
       // Format recent messages and posts in parallel, using only dialogue messages
-      const [formattedRecentMessages, formattedRecentPosts] = await Promise.all([
-        formatMessages({
-          messages: dialogueMessages,
-          entities: entitiesData,
-        }),
-        formatPosts({
-          messages: dialogueMessages,
-          entities: entitiesData,
-          conversationHeader: false,
-        }),
-      ]);
+      const formattedRecentMessages = formatMessages({
+        messages: dialogueMessages,
+        entities: entitiesData,
+      });
 
       // Format action results separately
       let actionResultsText = '';
@@ -235,12 +228,6 @@ export const recentMessagesProvider: Provider = {
           : '';
       }
 
-      // Create formatted text with headers
-      const recentPosts =
-        formattedRecentPosts && formattedRecentPosts.length > 0
-          ? addHeader('# Posts in Thread', formattedRecentPosts)
-          : '';
-
       const recentMessages =
         formattedRecentMessages && formattedRecentMessages.length > 0
           ? addHeader('# Conversation Messages', formattedRecentMessages)
@@ -249,7 +236,6 @@ export const recentMessagesProvider: Provider = {
       // If there are no messages at all, and no current message to process, return a specific message.
       // The check for dialogueMessages.length === 0 ensures we only show this if there's truly nothing.
       if (
-        !recentPosts &&
         !recentMessages &&
         dialogueMessages.length === 0 &&
         !message.content.text
@@ -434,7 +420,6 @@ export const recentMessagesProvider: Provider = {
       };
 
       const values = {
-        recentPosts,
         recentMessages,
         recentMessageInteractions,
         recentPostInteractions,
@@ -446,11 +431,11 @@ export const recentMessagesProvider: Provider = {
 
       // Combine all text sections
       const text = [
-        isPostFormat ? recentPosts : recentMessages,
+        recentMessages,
         actionResultsText, // Include action results in the text output
         // Only add received message and focus headers if there are messages or a current message to process
-        recentMessages || recentPosts || message.content.text ? receivedMessageHeader : '',
-        recentMessages || recentPosts || message.content.text ? focusHeader : '',
+        recentMessages || message.content.text ? receivedMessageHeader : '',
+        recentMessages || message.content.text ? focusHeader : '',
       ]
         .filter(Boolean)
         .join('\n\n');
