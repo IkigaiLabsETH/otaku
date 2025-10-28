@@ -498,7 +498,7 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
       <CardHeader className="flex items-center justify-between pl-3 pr-1">
         <CardTitle className="flex items-center gap-2.5 text-sm font-medium uppercase">
           <Bullet />
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1">
             Wallet
             {/* Copy Address Popup */}
             <div 
