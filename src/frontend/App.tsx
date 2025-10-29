@@ -107,6 +107,7 @@ function App() {
     displayName: string;
     bio: string;
     email: string;
+    phoneNumber?: string;
     walletAddress: string;
     memberSince: string;
   } | null>(null);
@@ -212,11 +213,6 @@ function App() {
           if (error?.status === 404 || error?.code === 'NOT_FOUND') {
             console.log(' Creating new user entity in database...');
             
-            console.log(' CDP provided username:', cdpUsername || '(not found)');
-            console.log(' CDP provided email:', cdpEmail || '(not found)');
-            console.log(' Saving to database - Username:', finalUsername);
-            console.log(' Saving to database - Email:', finalEmail);
-            
             entity = await elizaClient.entities.createEntity({
               id: userId as UUID,
               agentId: agentId as UUID,
@@ -238,6 +234,7 @@ function App() {
               displayName: entity.metadata?.displayName || finalUsername,
               bio: entity.metadata?.bio || 'DeFi Enthusiast • Blockchain Explorer',
               email: entity.metadata?.email || finalEmail,
+              phoneNumber: entity.metadata?.phoneNumber || phoneNumber,
               walletAddress,
               memberSince: entity.metadata?.createdAt || new Date().toISOString(),
             });
@@ -283,6 +280,7 @@ function App() {
           displayName: entity.metadata?.displayName || finalUsername || 'User',
           bio: entity.metadata?.bio || 'DeFi Enthusiast • Blockchain Explorer',
           email: finalEmail || '',
+          phoneNumber: entity.metadata?.phoneNumber || '',
           walletAddress: walletAddress || '',
           memberSince: entity.metadata?.createdAt || new Date().toISOString(),
         });
