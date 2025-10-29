@@ -279,10 +279,78 @@ interface JobResult {
 
 ## Notes
 
+- **x402 Payment Required**: This endpoint requires payment via the x402 protocol
+  - Cost: $0.02 per request (0.02 USDC)
+  - Supported networks: Base and Polygon
+  - Payment verification: Uses Coinbase Facilitator
+  - Include payment proof in `x-payment` header with transaction hash
+  - Specify network in `x-payment-network` header (base or polygon)
 - Jobs are automatically cleaned up after expiration
 - Default timeout is 30 seconds, maximum is 5 minutes
 - Jobs use temporary channels that are created and managed automatically
 - The system maintains a maximum of 10,000 jobs in memory
 - Jobs are ideal for stateless, one-off interactions
 - For ongoing conversations, consider using the Sessions API instead
+
+## x402 Payment Integration
+
+The Jobs endpoint uses Coinbase's x402 protocol for onchain payments. To use this endpoint:
+
+1. **Make initial request**: Send POST request to `/api/messaging/jobs`
+2. **Receive 402 response**: If payment is required, you'll receive a 402 Payment Required response with payment details
+3. **Make payment**: Submit 0.02 USDC payment on Base or Polygon network
+4. **Retry with payment proof**: Include the transaction hash in the `x-payment` header and network in `x-payment-network` header
+
+### Example Payment Flow
+
+```typescript
+// Initial request (may return 402)
+const response = await fetch('https://api.example.com/api/messaging/jobs', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    userId: 'user-uuid',
+    content: 'Research topic: AI trends',
+  }),
+});
+
+if (response.status === 402) {
+  const paymentInfo = await response.json();
+  // paymentInfo.payment contains network options and recipient address
+  
+  // Make payment (using x402-fetch or CDP wallet)
+  const txHash = await makePayment({
+    network: 'base',
+    recipient: paymentInfo.payment[0].recipient,
+    amount: paymentInfo.payment[0].amount,
+  });
+  
+  // Retry with payment proof
+  const job = await fetch('https://api.example.com/api/messaging/jobs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-payment': txHash,
+      'x-payment-network': 'base',
+    },
+    body: JSON.stringify({
+      userId: 'user-uuid',
+      content: 'Research topic: AI trends',
+    }),
+  });
+}
+```
+
+### Agent Capabilities
+
+This endpoint provides access to AI agents with the following capabilities:
+- Research and information gathering
+- News analysis and summarization
+- Data processing and analysis
+- Content generation and summarization
+- Question answering and knowledge retrieval
+
+For more information about x402 protocol and registration, visit:
+- [x402scan Registration](https://www.x402scan.com/resources/register)
+- [x402 Documentation](https://docs.cdp.coinbase.com/x402/quickstart-for-sellers)
 

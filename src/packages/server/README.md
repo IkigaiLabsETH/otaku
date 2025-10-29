@@ -96,6 +96,27 @@ server.start(3000);
 - `POST /api/agents/:agentId/memory` - Add to agent memory
 - `DELETE /api/agents/:agentId/memory/:memoryId` - Remove memory
 
+### Jobs API (x402 Payment Enabled)
+
+- `POST /api/messaging/jobs` - Create a job (requires x402 payment: $0.02 USDC)
+- `GET /api/messaging/jobs/:jobId` - Get job status
+- `GET /api/messaging/jobs` - List jobs
+- `GET /api/messaging/jobs/health` - Jobs API health check
+
+**x402 Payment Information:**
+- Cost: $0.02 per request (0.02 USDC)
+- Supported networks: Base, Polygon
+- Payment verification: Uses Coinbase Facilitator
+- Registration: Register your service at [x402scan](https://www.x402scan.com/resources/register)
+- Documentation: [x402 Quickstart for Sellers](https://docs.cdp.coinbase.com/x402/quickstart-for-sellers)
+
+**Agent Capabilities:**
+- Research and information gathering
+- News analysis and summarization
+- Data processing and analysis
+- Content generation and summarization
+- Question answering and knowledge retrieval
+
 ### System
 
 - `GET /api/health` - Health check endpoint
@@ -201,6 +222,9 @@ The server respects these environment variables:
 - `SQLITE_PATH` - Path to SQLite database file
 - `LOG_LEVEL` - Logging level (debug, info, warn, error)
 - `CORS_ORIGIN` - CORS allowed origins
+- `X402_RECIPIENT_ADDRESS` - Wallet address for receiving x402 payments (defaults to `COINBASE_WALLET_ADDRESS` if set)
+- `COINBASE_WALLET_ADDRESS` - Coinbase wallet address (used as fallback for x402 recipient)
+- `X402_FACILITATOR_URL` - Custom Coinbase Facilitator URL (optional, defaults to official facilitator)
 
 ### Error Monitoring (Sentry)
 

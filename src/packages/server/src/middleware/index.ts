@@ -37,3 +37,10 @@ export {
   requireChannelParticipant,
   requireAuthenticated,
 } from './validation';
+
+// x402 Payment middleware
+export {
+  createX402PaymentMiddleware,
+  type X402PaymentConfig,
+  type X402AuthenticatedRequest,
+} from './x402-payment';

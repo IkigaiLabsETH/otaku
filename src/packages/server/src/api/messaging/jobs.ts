@@ -16,9 +16,7 @@ import {
   type Job,
 } from '../../types/jobs';
 import internalMessageBus from '../../bus';
-
-// TODO: Re-enable authentication by uncommenting:
-// import { requireAuthOrApiKey, type AuthenticatedRequest } from '../../middleware';
+import { createX402PaymentMiddleware } from '../../middleware/x402-payment';
 
 const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID;
 const DEFAULT_JOB_TIMEOUT_MS = 30000; // 30 seconds
@@ -157,14 +155,41 @@ export function createJobsRouter(
     logger.info('[Jobs API] Router cleanup completed');
   };
 
+  // x402 Payment configuration for jobs endpoint
+  // Price: $0.02 per request, supported on Base and Polygon networks
+  // Using Coinbase Facilitator for payment verification
+  const x402PaymentConfig = {
+    price: 0.02, // $0.02 per request
+    networks: ['base', 'polygon'] as const,
+    recipientAddress: process.env.X402_RECIPIENT_ADDRESS || process.env.COINBASE_WALLET_ADDRESS || '0x0000000000000000000000000000000000000000',
+    facilitatorUrl: process.env.X402_FACILITATOR_URL,
+  };
+
+  // Create x402 payment middleware
+  const x402PaymentMiddleware = createX402PaymentMiddleware(x402PaymentConfig);
+
   /**
    * Create a new job (one-off message to agent)
    * POST /api/messaging/jobs
-   * TODO: Re-enable authentication - temporarily disabled for testing
+   * 
+   * This endpoint accepts x402 payments for agent interactions.
+   * Payment is required: $0.02 per request via USDC on Base or Polygon networks.
+   * 
+   * Agent Capabilities:
+   * - Research and information gathering
+   * - News analysis and summarization
+   * - Data processing and analysis
+   * - Content generation and summarization
+   * - Question answering and knowledge retrieval
+   * 
+   * This service uses Coinbase Facilitator for payment verification and settlement.
+   * Clients should include payment proof in the x-payment header.
+   * 
+   * @requires x402 payment ($0.02 USDC on Base or Polygon)
    */
   router.post(
     '/jobs',
-    // requireAuthOrApiKey, // TEMPORARILY DISABLED
+    x402PaymentMiddleware,
     async (req: express.Request, res: express.Response) => {
       try {
         const body = req.body;
