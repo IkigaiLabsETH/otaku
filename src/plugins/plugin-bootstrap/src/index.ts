@@ -1249,7 +1249,6 @@ async function runMultiStepCore({ runtime, message, state, callback: _callback }
   }
 
   accumulatedState = await runtime.composeState(message, ['RECENT_MESSAGES', 'ACTION_STATE']);
-  if (!accumulatedState.data) accumulatedState.data = {} as any;
   accumulatedState.data.actionResults = traceActionResult;
 
   const summaryPrompt = composePromptFromState({
