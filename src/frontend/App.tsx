@@ -18,7 +18,7 @@ import { ModalProvider } from './contexts/ModalContext';
 import { MessageSquare, Info } from 'lucide-react';
 import mockDataJson from './mock.json';
 import type { MockData } from './types/dashboard';
-import { resolveCdpUserInfo } from '@/lib/cdpUser';
+import { resolveCdpUserInfo, type CdpUser } from '@/lib/cdpUser';
 import { UUID } from '@elizaos/core';
 
 const mockData = mockDataJson as MockData;
@@ -34,7 +34,7 @@ const mockData = mockDataJson as MockData;
 async function authenticateUser(
   email: string,
   username: string, 
-  currentUser?: any
+  currentUser?: CdpUser
 ): Promise<{ userId: string; token: string }> {
   try {
     console.log(' Authenticating with backend...');
@@ -149,7 +149,7 @@ function App() {
     }
 
     // If user is not signed in, clear state and show sign-in modal
-    if (!isSignedIn || !userEmail) {
+    if (!isSignedIn) {
       console.log(' User not signed in, waiting for authentication...');
       setUserId(null);
       elizaClient.clearAuthToken();
@@ -159,7 +159,12 @@ function App() {
     // User is signed in with CDP, authenticate with backend
     async function initAuth() {
       try {
-        const { userId, token } = await authenticateUser(userEmail as string, userName || 'User', currentUser);
+        // Resolve email/username for auth, with robust fallbacks for SMS-only users
+        const { email: resolvedEmail, username: resolvedUsername } = resolveCdpUserInfo(currentUser as CdpUser | undefined, { isSignedIn: true });
+        const emailForAuth = resolvedEmail || `${currentUser?.userId}@cdp.local`;
+        const usernameForAuth = resolvedUsername || (emailForAuth ? emailForAuth.split('@')[0] : 'User');
+
+        const { userId, token } = await authenticateUser(emailForAuth, usernameForAuth, currentUser);
         setUserId(userId);
       } catch (error) {
         console.error(' Failed to authenticate:', error);
@@ -181,9 +186,9 @@ function App() {
 
   const agentId = agentsData?.[0]?.id;
 
-  // Sync user entity whenever userId, wallet address, or email changes
+  // Sync user entity whenever userId or agent changes
   useEffect(() => {
-    if (!userId || !agentId || !userEmail) {
+    if (!userId || !agentId) {
       // If any required data is missing, keep loading
       setIsLoadingUserProfile(true);
       return;
@@ -196,23 +201,20 @@ function App() {
 
         const wallet = await elizaClient.cdp.getOrCreateWallet(userId);
         const walletAddress = wallet.address;
+        // Resolve CDP user info with fallbacks (works for SMS-only signups)
+        const { email: cdpEmail, username: cdpUsername, phoneNumber } = resolveCdpUserInfo(currentUser as CdpUser | undefined, { isSignedIn: true });
+        const finalEmail = cdpEmail || userEmail || `${currentUser?.userId}@cdp.local`;
+        const finalUsername = cdpUsername || (cdpEmail ? cdpEmail.split('@')[0] : userName) || 'User';
         
         // Try to get existing entity
         let entity;
         try {
-          entity = await elizaClient.entities.getEntity(userId as any);
+          entity = await elizaClient.entities.getEntity(userId as UUID);
           console.log(' Found existing user entity in database');
         } catch (error: any) {
           // Entity doesn't exist, create it
           if (error?.status === 404 || error?.code === 'NOT_FOUND') {
             console.log(' Creating new user entity in database...');
-            
-            // Extract email and username using shared helper (DRY)
-            const { email: cdpEmail, username: cdpUsername } = resolveCdpUserInfo(currentUser as any, { isSignedIn: true });
-            
-            // Use extracted values with fallbacks
-            const finalEmail = cdpEmail || userEmail || `${currentUser?.userId}@cdp.local`;
-            const finalUsername = cdpUsername || (cdpEmail ? cdpEmail.split('@')[0] : userName) || 'User';
             
             console.log(' CDP provided username:', cdpUsername || '(not found)');
             console.log(' CDP provided email:', cdpEmail || '(not found)');
@@ -220,12 +222,13 @@ function App() {
             console.log(' Saving to database - Email:', finalEmail);
             
             entity = await elizaClient.entities.createEntity({
-              id: userId as any,
-              agentId: agentId as any,
+              id: userId as UUID,
+              agentId: agentId as UUID,
               names: [finalUsername],
               metadata: {
                 avatarUrl: '/avatars/user_krimson.png',
                 email: finalEmail,
+                phoneNumber,
                 walletAddress,
                 displayName: finalUsername,
                 bio: 'DeFi Enthusiast • Blockchain Explorer',
@@ -254,18 +257,20 @@ function App() {
           !entity.metadata?.email ||
           !entity.metadata?.walletAddress ||
           !entity.metadata?.bio ||
+          (phoneNumber && entity.metadata?.phoneNumber !== phoneNumber) ||
           (walletAddress && entity.metadata?.walletAddress !== walletAddress) ||
-          (userEmail && entity.metadata?.email !== userEmail);
+          (finalEmail && entity.metadata?.email !== finalEmail);
 
         if (needsUpdate) {
           console.log(' Updating user entity metadata...');
-          const updated = await elizaClient.entities.updateEntity(userId as any, {
+          const updated = await elizaClient.entities.updateEntity(userId as UUID, {
             metadata: {
               ...entity.metadata,
               avatarUrl: entity.metadata?.avatarUrl || '/avatars/user_krimson.png',
-              email: userEmail || entity.metadata?.email || '',
+              email: finalEmail || entity.metadata?.email || '',
+              phoneNumber: phoneNumber || entity.metadata?.phoneNumber || undefined,
               walletAddress: walletAddress || entity.metadata?.walletAddress || '',
-              displayName: entity.metadata?.displayName || userName || 'User',
+              displayName: entity.metadata?.displayName || finalUsername || 'User',
               bio: entity.metadata?.bio || 'DeFi Enthusiast • Blockchain Explorer',
               updatedAt: new Date().toISOString(),
             },
@@ -279,9 +284,9 @@ function App() {
         // Set user profile state from entity
         setUserProfile({
           avatarUrl: entity.metadata?.avatarUrl || '/avatars/user_krimson.png',
-          displayName: entity.metadata?.displayName || userName || 'User',
+          displayName: entity.metadata?.displayName || finalUsername || 'User',
           bio: entity.metadata?.bio || 'DeFi Enthusiast • Blockchain Explorer',
-          email: userEmail || '',
+          email: finalEmail || '',
           walletAddress: walletAddress || '',
           memberSince: entity.metadata?.createdAt || new Date().toISOString(),
         });
@@ -396,7 +401,7 @@ function App() {
           // This is CRITICAL - without this, the agent won't process messages from this server
           console.log(' Associating agent with user server...');
           try {
-            await elizaClient.messaging.addAgentToServer(userId as any, agent.id as any);
+            await elizaClient.messaging.addAgentToServer(userId as UUID, agent.id as UUID);
             console.log(' Agent associated with user server:', userId);
           } catch (assocError: any) {
             console.warn(' Failed to associate agent with server (may already be associated):', assocError.message);
@@ -410,7 +415,7 @@ function App() {
         const serverIdForQuery = userId;
         console.log(' Loading channels from user-specific server:', serverIdForQuery);
         console.log(' Agent ID:', agent.id);
-        const response = await elizaClient.messaging.getServerChannels(serverIdForQuery as any);
+        const response = await elizaClient.messaging.getServerChannels(serverIdForQuery as UUID);
         const dmChannels = await Promise.all(
           response.channels
             .map(async (ch: any) => {
