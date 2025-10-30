@@ -305,6 +305,49 @@ export class CdpService extends Service {
   }
 
   /**
+   * Fetch token info from DexScreener as fallback
+   */
+  private async getTokenInfoFromDexScreener(address: string, chainId: string): Promise<{
+    price?: number;
+    liquidity?: number;
+    volume24h?: number;
+    priceChange24h?: number;
+    name?: string;
+    symbol?: string;
+  } | null> {
+    try {
+      const url = `https://api.dexscreener.com/latest/dex/tokens/${address}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      const pairs = data.pairs || [];
+      
+      // Find pair for the specific chain
+      const pair = pairs.find((p: any) => p.chainId === chainId);
+      
+      if (!pair) {
+        return null;
+      }
+
+      return {
+        price: parseFloat(pair.priceUsd) || undefined,
+        liquidity: parseFloat(pair.liquidity?.usd) || undefined,
+        volume24h: parseFloat(pair.volume?.h24) || undefined,
+        priceChange24h: parseFloat(pair.priceChange?.h24) || undefined,
+        name: pair.baseToken?.name || undefined,
+        symbol: pair.baseToken?.symbol || undefined,
+      };
+    } catch (err) {
+      logger.warn(`[CDP Service] DexScreener error for ${address}:`, err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  }
+
+  /**
    * Get comprehensive wallet information from cache if available and not expired
    * Falls back to fetching fresh data if cache miss or expired
    * @param accountName User's account identifier
@@ -470,14 +513,44 @@ export class CdpService extends Service {
             
             // Get token info from CoinGecko
             const platform = chainConfig.coingeckoPlatform;
-            const tokenInfo = await this.getTokenInfo(contractAddress, platform);
+            let tokenInfo = await this.getTokenInfo(contractAddress, platform);
+            let usdPrice = 0;
             
             if (!tokenInfo) {
-              logger.debug(`[CDP Service] Could not get price for token ${contractAddress} on ${network}`);
+              // Try DexScreener as fallback
+              const dexInfo = await this.getTokenInfoFromDexScreener(contractAddress, network);
+              if (dexInfo?.price) {
+                usdPrice = dexInfo.price;
+                // Use DexScreener data with token metadata
+                const amountNum = this.safeBalanceToNumber(tokenBalanceHex, 18); // Assume 18 decimals
+                const usdValue = amountNum * usdPrice;
+                
+                // Only add to total if it's a valid number
+                if (!isNaN(usdValue)) {
+                  totalUsdValue += usdValue;
+                }
+                
+                allTokens.push({
+                  symbol: dexInfo.symbol?.toUpperCase() || 'UNKNOWN',
+                  name: dexInfo.name || 'Unknown Token',
+                  balance: isNaN(amountNum) ? '0' : amountNum.toString(),
+                  balanceFormatted: isNaN(amountNum) ? '0' : amountNum.toFixed(6).replace(/\.?0+$/, ''),
+                  usdValue: isNaN(usdValue) ? 0 : usdValue,
+                  usdPrice: isNaN(usdPrice) ? 0 : usdPrice,
+                  contractAddress,
+                  chain: network,
+                  decimals: 18,
+                });
+              } else {
+                logger.debug(`[CDP Service] Could not get price for token ${contractAddress} on ${network}`);
+              }
               continue;
             }
             
-            const usdPrice = tokenInfo.price || 0;
+            // Use token info price, fallback to 0 if null
+            usdPrice = tokenInfo.price || 0;
+            
+            // Convert balance using correct decimals
             const amountNum = this.safeBalanceToNumber(tokenBalanceHex, tokenInfo.decimals || 18);
             const usdValue = amountNum * usdPrice;
             
