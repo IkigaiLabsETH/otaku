@@ -1,16 +1,24 @@
 /**
  * Test script for x402 payment integration with Jobs API (Base Mainnet)
  * 
+ * CONFIGURATION (aligned with jobs.ts):
+ * - Price: $0.005 USDC per request
+ * - Network: Base mainnet
+ * - Default job timeout: 3 minutes (180000ms)
+ * - Maximum job timeout: 5 minutes (300000ms)
+ * - USDC Contract: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+ * 
  * This script demonstrates how to:
  * 1. Test the 402 Payment Required response
  * 2. Make a paid request using x402-fetch (working implementation)
- * 3. Poll for job completion
- * 4. Retrieve job results
+ * 3. Poll for job completion (supports up to 200s polling for 180s job timeout)
+ * 4. Verify job listing protection (expected 402)
+ * 5. Check API health status
  * 
  * Prerequisites:
  * - Server running with X402_RECEIVING_WALLET configured
  * - For Test 2 (paid requests):
- *   - Wallet with USDC on Base mainnet (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+ *   - Wallet with USDC on Base mainnet
  *   - EVM_PRIVATE_KEY, TEST_WALLET_PRIVATE_KEY, or CDP_API_KEY_PRIVATE_KEY environment variable
  * 
  * IMPORTANT NOTES:
@@ -22,7 +30,7 @@
  * 
  * Usage:
  *   bun run scripts/test-x402-jobs.ts
- *   bun run scripts/test-x402-jobs.ts --prompt "What is the weather today?"
+ *   bun run scripts/test-x402-jobs.ts --prompt "Explain EigenLayer restaking"
  */
 
 import { createWalletClient, createPublicClient, http, type Address } from 'viem';
@@ -165,10 +173,11 @@ async function testPaymentRequired(): Promise<void> {
         const accept = paymentInfo.accepts[0];
         console.log(`  Network: ${accept.network}`);
         console.log(`  Scheme: ${accept.scheme}`);
-        console.log(`  Amount: ${parseInt(accept.maxAmountRequired) / 1_000_000} USDC`);
+        console.log(`  Price: ${parseInt(accept.maxAmountRequired) / 1_000_000} USDC`);
         console.log(`  Recipient: ${accept.payTo}`);
         console.log(`  Asset: ${accept.asset} (USDC)`);
-        console.log(`  Timeout: ${accept.maxTimeoutSeconds}s`);
+        console.log(`  Payment Timeout: ${accept.maxTimeoutSeconds}s`);
+        console.log(`  Job Timeout: 3 minutes (default), 5 minutes (max)`);
         console.log(`  Description: ${accept.description.substring(0, 100)}...`);
       }
       
@@ -372,7 +381,8 @@ async function testPaidRequest(prompt: string): Promise<void> {
  * Poll for job completion
  */
 async function pollForCompletion(jobId: string): Promise<void> {
-  console.log(`\n⏳ Polling for job completion (job: ${jobId})...\n`);
+  console.log(`\n⏳ Polling for job completion (job: ${jobId})...`);
+  console.log(`   Max wait time: ${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s (job timeout: 180s)\n`);
 
   for (let attempt = 1; attempt <= MAX_POLL_ATTEMPTS; attempt++) {
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -386,7 +396,8 @@ async function pollForCompletion(jobId: string): Promise<void> {
       }
 
       const job: JobDetailsResponse = await response.json();
-      console.log(`[${attempt}] Status: ${job.status}`);
+      const elapsed = ((attempt * POLL_INTERVAL_MS) / 1000).toFixed(0);
+      console.log(`[${attempt}] Status: ${job.status} (elapsed: ${elapsed}s)`);
 
       if (job.status === 'completed') {
         console.log('\n✅ Job completed!\n');
@@ -401,7 +412,7 @@ async function pollForCompletion(jobId: string): Promise<void> {
         console.log(`\n❌ Job failed: ${job.error || 'Unknown error'}`);
         return;
       } else if (job.status === 'timeout') {
-        console.log('\n⏰ Job timed out waiting for agent response');
+        console.log('\n⏰ Job timed out waiting for agent response (3 minute timeout exceeded)');
         return;
       }
     } catch (error) {
@@ -411,37 +422,30 @@ async function pollForCompletion(jobId: string): Promise<void> {
   }
 
   console.log('\n⏰ Polling timed out - job may still be processing');
+  console.log('   Use GET /api/messaging/jobs/:jobId to check status manually');
 }
 
 /**
- * Test 3: List jobs
+ * Test 3: Verify list jobs endpoint is protected (expected 402)
  */
-async function testListJobs(): Promise<void> {
-  console.log('\n🧪 Test 3: Listing recent jobs...\n');
+async function testListJobsProtection(): Promise<void> {
+  console.log('\n🧪 Test 3: Verifying job listing protection...\n');
 
   try {
     const response = await fetch(`${JOBS_ENDPOINT}?limit=5`);
     
-    if (!response.ok) {
-      console.error(`❌ Failed to list jobs: ${response.status}`);
+    if (response.status === 402) {
+      const error = await response.json();
+      console.log('✅ Job listing correctly protected with 402 Payment Required');
+      console.log(`   Message: ${error.message || error.error}\n`);
+      console.log('💡 Note: Job listing is intentionally disabled to prevent free access.');
+      console.log('   To check job status, use: GET /api/messaging/jobs/:jobId');
       return;
     }
 
-    const data: { jobs: JobDetailsResponse[]; total: number; filtered: number } = await response.json();
-    
-    console.log(`Total jobs: ${data.total}`);
-    console.log(`Showing: ${data.filtered}\n`);
-
-    data.jobs.forEach((job, index) => {
-      console.log(`${index + 1}. Job ${job.jobId.substring(0, 8)}...`);
-      console.log(`   Status: ${job.status}`);
-      console.log(`   Prompt: ${job.prompt.substring(0, 50)}${job.prompt.length > 50 ? '...' : ''}`);
-      console.log(`   Created: ${new Date(job.createdAt).toISOString()}`);
-      if (job.result) {
-        console.log(`   Processing time: ${job.result.processingTimeMs}ms`);
-      }
-      console.log('');
-    });
+    console.log(`⚠️  Expected 402 for job listing, got: ${response.status}`);
+    const data = await response.text();
+    console.log(`   Response: ${data.substring(0, 200)}...`);
   } catch (error) {
     console.error('❌ Test failed:', error instanceof Error ? error.message : String(error));
   }
@@ -490,9 +494,13 @@ async function main(): Promise<void> {
   console.log('║  x402 Payment Integration Test Suite for Jobs API         ║');
   console.log('║              BASE MAINNET - Real USDC Required             ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
-  console.log(`\nAPI URL: ${API_BASE_URL}`);
-  console.log(`Endpoint: ${JOBS_ENDPOINT}`);
-  console.log(`Network: Base Mainnet`);
+  console.log(`\nConfiguration:`);
+  console.log(`  API URL: ${API_BASE_URL}`);
+  console.log(`  Endpoint: ${JOBS_ENDPOINT}`);
+  console.log(`  Network: Base Mainnet`);
+  console.log(`  Price: $0.005 USDC per request`);
+  console.log(`  Job Timeout: 3 minutes (default), 5 minutes (max)`);
+  console.log(`  Poll Timeout: ${(MAX_POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s (${MAX_POLL_ATTEMPTS} attempts × ${POLL_INTERVAL_MS / 1000}s)`);
 
   try {
     // Test 1: Verify 402 response
@@ -508,8 +516,8 @@ async function main(): Promise<void> {
       console.log('   Set EVM_PRIVATE_KEY, TEST_WALLET_PRIVATE_KEY, or CDP_API_KEY_PRIVATE_KEY to enable');
     }
 
-    // Test 3: List jobs
-    await testListJobs();
+    // Test 3: Verify job listing protection
+    await testListJobsProtection();
 
     // Test 4: Health check
     await testHealthCheck();

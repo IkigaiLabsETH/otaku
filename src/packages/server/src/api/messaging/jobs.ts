@@ -145,8 +145,14 @@ export interface JobsRouter extends express.Router {
 /**
  * Creates the jobs router for one-off messaging with x402 payment support
  * 
- * This endpoint requires x402 payment ($0.02 per request) on Base or Polygon networks.
+ * This endpoint requires x402 payment ($0.005 per request) on Base mainnet.
  * Payment is handled via Coinbase facilitator, which verifies and settles payments automatically.
+ * 
+ * Configuration:
+ * - Price: $0.005 USDC per request
+ * - Network: Base mainnet
+ * - Default timeout: 3 minutes (180000ms)
+ * - Maximum timeout: 5 minutes (300000ms)
  * 
  * Capabilities:
  * - Research: Query and analyze research data, papers, and academic resources

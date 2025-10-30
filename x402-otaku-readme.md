@@ -36,9 +36,12 @@ https://otaku.so
 
 **POST** `/api/messaging/jobs`
 
-**Price:** $0.005 USDC per request  
-**Network:** Base Mainnet  
-**Payment Method:** x402 automatic payment
+**Configuration:**
+- **Price:** $0.005 USDC per request  
+- **Network:** Base Mainnet  
+- **Payment Method:** x402 automatic payment
+- **Default Timeout:** 3 minutes (180 seconds)
+- **Maximum Timeout:** 5 minutes (300 seconds)
 
 ## Making Your First Request
 
@@ -91,7 +94,7 @@ console.log('Job created:', job.jobId);
 {
   prompt: string;        // Required: Your query or research request
   agentId?: string;      // Optional: Specific agent UUID (uses first available if not provided)
-  timeoutMs?: number;    // Optional: Timeout in milliseconds (default: 30000, max: 300000)
+  timeoutMs?: number;    // Optional: Timeout in milliseconds (default: 180000, max: 300000)
   metadata?: object;     // Optional: Custom metadata to attach to the job
 }
 ```
@@ -146,7 +149,7 @@ After creating a job, poll the status endpoint to get results:
 
 ```typescript
 async function pollForCompletion(jobId: string): Promise<void> {
-  const maxAttempts = 30;
+  const maxAttempts = 100;  // Support 3-minute job timeout
   const pollInterval = 2000; // 2 seconds
   
   for (let i = 0; i < maxAttempts; i++) {
@@ -239,20 +242,18 @@ This means:
 - ✅ Your conversations and history persist across requests
 - ✅ The AI remembers your context from previous interactions
 
-## Checking Available Jobs
+## Checking Job Status
 
-### List Recent Jobs
+### ⚠️ Job Listing Disabled
 
-**GET** `/api/messaging/jobs?limit=10`
+**GET** `/api/messaging/jobs` returns `402 Payment Required`
+
+Job listing is intentionally disabled to prevent free access. After creating a paid job, use the specific job ID to check its status.
 
 ```typescript
+// ❌ This endpoint is disabled
 const response = await fetch('https://otaku.so/api/messaging/jobs?limit=10');
-const data = await response.json();
-
-console.log(`Total jobs: ${data.total}`);
-data.jobs.forEach(job => {
-  console.log(`${job.jobId}: ${job.status} - ${job.prompt.substring(0, 50)}...`);
-});
+// Returns: 402 Payment Required
 ```
 
 ### Get Job Details
@@ -349,7 +350,7 @@ async function askOtaku(prompt: string): Promise<string> {
 
   // Poll for result
   console.log('Waiting for response...');
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 100; i++) {  // Support 3-minute job timeout
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     const statusRes = await fetch(`https://otaku.so/api/messaging/jobs/${job.jobId}`);
@@ -357,7 +358,7 @@ async function askOtaku(prompt: string): Promise<string> {
     
     if (jobData.status === 'completed') {
       return jobData.result.message.content;
-    } else if (jobData.status === 'failed') {
+    } else if (jobData.status === 'failed' || jobData.status === 'timeout') {
       throw new Error(jobData.error || 'Job failed');
     }
   }
@@ -383,12 +384,13 @@ Otaku can help you with:
 
 ## Rate Limits & Pricing
 
-- **Price per request:** $0.005 USDC (0.005 USDC)
+- **Price per request:** $0.005 USDC
 - **Network:** Base Mainnet
 - **Payment asset:** USDC (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
 - **Max jobs:** 10,000 concurrent jobs
-- **Job timeout:** 30 seconds default (max: 5 minutes)
+- **Job timeout:** 3 minutes default (180 seconds), 5 minutes max (300 seconds)
 - **Job expiry:** Jobs expire after completion or timeout
+- **Polling recommendation:** Poll every 2 seconds for up to 100 attempts (200 seconds)
 
 ## Important Notes
 
@@ -473,11 +475,13 @@ console.log('USDC Balance:', Number(balance) / 1_000_000);
    const key = '0x...' as `0x${string}`;
    ```
 
-### Job Stays in "pending" Status
+### Job Stays in "processing" Status
 
-- Wait longer (processing can take 15-30 seconds)
+- Wait longer (complex jobs can take up to 3 minutes)
+- Poll every 2 seconds for up to 100 attempts
 - Check server health: `GET /api/messaging/jobs/health`
 - Verify agents are available on the server
+- Jobs timeout after 3 minutes by default (configurable up to 5 minutes)
 
 ### Job Failed with Error
 

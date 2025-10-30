@@ -23,7 +23,7 @@ export interface CreateJobRequest {
   prompt: string;
   /** Optional metadata */
   metadata?: Record<string, unknown>;
-  /** Optional timeout in milliseconds (default: 30000ms) */
+  /** Optional timeout in milliseconds (default: 180000ms, max: 300000ms) */
   timeoutMs?: number;
 }
 
