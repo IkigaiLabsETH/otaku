@@ -91,7 +91,7 @@ const pluginItems: PluginItem[] = [
     example: '"Explain the risks of staking ETH on Lido vs. RocketPool."',
   },
   {
-    name: 'Coinbase Developer Platform',
+    name: 'Coinbase CDP',
     category: 'Execution',
     summary: 'Secure non-custodial smart wallets, balance checks, and seamless transaction signing.',
     points: [
@@ -237,9 +237,10 @@ export function AboutModalContent({ onClose }: AboutModalContentProps) {
               className="flex h-full flex-col rounded-lg border border-border/60 bg-background/60 p-4"
             >
               <div className="flex items-center justify-between gap-2">
-                <Badge variant="outline" className="text-[11px] uppercase tracking-[0.2em]">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <Bullet className="size-2.5" />
                   {plugin.category}
-                </Badge>
+                </div>
                 <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/80">
                   {plugin.name}
                 </span>
@@ -254,7 +255,7 @@ export function AboutModalContent({ onClose }: AboutModalContentProps) {
                 ))}
               </ul>
               <p className="mt-4 text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                Example: <span className="text-primary/90">{plugin.example}</span>
+                Example: <span className="text-muted-foreground">{plugin.example}</span>
               </p>
             </div>
           ))}
