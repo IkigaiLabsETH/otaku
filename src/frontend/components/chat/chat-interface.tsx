@@ -846,9 +846,9 @@ export function ChatInterface({ agent, userId, serverId, channelId, isNewChatMod
                         >
                           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             <Icon className="size-3.5 text-primary shrink-0" strokeWidth={2} />
-                            <span className="line-clamp-1">{plugin.name}</span>
+                            <span className="text-foreground">{plugin.name}</span>
                           </div>
-                          <p className="text-sm text-foreground/90 leading-relaxed">{plugin.description}</p>
+                          <p className="text-sm text-muted-foreground/80 leading-relaxed">{plugin.description}</p>
                         </button>
                       )
                     })}
