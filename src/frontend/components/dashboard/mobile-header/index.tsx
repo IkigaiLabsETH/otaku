@@ -30,7 +30,7 @@ export function MobileHeader({ onHomeClick }: MobileHeaderProps) {
         >
           <div className="flex items-center gap-2">
             <div className="h-8 w-16 bg-primary rounded flex items-center justify-center">
-              <img src="/avatars/otaku.png" alt="Otaku" className="size-6 text-primary-foreground" />
+              <img src="/avatars/otaku-pfp.png" alt="Otaku" className="size-8 text-primary-foreground bg-transparent" />
             </div>
           </div>
         </button>
