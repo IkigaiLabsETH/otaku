@@ -23,7 +23,7 @@ import internalMessageBus from '../../bus';
 import { createFacilitatorConfig } from '@coinbase/x402';
 
 const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID;
-const DEFAULT_JOB_TIMEOUT_MS = 30000; // 30 seconds
+const DEFAULT_JOB_TIMEOUT_MS = 180000; // 3 minutes
 const MAX_JOB_TIMEOUT_MS = 300000; // 5 minutes
 const JOB_CLEANUP_INTERVAL_MS = 60000; // 1 minute
 const MAX_JOBS_IN_MEMORY = 10000; // Prevent memory leaks
@@ -241,7 +241,7 @@ export function createJobsRouter(
                   },
                   timeoutMs: {
                     type: 'number',
-                    description: 'Optional timeout in milliseconds (default: 30000ms, max: 300000ms)',
+                    description: 'Optional timeout in milliseconds (default: 180000ms, max: 300000ms)',
                   },
                   metadata: {
                     type: 'object',

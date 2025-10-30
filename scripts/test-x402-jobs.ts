@@ -36,7 +36,7 @@ const JOBS_ENDPOINT = `${API_BASE_URL}/api/messaging/jobs`;
 const PRIVATE_KEY = process.env.EVM_PRIVATE_KEY || process.env.TEST_WALLET_PRIVATE_KEY || process.env.CDP_API_KEY_PRIVATE_KEY;
 const MAX_PAYMENT_USDC = 0.02; // $0.02 per request
 const POLL_INTERVAL_MS = 2000; // Poll every 2 seconds
-const MAX_POLL_ATTEMPTS = 30; // Max 60 seconds of polling
+const MAX_POLL_ATTEMPTS = 100; // Max 200 seconds of polling (to cover 3 min timeout)
 
 // Parse command-line arguments
 function parseArgs(): { prompt?: string } {
