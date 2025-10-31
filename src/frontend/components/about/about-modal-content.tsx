@@ -131,7 +131,7 @@ const pluginItems: PluginItem[] = [
     example: '"What is the latest on EigenLayer restaking yields?"',
   },
   {
-    name: 'SQL Workspace',
+    name: 'SQL',
     category: 'Database',
     summary: "Query Otaku's structured DeFi dataset for trades, logs, and historical insights.",
     points: [
