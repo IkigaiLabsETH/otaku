@@ -19,8 +19,8 @@ import {
 } from '../../types/jobs';
 import internalMessageBus from '../../bus';
 
-// Import CDP facilitator helper for mainnet (if using Coinbase CDP)
-import { createFacilitatorConfig } from '@coinbase/x402';
+// Import Coinbase facilitator for mainnet
+import { facilitator } from '@coinbase/x402';
 
 const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID;
 const DEFAULT_JOB_TIMEOUT_MS = 180000; // 3 minutes
@@ -173,27 +173,18 @@ export function createJobsRouter(
   startCleanupInterval();
 
   // Configure x402 facilitator
-  // For mainnet: requires CDP_API_KEY_ID and CDP_API_KEY_SECRET
-  // For testnet: can use public facilitator without keys
-  const facilitatorUrl = process.env.X402_FACILITATOR_URL || 'https://facilitator.payai.network';
-  const apiKeyId = process.env.CDP_API_KEY_ID;
-  const apiKeySecret = process.env.CDP_API_KEY_SECRET;
+  // Default: Coinbase facilitator (automatically uses CDP_API_KEY_ID/CDP_API_KEY_SECRET if set)
+  // For testnet: set X402_FACILITATOR_URL to https://x402.org/facilitator
+  const facilitatorUrl = process.env.X402_FACILITATOR_URL;
+  const facilitatorConfig = facilitatorUrl 
+    ? { url: facilitatorUrl as `${string}://${string}` } // Custom facilitator (testnet)
+    : facilitator; // Coinbase facilitator (mainnet) - uses CDP keys from env if available
   
-  // Create facilitator config
-  let facilitatorConfig: unknown;
-  if (apiKeyId && apiKeySecret) {
-    // Use CDP auth for mainnet
-    facilitatorConfig = createFacilitatorConfig(apiKeyId, apiKeySecret);
-    logger.info(
-      `[Jobs API] Using x402 facilitator: ${facilitatorUrl} with CDP API keys for mainnet`
-    );
-  } else {
-    // Use URL-only for testnet
-    facilitatorConfig = { url: facilitatorUrl as `${string}://${string}` };
-    logger.info(
-      `[Jobs API] Using x402 public facilitator: ${facilitatorUrl} (testnet only)`
-    );
-  }
+  logger.info(
+    facilitatorUrl 
+      ? `[Jobs API] Using custom x402 facilitator: ${facilitatorUrl}`
+      : `[Jobs API] Using Coinbase x402 facilitator (mainnet)`
+  );
 
   // Cleanup function for the router
   router.cleanup = () => {
@@ -318,7 +309,8 @@ export function createJobsRouter(
     );
     throw new Error(
       'x402 payment middleware setup failed. Server cannot start without payment protection. ' +
-      'Check X402_RECEIVING_WALLET, CDP_API_KEY_ID, and CDP_API_KEY_SECRET environment variables.'
+      'Set X402_RECEIVING_WALLET environment variable to your wallet address. ' +
+      'For mainnet, also set CDP_API_KEY_ID and CDP_API_KEY_SECRET (optional for testnet).'
     );
   }
 

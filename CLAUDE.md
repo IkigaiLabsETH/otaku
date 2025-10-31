@@ -305,8 +305,8 @@ Otaku supports paid API access via x402 protocol on Base network:
 
 **Configuration:**
 - `X402_RECEIVING_WALLET` - Wallet address to receive payments (required)
-- `X402_FACILITATOR_URL` - Facilitator endpoint (default: `https://facilitator.payai.network`)
-- `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` - Required for mainnet facilitator
+- `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` - Required for mainnet (automatically used by Coinbase facilitator)
+- `X402_FACILITATOR_URL` - Custom facilitator URL (optional, defaults to Coinbase facilitator for mainnet. Set to `https://x402.org/facilitator` for testnet)
 - `X402_PUBLIC_URL` or `PUBLIC_URL` - Public URL for payment resource (highly recommended in production)
   - **If not set:** Falls back to checking `NODE_ENV`:
     - `NODE_ENV=production` → `https://otaku.so/api/messaging/jobs`

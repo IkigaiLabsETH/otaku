@@ -476,6 +476,10 @@ export class AgentServer {
       // Initialize middleware and database
       this.app = express();
 
+      // Trust proxy for accurate IP detection behind proxies (Railway, Cloudflare, etc.)
+      // This is required for express-rate-limit to work correctly with X-Forwarded-For headers
+      this.app.set('trust proxy', true);
+
       // Initialize Sentry (if configured) before any other middleware
       const DEFAULT_SENTRY_DSN =
         'https://c20e2d51b66c14a783b0689d536f7e5c@o4509349865259008.ingest.us.sentry.io/4509352524120064';
