@@ -199,6 +199,7 @@ socketManager.onMessage((data) => console.log('New message:', data));
 - `POSTGRES_URL` - PostgreSQL connection (overrides SQLite)
 - `TAVILY_API_KEY` - Required if web-search plugin enabled
 - `COINGECKO_API_KEY` - Better token pricing
+- `X402_PUBLIC_URL` or `PUBLIC_URL` - Public URL for x402 payment resource (required in production if behind proxy/CDN)
 
 ## Development Workflow
 
@@ -298,9 +299,20 @@ Unlike standard Vite, this project exposes **all** env vars (not just `VITE_` pr
 
 Otaku supports paid API access via x402 protocol on Base network:
 - Endpoint: `POST /api/messaging/jobs`
-- Price: $0.005 USDC per request
+- Price: $0.015 USDC per request
 - Payment: Automatic via `x402-fetch` library
 - See `x402-otaku-readme.md` for full integration guide
+
+**Configuration:**
+- `X402_RECEIVING_WALLET` - Wallet address to receive payments (required)
+- `X402_FACILITATOR_URL` - Facilitator endpoint (default: `https://facilitator.payai.network`)
+- `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` - Required for mainnet facilitator
+- `X402_PUBLIC_URL` or `PUBLIC_URL` - Public URL for payment resource (highly recommended in production)
+  - **If not set:** Falls back to checking `NODE_ENV`:
+    - `NODE_ENV=production` → `https://otaku.so/api/messaging/jobs`
+    - Otherwise → `http://localhost:${SERVER_PORT}/api/messaging/jobs`
+  - **Important:** Must match the actual URL clients use to access the API
+  - If your server is behind a proxy/CDN, **you must set this explicitly** or payments will fail validation
 
 The CDP plugin includes `FETCH_WITH_PAYMENT` action for making x402 requests from within the agent.
 
@@ -328,6 +340,13 @@ The CDP plugin includes `FETCH_WITH_PAYMENT` action for making x402 requests fro
 
 **"Port already in use":**
 - Change `SERVER_PORT` in `.env`
+
+**"x402 payment not working":**
+- Ensure `X402_RECEIVING_WALLET` is set to your wallet address
+- In production, set `X402_PUBLIC_URL` to match your actual domain (e.g., `https://otaku.so`)
+- The resource URL in 402 responses must match the URL clients use to make requests
+- Verify `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` are set for mainnet facilitator
+- Check server logs for x402 middleware initialization messages
 
 ## API Endpoints
 

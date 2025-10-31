@@ -216,11 +216,32 @@ export function createJobsRouter(
     // Apply x402 payment middleware to POST /jobs endpoint only
     // Price: $0.015 per request
     // Network: Base mainnet with CDP facilitator  
-    // Determine resource URL based on environment
-    const isProduction = process.env.NODE_ENV === 'production';
-    const resourceUrl = (isProduction
-      ? 'https://otaku.so/api/messaging/jobs'
-      : `http://localhost:${process.env.SERVER_PORT || '3000'}/api/messaging/jobs`) as `${string}://${string}`;
+    // Determine resource URL based on environment variable or fallback to NODE_ENV
+    // Priority: X402_PUBLIC_URL > NODE_ENV > localhost
+    const publicUrl = process.env.X402_PUBLIC_URL || process.env.PUBLIC_URL;
+    let resourceUrl: `${string}://${string}`;
+    
+    if (publicUrl) {
+      // Remove trailing slash if present, then append the endpoint path
+      const baseUrl = publicUrl.replace(/\/$/, '');
+      resourceUrl = `${baseUrl}/api/messaging/jobs` as `${string}://${string}`;
+      logger.info(`[Jobs API] Using X402_PUBLIC_URL for resource: ${resourceUrl}`);
+    } else {
+      // Fallback to NODE_ENV detection (less reliable, warns if production)
+      const isProduction = process.env.NODE_ENV === 'production';
+      resourceUrl = (isProduction
+        ? 'https://otaku.so/api/messaging/jobs'
+        : `http://localhost:${process.env.SERVER_PORT || '3000'}/api/messaging/jobs`) as `${string}://${string}`;
+      
+      if (isProduction) {
+        logger.warn(
+          `[Jobs API] X402_PUBLIC_URL not set, using hardcoded production URL: ${resourceUrl}. ` +
+          `If your server is behind a proxy/CDN, set X402_PUBLIC_URL to match your actual domain.`
+        );
+      } else {
+        logger.info(`[Jobs API] Using NODE_ENV=${process.env.NODE_ENV || 'undefined'} for resource: ${resourceUrl}`);
+      }
+    }
     
     router.use(
       paymentMiddleware(receivingWallet as `0x${string}`, {
