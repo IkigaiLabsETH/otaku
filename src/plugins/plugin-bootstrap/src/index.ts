@@ -5,16 +5,13 @@ import {
   composePromptFromState,
   type Content,
   type ControlMessage,
-  ContentType,
   createUniqueUuid,
   type EntityPayload,
   type EvaluatorEventPayload,
   type EventPayload,
   EventType,
   type IAgentRuntime,
-  imageDescriptionTemplate,
   logger,
-  type Media,
   type Memory,
   messageHandlerTemplate,
   type MessagePayload,
@@ -29,7 +26,6 @@ import {
   truncateToCompleteSentence,
   type UUID,
   type WorldPayload,
-  getLocalServerUrl,
   type State,
   Action,
   HandlerCallback,
@@ -38,6 +34,17 @@ import { v4 } from 'uuid';
 
 import * as evaluators from './evaluators/index.js';
 import * as providers from './providers/index.js';
+import {
+  multiStepDecisionTemplate,
+  multiStepSummaryTemplate,
+} from './templates/index.js';
+import { fetchMediaData, processAttachments } from './utils/media.js';
+import { shouldBypassShouldRespond } from './utils/shouldRespond.js';
+import { isJobMessage, mergeState } from './utils/state.js';
+
+export { fetchMediaData, processAttachments } from './utils/media.js';
+export type { MediaData } from './utils/media.js';
+export { shouldBypassShouldRespond } from './utils/shouldRespond.js';
 
 import { TaskService } from './services/task.js';
 import { EmbeddingGenerationService } from './services/embedding.js';
@@ -45,91 +52,6 @@ import { EmbeddingGenerationService } from './services/embedding.js';
 export * from './actions/index.js';
 export * from './evaluators/index.js';
 export * from './providers/index.js';
-
-export const multiStepDecisionTemplate = `<task>Decide the assistant's next step to satisfy the user's latest request.</task>
-
-{{system}}
-
-{{time}}
-
-{{recentMessages}}
-
-# Execution Snapshot
-Step: {{iterationCount}} of {{maxIterations}}
-Actions this round: {{traceActionResult.length}}
-{{#if traceActionResult.length}}
-Recent action results:
-{{actionResults}}
-{{/if}}
-{{#if actionsWithParams}}
-Proposed actions:
-{{actionsWithParams}}
-{{/if}}
-
-# Rules
-- Focus on the latest user request and current evidence.
-- Do not repeat an action with identical parameters.
-- Prefer complementary data or follow-up steps that add new value.
-- Set isFinish true once the request is fully satisfied or no useful action remains.
-
-# Output
-Return XML in this exact shape:
-<output>
-  <response>
-    <thought>Step {{iterationCount}}/{{maxIterations}}. Actions taken this round: {{traceActionResult.length}}. [concise reasoning]</thought>
-    <action>ACTION_NAME or ""</action>
-    <parameters>{"key": "value"}</parameters>
-    <isFinish>true or false</isFinish>
-  </response>
-</output>`;
-
-export const multiStepSummaryTemplate = `<task>Write the final reply for the user using the completed actions.</task>
-
-{{bio}}
-
-{{system}}
-
-{{messageDirections}}
-
-{{time}}
-
-{{recentMessages}}
-
-{{#if actionResults}}
-Action results:
-{{actionResults}}
-{{/if}}
-
-{{actionsWithDescriptions}}
-
-Last reasoning: {{recentThought}}
-
-# Guidance
-- Lead with the answer the user needs.
-- Use successful action outcomes as evidence; note failures if they block completion.
-- Keep the response concise and helpful.
-
-# Output
-<output>
-  <response>
-    <thought>Brief summary of the request, key results, and remaining gaps if any.</thought>
-    <text>Direct user-facing reply grounded in the gathered results.</text>
-  </response>
-</output>
-`;
-
-
-
-/**
- * Represents media data containing a buffer of data and the media type.
- * @typedef {Object} MediaData
- * @property {Buffer} data - The buffer of data.
- * @property {string} mediaType - The type of media.
- */
-type MediaData = {
-  data: Buffer;
-  mediaType: string;
-};
 
 /**
  * Multi-step workflow execution result
@@ -143,220 +65,6 @@ interface MultiStepActionResult {
 }
 
 const latestResponseIds = new Map<string, Map<string, string>>();
-
-/**
- * Fetches media data from a list of attachments, supporting both HTTP URLs and local file paths.
- *
- * @param attachments Array of Media objects containing URLs or file paths to fetch media from
- * @returns Promise that resolves with an array of MediaData objects containing the fetched media data and content type
- */
-/**
- * Fetches media data from given attachments.
- * @param {Media[]} attachments - Array of Media objects to fetch data from.
- * @returns {Promise<MediaData[]>} - A Promise that resolves with an array of MediaData objects.
- */
-export async function fetchMediaData(attachments: Media[]): Promise<MediaData[]> {
-  return Promise.all(
-    attachments.map(async (attachment: Media) => {
-      if (/^(http|https):\/\//.test(attachment.url)) {
-        // Handle HTTP URLs
-        const response = await fetch(attachment.url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch file: ${attachment.url}`);
-        }
-        const mediaBuffer = Buffer.from(await response.arrayBuffer());
-        const mediaType = attachment.contentType || 'image/png';
-        return { data: mediaBuffer, mediaType };
-      }
-      throw new Error(`File not found: ${attachment.url}. Make sure the path is correct.`);
-    })
-  );
-}
-
-/**
- * Processes attachments by generating descriptions for supported media types.
- * Currently supports image description generation.
- *
- * @param {Media[]} attachments - Array of attachments to process
- * @param {IAgentRuntime} runtime - The agent runtime for accessing AI models
- * @returns {Promise<Media[]>} - Returns a new array of processed attachments with added description, title, and text properties
- */
-export async function processAttachments(
-  attachments: Media[],
-  runtime: IAgentRuntime
-): Promise<Media[]> {
-  if (!attachments || attachments.length === 0) {
-    return [];
-  }
-  runtime.logger.debug(`[Bootstrap] Processing ${attachments.length} attachment(s)`);
-
-  const processedAttachments: Media[] = [];
-
-  for (const attachment of attachments) {
-    try {
-      // Start with the original attachment
-      const processedAttachment: Media = { ...attachment };
-
-      const isRemote = /^(http|https):\/\//.test(attachment.url);
-      const url = isRemote ? attachment.url : getLocalServerUrl(attachment.url);
-      // Only process images that don't already have descriptions
-      if (attachment.contentType === ContentType.IMAGE && !attachment.description) {
-        runtime.logger.debug(`[Bootstrap] Generating description for image: ${attachment.url}`);
-
-        let imageUrl = url;
-
-        if (!isRemote) {
-          // Only convert local/internal media to base64
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`Failed to fetch image: ${res.statusText}`);
-
-          const arrayBuffer = await res.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          const contentType = res.headers.get('content-type') || 'application/octet-stream';
-          imageUrl = `data:${contentType};base64,${buffer.toString('base64')}`;
-        }
-
-        try {
-          const response = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, {
-            prompt: imageDescriptionTemplate,
-            imageUrl,
-          });
-
-          if (typeof response === 'string') {
-            // Parse XML response
-            const parsedXml = parseKeyValueXml(response);
-
-            if (parsedXml && (parsedXml.description || parsedXml.text)) {
-              processedAttachment.description = parsedXml.description || '';
-              processedAttachment.title = parsedXml.title || 'Image';
-              processedAttachment.text = parsedXml.text || parsedXml.description || '';
-
-              runtime.logger.debug(
-                `[Bootstrap] Generated description: ${processedAttachment.description?.substring(0, 100)}...`
-              );
-            } else {
-              // Fallback: Try simple regex parsing if parseKeyValueXml fails
-              const responseStr = response as string;
-              const titleMatch = responseStr.match(/<title>([^<]+)<\/title>/);
-              const descMatch = responseStr.match(/<description>([^<]+)<\/description>/);
-              const textMatch = responseStr.match(/<text>([^<]+)<\/text>/);
-
-              if (titleMatch || descMatch || textMatch) {
-                processedAttachment.title = titleMatch?.[1] || 'Image';
-                processedAttachment.description = descMatch?.[1] || '';
-                processedAttachment.text = textMatch?.[1] || descMatch?.[1] || '';
-
-                runtime.logger.debug(
-                  `[Bootstrap] Used fallback XML parsing - description: ${processedAttachment.description?.substring(0, 100)}...`
-                );
-              } else {
-                runtime.logger.warn(
-                  `[Bootstrap] Failed to parse XML response for image description`
-                );
-              }
-            }
-          } else if (response && typeof response === 'object' && 'description' in response) {
-            // Handle object responses for backwards compatibility
-            processedAttachment.description = response.description;
-            processedAttachment.title = response.title || 'Image';
-            processedAttachment.text = response.description;
-
-            runtime.logger.debug(
-              `[Bootstrap] Generated description: ${processedAttachment.description?.substring(0, 100)}...`
-            );
-          } else {
-            runtime.logger.warn(`[Bootstrap] Unexpected response format for image description`);
-          }
-        } catch (error) {
-          runtime.logger.error({ error }, `[Bootstrap] Error generating image description:`);
-          // Continue processing without description
-        }
-      } else if (attachment.contentType === ContentType.DOCUMENT && !attachment.text) {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Failed to fetch document: ${res.statusText}`);
-
-        const contentType = res.headers.get('content-type') || '';
-        const isPlainText = contentType.startsWith('text/plain');
-
-        if (isPlainText) {
-          runtime.logger.debug(`[Bootstrap] Processing plain text document: ${attachment.url}`);
-
-          const textContent = await res.text();
-          processedAttachment.text = textContent;
-          processedAttachment.title = processedAttachment.title || 'Text File';
-
-          runtime.logger.debug(
-            `[Bootstrap] Extracted text content (first 100 chars): ${processedAttachment.text?.substring(0, 100)}...`
-          );
-        } else {
-          runtime.logger.warn(`[Bootstrap] Skipping non-plain-text document: ${contentType}`);
-        }
-      }
-
-      processedAttachments.push(processedAttachment);
-    } catch (error) {
-      runtime.logger.error(
-        { error, attachmentUrl: attachment.url },
-        `[Bootstrap] Failed to process attachment ${attachment.url}:`
-      );
-      // Add the original attachment if processing fails
-      processedAttachments.push(attachment);
-    }
-  }
-
-  return processedAttachments;
-}
-
-/**
- * Determines whether to skip the shouldRespond logic based on room type and message source.
- * Supports both default values and runtime-configurable overrides via env settings.
- */
-export function shouldBypassShouldRespond(
-  runtime: IAgentRuntime,
-  room?: Room,
-  source?: string
-): boolean {
-  if (!room) return false;
-
-  function normalizeEnvList(value: unknown): string[] {
-    if (!value || typeof value !== 'string') return [];
-
-    const cleaned = value.trim().replace(/^\[|\]$/g, '');
-    return cleaned
-      .split(',')
-      .map((v) => v.trim())
-      .filter(Boolean);
-  }
-
-  const defaultBypassTypes = [
-    ChannelType.DM,
-    ChannelType.VOICE_DM,
-    ChannelType.SELF,
-    ChannelType.API,
-  ];
-
-  const defaultBypassSources = ['client_chat'];
-
-  const bypassTypesSetting = normalizeEnvList(runtime.getSetting('SHOULD_RESPOND_BYPASS_TYPES'));
-  const bypassSourcesSetting = normalizeEnvList(
-    runtime.getSetting('SHOULD_RESPOND_BYPASS_SOURCES')
-  );
-
-  const bypassTypes = new Set(
-    [...defaultBypassTypes.map((t) => t.toString()), ...bypassTypesSetting].map((s: string) =>
-      s.trim().toLowerCase()
-    )
-  );
-
-  const bypassSources = [...defaultBypassSources, ...bypassSourcesSetting].map((s: string) =>
-    s.trim().toLowerCase()
-  );
-
-  const roomType = room.type?.toString().toLowerCase();
-  const sourceStr = source?.toLowerCase() || '';
-
-  return bypassTypes.has(roomType) || bypassSources.some((pattern) => sourceStr.includes(pattern));
-}
 
 /**
  * Handles incoming messages and generates responses based on the provided runtime and message information.
@@ -820,30 +528,6 @@ type StrategyResult = {
   state: any;
   mode: StrategyMode;
 };
-
-function mergeState(base: State, updates: State): State {
-  return {
-    ...base,
-    ...updates,
-    data: {
-      ...(base.data ?? {}),
-      ...(updates.data ?? {}),
-    },
-    values: {
-      ...(base.values ?? {}),
-      ...(updates.values ?? {}),
-    },
-  };
-}
-
-function isJobMessage(metadata: unknown): metadata is { isJobMessage: boolean } {
-  return (
-    typeof metadata === 'object' &&
-    metadata !== null &&
-    'isJobMessage' in metadata &&
-    typeof (metadata as { isJobMessage: unknown }).isJobMessage === 'boolean'
-  );
-}
 
 async function runSingleShotCore({ runtime, message, state }: { runtime: IAgentRuntime, message: Memory, state: State }): Promise<StrategyResult> {
   state = await runtime.composeState(message, ['ACTIONS']);
