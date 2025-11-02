@@ -603,7 +603,7 @@ const messageReceivedHandler = async ({
     
     // Check if this is a job request (x402 paid API)
     // Job requests are isolated one-off operations that don't need race tracking
-    const isJobRequest = message.content.metadata?.isJobMessage === true;
+    const isJobRequest = (message.content.metadata as Record<string, unknown>)?.isJobMessage === true;
     
     // Get or create the agent-specific map
     if (!latestResponseIds.has(runtime.agentId)) {
@@ -785,7 +785,7 @@ const messageReceivedHandler = async ({
           // Race check before we send anything
           // IMPORTANT: Bypass race check for job requests (x402 paid API)
           // Job requests are one-off operations that must always complete
-          const isJobRequest = message.content.metadata?.isJobMessage === true;
+          const isJobRequest = (message.content.metadata as Record<string, unknown>)?.isJobMessage === true;
           
           if (!isJobRequest) {
             const currentResponseId = agentResponses.get(message.roomId);
