@@ -344,16 +344,27 @@ export const cdpWalletTokenTransfer: Action = {
         }
       } else {
         // Look for token in user's wallet by symbol
-        walletToken = transferParams.network
-          ? // If network specified, find token on that specific network
-            walletInfo.tokens.find(
-              t => tokenSymbolMatches(t.symbol, transferParams.token) &&
-                   t.chain === transferParams.network
-            )
-          : // If no network specified, find token on any network (prefer highest balance)
-            walletInfo.tokens
-              .filter(t => tokenSymbolMatches(t.symbol, transferParams.token))
-              .sort((a, b) => parseFloat(b.balance) - parseFloat(a.balance))[0];
+        const matchingTokens = walletInfo.tokens.filter((t) =>
+          tokenSymbolMatches(t.symbol, transferParams.token)
+        );
+
+        if (transferParams.network) {
+          walletToken = matchingTokens.find(
+            (t) => t.chain === transferParams.network
+          );
+        } else if (matchingTokens.length > 0) {
+          const uniqueChains = new Set(matchingTokens.map((t) => t.chain));
+
+          if (uniqueChains.size > 1) {
+            const chainList = Array.from(uniqueChains).join(", ");
+            throw new Error(
+              `Token ${transferParams.token.toUpperCase()} is present on multiple networks in your wallet (${chainList}). Please specify the network or provide the exact token contract address.`
+            );
+          }
+
+          walletToken = matchingTokens
+            .sort((a, b) => parseFloat(b.balance) - parseFloat(a.balance))[0];
+        }
 
         if (!walletToken) {
           const networkMsg = transferParams.network ? ` on ${transferParams.network}` : '';
@@ -364,6 +375,14 @@ export const cdpWalletTokenTransfer: Action = {
         }
 
         resolvedNetwork = walletToken.chain as CdpNetwork;
+
+        if ((transferParams.token === "pol" || transferParams.token === "matic") && resolvedNetwork !== "polygon") {
+          if (!tokenParam.startsWith("0x")) {
+            throw new Error(
+              `Token ${transferParams.token.toUpperCase()} on ${resolvedNetwork} has multiple representations. Please provide the exact ERC-20 contract address to confirm the transfer.`
+            );
+          }
+        }
 
         // Native token (no contract address)
         if (!walletToken.contractAddress) {
