@@ -33,7 +33,7 @@ export const cdpWalletTokenTransfer: Action = {
     "TRANSFER_TOKENS_CDP",
     "PAY_WITH_CDP",
   ],
-  description: "Use this action when you need to transfer tokens (ERC20 or native tokens like ETH) from user's wallet. For NFTs, use USER_WALLET_NFT_TRANSFER instead. On Polygon, the gas token is POL ($POL, formerly MATIC). Treat 'ETH' on Polygon as 'WETH'.",
+  description: "Use this action when you need to transfer tokens (ERC20 or native tokens like ETH) from user's wallet. For NFTs, use USER_WALLET_NFT_TRANSFER instead. On Polygon, the gas token is POL ($POL, formerly MATIC). Treat 'ETH' on Polygon as 'WETH'. IMPORTANT: Before executing, you MUST present a clear summary (recipient, amount, token, network, USD value) and get explicit user confirmation ('yes', 'confirm', 'go ahead'). Never execute transfers without confirmed intent - they are irreversible.",
   
   // Parameter schema for tool calling
   parameters: {
