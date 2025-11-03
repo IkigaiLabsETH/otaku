@@ -122,7 +122,6 @@ export class CdpTransactionManager {
    * Get the singleton instance of CdpTransactionManager
    */
   public static getInstance(): CdpTransactionManager {
-    console.log('yoyoyoyoyoyoyo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! CdpTransactionManager.instance', CdpTransactionManager.instance);
     if (!CdpTransactionManager.instance) {
       CdpTransactionManager.instance = new CdpTransactionManager();
     }
@@ -202,10 +201,7 @@ export class CdpTransactionManager {
     // Check cache first (unless force sync)
     if (!forceSync) {
       const cacheKey = chain ? `${userId}:${chain}` : userId;
-      console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ cacheKey', cacheKey);
       const cached = this.tokensCache.get(cacheKey);
-      console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! cached', cached);
-      console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! cached.timestamp', (Date.now() - (cached?.timestamp || 0)), this.CACHE_TTL);
       if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
         logger.info(`[CdpTransactionManager] Returning cached token balances for user: ${userId.substring(0, 8)}...${chain ? ` (chain: ${chain})` : ''}`);
         return { ...cached.data, fromCache: true };
@@ -416,7 +412,6 @@ export class CdpTransactionManager {
         
         // Cache this chain's results immediately
         const chainCacheKey = `${name}:${network}`;
-        console.log('############################# chainCacheKey', chainCacheKey);
         const chainUsdValueFinal = isNaN(chainUsdValue) ? 0 : chainUsdValue;
         this.tokensCache.set(chainCacheKey, {
           data: {
@@ -440,6 +435,20 @@ export class CdpTransactionManager {
     const finalTotalUsdValue = isNaN(totalUsdValue) ? 0 : totalUsdValue;
     
     logger.info(`[CDP API] Found ${allTokens.length} tokens for user ${name}${chain ? ` on ${chain}` : ''}, total value: $${finalTotalUsdValue.toFixed(2)}`);
+  
+    // Cache aggregate result if fetching all chains
+    if (!chain) {
+      const aggregateCacheKey = name;
+      this.tokensCache.set(aggregateCacheKey, {
+        data: {
+          tokens: allTokens,
+          totalUsdValue: finalTotalUsdValue,
+          address: account.address,
+        },
+        timestamp: Date.now(),
+      });
+      logger.debug(`[CDP API] Cached aggregate tokens for all chains: ${allTokens.length} tokens, $${finalTotalUsdValue.toFixed(2)}`);
+    }
   
     return {
       tokens: allTokens,
