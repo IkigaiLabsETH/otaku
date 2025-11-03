@@ -97,7 +97,7 @@ Open `.env` and fill in the secrets marked as **required** in the sample file. Y
 - Coinbase credentials (`VITE_CDP_PROJECT_ID`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`)
 - `ALCHEMY_API_KEY`
 
-By default the server stores data in an embedded SQLite database at `./data`. Set `POSTGRES_URL` (for example to a Railway Postgres connection string) if you want to use PostgreSQL instead.
+By default the server stores data in an embedded PGlite database at `./.eliza/.elizadb`. Set `POSTGRES_URL` (for example to a Railway Postgres connection string) if you want to use PostgreSQL instead.
 
 ### 3. Start the development server
 
