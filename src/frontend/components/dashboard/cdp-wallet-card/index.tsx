@@ -54,6 +54,8 @@ interface Transaction {
   blockNum: string;
   explorerUrl: string;
   direction: 'sent' | 'received';
+  icon?: string | null;
+  contractAddress?: string | null;
 }
 
 interface CDPWalletCardProps {
@@ -436,19 +438,6 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
     setHidePopupTimeout(timeout);
   };
 
-  // Handle copy address
-  const handleCopyAddress = async () => {
-    if (!walletAddress) return;
-    
-    try {
-      await navigator.clipboard.writeText(walletAddress);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy address:', err);
-    }
-  };
-
   // Group transactions by date (sorted by most recent first)
   const groupedTransactions = transactions.reduce<Record<string, Transaction[]>>((groups, tx) => {
     const dateKey = formatDate(tx.timestamp);
@@ -503,6 +492,46 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
     return (
       <span className="text-xs sm:text-sm font-bold text-muted-foreground uppercase">
         {token.symbol.charAt(0)}
+      </span>
+    );
+  };
+
+  // Get transaction icon - returns JSX element
+  const getTransactionIcon = (tx: Transaction) => {
+    // If transaction has icon from API, use it
+    if (tx.icon) {
+      return (
+        <img 
+          src={tx.icon} 
+          alt={tx.asset} 
+          className="w-full h-full object-contain p-0.5"
+          onError={(e) => {
+            // Fallback to circle with first letter if image fails to load
+            const parent = e.currentTarget.parentElement;
+            if (parent) {
+              parent.innerHTML = `<span class="text-xs sm:text-sm font-bold text-muted-foreground uppercase">${tx.asset.charAt(0)}</span>`;
+            }
+          }}
+        />
+      );
+    }
+
+    // Try to get icon from constants based on asset symbol
+    const iconPath = getTokenIconBySymbol(tx.asset);
+    if (iconPath) {
+      return (
+        <img 
+          src={iconPath} 
+          alt={tx.asset} 
+          className="w-full h-full object-contain p-0.5"
+        />
+      );
+    }
+
+    // Fallback: gray circle with first letter
+    return (
+      <span className="text-xs sm:text-sm font-bold text-muted-foreground uppercase">
+        {tx.asset.charAt(0)}
       </span>
     );
   };
@@ -919,12 +948,8 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
                                 className="w-full flex items-center justify-between p-2 rounded hover:bg-muted/50 transition-colors text-left cursor-pointer"
                               >
                                 <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                  <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 ${
-                                    isReceived ? 'bg-green-500/10' : 'bg-red-500/10'
-                                  }`}>
-                                    <span className="text-base sm:text-lg">
-                                      {isReceived ? '' : ''}
-                                    </span>
+                                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                                    {getTransactionIcon(tx)}
                                   </div>
                                   <div className="flex flex-col min-w-0 flex-1">
                                     <div className="flex items-center gap-1.5 sm:gap-2">
