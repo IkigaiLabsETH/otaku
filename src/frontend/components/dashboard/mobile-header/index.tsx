@@ -11,13 +11,13 @@ interface MobileHeaderProps {
   onHomeClick?: () => void;
 }
 
-export const MobileHeader = React.forwardRef<HTMLDivElement, MobileHeaderProps>(function MobileHeader({ onHomeClick }: MobileHeaderProps, ref) {
+export function MobileHeader({ onHomeClick }: MobileHeaderProps) {
   const { currentUser } = useCDPWallet();
   const userId = currentUser?.userId || '';
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
   return (
-    <div ref={ref} className="lg:hidden h-header-mobile sticky top-0 z-40 bg-background/95  border-b border-border">
+    <div className="lg:hidden h-header-mobile sticky top-0 z-40 bg-background/95 border-b border-border">
       <div className="flex items-center justify-between px-4 py-3">
         {/* Left: Sidebar Menu */}
         <SidebarTrigger />
@@ -83,4 +83,4 @@ export const MobileHeader = React.forwardRef<HTMLDivElement, MobileHeaderProps>(
       </div>
     </div>
   );
-});
+}
