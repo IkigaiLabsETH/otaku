@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import MonkeyIcon from "@/components/icons/monkey";
 import { CDPWalletCard } from "@/components/dashboard/cdp-wallet-card";
 import { useCDPWallet } from "@/hooks/useCDPWallet";
 import { Wallet } from "lucide-react";
@@ -11,13 +12,13 @@ interface MobileHeaderProps {
   onHomeClick?: () => void;
 }
 
-export const MobileHeader = React.forwardRef<HTMLDivElement, MobileHeaderProps>(function MobileHeader({ onHomeClick }: MobileHeaderProps, ref) {
+export function MobileHeader({ onHomeClick }: MobileHeaderProps) {
   const { currentUser } = useCDPWallet();
   const userId = currentUser?.userId || '';
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
 
   return (
-    <div ref={ref} className="lg:hidden h-header-mobile sticky top-0 z-40 bg-background/95  border-b border-border">
+    <div className="lg:hidden h-header-mobile sticky top-0 z-40 bg-background/95  border-b border-border">
       <div className="flex items-center justify-between px-4 py-3">
         {/* Left: Sidebar Menu */}
         <SidebarTrigger />
@@ -29,7 +30,7 @@ export const MobileHeader = React.forwardRef<HTMLDivElement, MobileHeaderProps>(
         >
           <div className="flex items-center gap-2">
             <div className="h-8 w-16 bg-primary rounded flex items-center justify-center">
-              <img src="/avatars/otaku-pfp.png" alt="Otaku" className="size-8 text-primary-foreground bg-transparent" />
+              <img src="/avatars/otaku.png" alt="Otaku" className="size-6 text-primary-foreground" />
             </div>
           </div>
         </button>
@@ -83,4 +84,4 @@ export const MobileHeader = React.forwardRef<HTMLDivElement, MobileHeaderProps>(
       </div>
     </div>
   );
-});
+}
