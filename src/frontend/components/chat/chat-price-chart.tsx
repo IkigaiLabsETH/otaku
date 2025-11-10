@@ -62,7 +62,7 @@ const chartConfig = {
 export function ChatPriceChart({ data }: ChatPriceChartProps) {
   const [activeChartType, setActiveChartType] = useState<ChartType>('price');
   
-  // Base formatting function used by all price/value displays
+  // Base formatting function used by graph values (Y-axis, tooltips)
   const formatValue = (value: number, includeSymbol: boolean = false): string => {
     const prefix = includeSymbol ? '$' : '';
     
@@ -76,9 +76,23 @@ export function ChatPriceChart({ data }: ChatPriceChartProps) {
     return `${prefix}${value.toFixed(8)}`;
   };
 
-  const formatPrice = (price: number): string => formatValue(price, false);
+  // Header formatting function - only abbreviates for values >= 1M
+  const formatHeaderValue = (value: number, includeSymbol: boolean = false): string => {
+    const prefix = includeSymbol ? '$' : '';
+    
+    if (value === 0) return '';
+    if (value >= 1000000000) return `${prefix}${(value / 1000000000).toFixed(2)}B`;
+    if (value >= 1000000) return `${prefix}${(value / 1000000).toFixed(2)}M`;
+    // For values < 1M, show precise value with comma separators
+    if (value >= 1) return `${prefix}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (value >= 0.01) return `${prefix}${value.toFixed(4)}`;
+    if (value >= 0.0001) return `${prefix}${value.toFixed(6)}`;
+    return `${prefix}${value.toFixed(8)}`;
+  };
+
+  const formatPrice = (price: number): string => formatHeaderValue(price, false);
   const formatYAxisValue = (value: number): string => formatValue(value, true);
-  const formatMarketCap = (value: number): string => formatValue(value, true);
+  const formatMarketCap = (value: number): string => formatHeaderValue(value, true);
 
   const getEvenlySpacedTimeTicks = (dataPoints: PriceDataPoint[] | MarketCapDataPoint[], count: number): number[] => {
     if (dataPoints.length === 0) return [];
