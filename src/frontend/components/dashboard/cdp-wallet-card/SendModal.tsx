@@ -226,7 +226,7 @@ export function SendModalContent({ tokens, userId, onSuccess }: SendModalContent
 
           {/* Dropdown Menu */}
           {isDropdownOpen && (
-            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-[35vh] overflow-y-auto">
               {tokens.map((token, index) => (
                 <button
                   key={`${token.chain}-${token.contractAddress || token.symbol}-${index}`}
