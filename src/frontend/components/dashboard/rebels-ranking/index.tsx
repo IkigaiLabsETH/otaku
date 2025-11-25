@@ -12,7 +12,6 @@ export default function RebelsRanking({ rebels }: RebelsRankingProps) {
     <DashboardCard
       title="Leaderboard"
       intent="default"
-      addon={<Badge variant="outline-warning">2 NEW</Badge>}
     >
       <div className="space-y-4">
         {rebels.map((rebel) => (
