@@ -16,7 +16,8 @@
     "build:all": "turbo run build",
     "build:backend": "bun run build.ts",
     "build:frontend": "vite build",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf .eliza node_modules dist .turbo bun.lockb && find src -type d -name node_modules -exec rm -rf {} + 2>/dev/null || true && find src -type d -name dist -exec rm -rf {} + 2>/dev/null || true"
   },
   "packageManager": "bun@1.2.21",
   "workspaces": [

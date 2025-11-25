@@ -120,9 +120,36 @@ export const cdpWalletInfo: Action = {
       try {
         const entity = await runtime.getEntityById(entityId);
         if (entity) {
-          // Use metadata.displayName first (as shown on dashboard), then fallback to names[0]
-          entityName = (entity.metadata?.displayName as string) || 
-                       (entity.names && entity.names.length > 0 ? entity.names[0] : entityId);
+          logger.debug(`[USER_WALLET_INFO] Agent entity metadata:`, JSON.stringify(entity.metadata, null, 2));
+          logger.debug(`[USER_WALLET_INFO] Agent entity names:`, entity.names);
+          
+          // Try to get displayName from agent entity first
+          entityName = (entity.metadata?.displayName as string);
+          
+          // If not found, try to get the actual user entity (via author_id) which has the displayName
+          if (!entityName && entity.metadata?.author_id) {
+            try {
+              const userEntityId = entity.metadata.author_id as string;
+              logger.debug(`[USER_WALLET_INFO] Fetching user entity: ${userEntityId}`);
+              const userEntity = await runtime.getEntityById(userEntityId);
+              if (userEntity) {
+                logger.debug(`[USER_WALLET_INFO] User entity metadata:`, JSON.stringify(userEntity.metadata, null, 2));
+                entityName = (userEntity.metadata?.displayName as string) || 
+                             (userEntity.names && userEntity.names.length > 0 ? userEntity.names[0] : undefined);
+                // Use user entity ID for consistency
+                entityId = userEntityId;
+              }
+            } catch (userEntityError) {
+              logger.warn("[USER_WALLET_INFO] Could not fetch user entity:", userEntityError instanceof Error ? userEntityError.message : String(userEntityError));
+            }
+          }
+          
+          // Final fallback to agent entity names
+          if (!entityName) {
+            entityName = entity.names && entity.names.length > 0 ? entity.names[0] : entityId;
+          }
+          
+          logger.debug(`[USER_WALLET_INFO] Resolved entityName: ${entityName} (entityId: ${entityId})`);
         }
       } catch (error) {
         logger.warn("[USER_WALLET_INFO] Could not fetch entity name:", error instanceof Error ? error.message : String(error));

@@ -271,6 +271,7 @@ function App() {
           !entity.metadata?.email ||
           !entity.metadata?.walletAddress ||
           !entity.metadata?.bio ||
+          !entity.metadata?.displayName ||
           (phoneNumber && entity.metadata?.phoneNumber !== phoneNumber) ||
           (walletAddress && entity.metadata?.walletAddress !== walletAddress) ||
           (finalEmail && entity.metadata?.email !== finalEmail);
