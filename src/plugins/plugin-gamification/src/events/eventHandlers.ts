@@ -44,6 +44,18 @@ async function recordSwapPoints(payload: ActionEventPayload): Promise<void> {
           ? (actionResultSingle as ActionResultWithValues)
           : undefined;
     
+    // Only award points for successful swaps
+    if (!actionResult || actionResult.success !== true) {
+      logger.debug('[Gamification] Skipping points for unsuccessful swap');
+      return;
+    }
+
+    // Also check swapSuccess flag if present (for extra safety)
+    if (actionResult.values?.swapSuccess === false) {
+      logger.debug('[Gamification] Skipping points for swap marked as unsuccessful');
+      return;
+    }
+    
     const volumeUsd = actionResult?.values?.volumeUsd || actionResult?.values?.valueUsd || 0;
 
     const userId = await getUserIdFromMessage(payload.runtime, payload.messageId, payload.roomId);
@@ -75,6 +87,12 @@ async function recordBridgePoints(payload: ActionEventPayload): Promise<void> {
         : actionResultSingle 
           ? (actionResultSingle as ActionResultWithValues)
           : undefined;
+    
+    // Only award points for successful bridges
+    if (!actionResult || actionResult.success !== true) {
+      logger.debug('[Gamification] Skipping points for unsuccessful bridge');
+      return;
+    }
     
     const volumeUsd = actionResult?.values?.volumeUsd || actionResult?.values?.valueUsd || 0;
     const chain = actionResult?.values?.destinationChain || actionResult?.values?.toChain;
@@ -109,6 +127,12 @@ async function recordTransferPoints(payload: ActionEventPayload): Promise<void> 
         : actionResultSingle 
           ? (actionResultSingle as ActionResultWithValues)
           : undefined;
+    
+    // Only award points for successful transfers
+    if (!actionResult || actionResult.success !== true) {
+      logger.debug('[Gamification] Skipping points for unsuccessful transfer');
+      return;
+    }
     
     const valueUsd = actionResult?.values?.valueUsd || 0;
 
