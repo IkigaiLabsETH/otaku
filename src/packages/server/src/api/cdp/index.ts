@@ -1,19 +1,56 @@
 import express from 'express';
-import { logger } from '@elizaos/core';
+import { logger, validateUuid } from '@elizaos/core';
 import type { AgentServer } from '../../index';
 import { sendError, sendSuccess } from '../shared/response-utils';
 import { requireAuth, type AuthenticatedRequest } from '../../middleware';
 import { CdpTransactionManager } from '@/managers/cdp-transaction-manager';
 import { MAINNET_NETWORKS } from '@/constants/chains';
 
-export function cdpRouter(_serverInstance: AgentServer): express.Router {
+export function cdpRouter(serverInstance: AgentServer): express.Router {
   const router = express.Router();
+  const db = serverInstance?.database;
 
   // Get the singleton instance of CdpTransactionManager
   const cdpTransactionManager = CdpTransactionManager.getInstance();
   
   // SECURITY: Require authentication for all CDP wallet operations
   router.use(requireAuth);
+
+  /**
+   * Helper: Get wallet address from entity metadata for GET requests
+   */
+  async function getWalletAddressFromEntity(userId: string): Promise<string | null> {
+    if (!db) {
+      logger.warn('[CDP API] Database not available, cannot fetch entity metadata');
+      return null;
+    }
+
+    try {
+      const validatedUserId = validateUuid(userId);
+      if (!validatedUserId) {
+        logger.warn(`[CDP API] Invalid UUID format for userId: ${userId}`);
+        return null;
+      }
+      
+      const entities = await db.getEntitiesByIds([validatedUserId]);
+      if (!entities || entities.length === 0) {
+        return null;
+      }
+
+      const entity = entities[0];
+      const walletAddress = entity.metadata?.walletAddress as string | undefined;
+      
+      if (walletAddress && typeof walletAddress === 'string' && walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+        logger.debug(`[CDP API] Found wallet address in entity metadata: ${walletAddress}`);
+        return walletAddress;
+      }
+
+      return null;
+    } catch (error) {
+      logger.warn('[CDP API] Error fetching entity metadata:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
 
   /**
    * POST /api/cdp/wallet
@@ -48,6 +85,9 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
    * Query params:
    *   - chain (optional): Specific chain to fetch (e.g., 'base', 'ethereum', 'polygon')
    * SECURITY: Uses authenticated userId from JWT token
+   * 
+   * For GET requests, we fetch the wallet address from entity metadata instead of
+   * calling getOrCreateAccount, which avoids unnecessary account initialization.
    */
   router.get('/wallet/tokens', async (req: AuthenticatedRequest, res) => {
     try {
@@ -59,7 +99,10 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_CHAIN', `Invalid or unsupported chain: ${chain}`);
       }
 
-      const result = await cdpTransactionManager.getTokenBalances(userId, chain, false);
+      // Try to get address from entity metadata first (for GET requests)
+      const walletAddress = await getWalletAddressFromEntity(userId);
+      
+      const result = await cdpTransactionManager.getTokenBalances(userId, chain, false, walletAddress || undefined);
 
       sendSuccess(res, result);
     } catch (error) {
@@ -83,6 +126,8 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
    * Body params:
    *   - chain (optional): Specific chain to fetch (e.g., 'base', 'ethereum', 'polygon')
    * SECURITY: Uses authenticated userId from JWT token
+   * 
+   * Tries to get wallet address from entity metadata first, then falls back to CDP account
    */
   router.post('/wallet/tokens/sync', async (req: AuthenticatedRequest, res) => {
     try {
@@ -94,7 +139,10 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_CHAIN', `Invalid or unsupported chain: ${chain}`);
       }
 
-      const result = await cdpTransactionManager.getTokenBalances(userId, chain, true);
+      // Try to get address from entity metadata first (same as GET endpoint)
+      const walletAddress = await getWalletAddressFromEntity(userId);
+      
+      const result = await cdpTransactionManager.getTokenBalances(userId, chain, true, walletAddress || undefined);
 
       sendSuccess(res, { ...result, synced: true });
     } catch (error) {
@@ -118,6 +166,9 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
    * Query params:
    *   - chain (optional): Specific chain to fetch (e.g., 'base', 'ethereum', 'polygon')
    * SECURITY: Uses authenticated userId from JWT token
+   * 
+   * For GET requests, we fetch the wallet address from entity metadata instead of
+   * calling getOrCreateAccount, which avoids unnecessary account initialization.
    */
   router.get('/wallet/nfts', async (req: AuthenticatedRequest, res) => {
     try {
@@ -129,7 +180,10 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_CHAIN', `Invalid or unsupported chain: ${chain}`);
       }
 
-      const result = await cdpTransactionManager.getNFTs(userId, chain, false);
+      // Try to get address from entity metadata first (for GET requests)
+      const walletAddress = await getWalletAddressFromEntity(userId);
+      
+      const result = await cdpTransactionManager.getNFTs(userId, chain, false, walletAddress || undefined);
 
       sendSuccess(res, result);
     } catch (error) {
@@ -153,6 +207,8 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
    * Body params:
    *   - chain (optional): Specific chain to fetch (e.g., 'base', 'ethereum', 'polygon')
    * SECURITY: Uses authenticated userId from JWT token
+   * 
+   * Tries to get wallet address from entity metadata first, then falls back to CDP account
    */
   router.post('/wallet/nfts/sync', async (req: AuthenticatedRequest, res) => {
     try {
@@ -164,7 +220,10 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_CHAIN', `Invalid or unsupported chain: ${chain}`);
       }
 
-      const result = await cdpTransactionManager.getNFTs(userId, chain, true);
+      // Try to get address from entity metadata first (same as GET endpoint)
+      const walletAddress = await getWalletAddressFromEntity(userId);
+      
+      const result = await cdpTransactionManager.getNFTs(userId, chain, true, walletAddress || undefined);
 
       sendSuccess(res, { ...result, synced: true });
     } catch (error) {
@@ -186,12 +245,18 @@ export function cdpRouter(_serverInstance: AgentServer): express.Router {
    * GET /api/cdp/wallet/history
    * Get transaction history for authenticated user across networks using Alchemy API
    * SECURITY: Uses authenticated userId from JWT token
+   * 
+   * For GET requests, we fetch the wallet address from entity metadata instead of
+   * calling getOrCreateAccount, which avoids unnecessary account initialization.
    */
   router.get('/wallet/history', async (req: AuthenticatedRequest, res) => {
     try {
       const userId = req.userId!;
 
-      const result = await cdpTransactionManager.getTransactionHistory(userId);
+      // Try to get address from entity metadata first (for GET requests)
+      const walletAddress = await getWalletAddressFromEntity(userId);
+      
+      const result = await cdpTransactionManager.getTransactionHistory(userId, walletAddress || undefined);
 
       sendSuccess(res, result);
     } catch (error) {
