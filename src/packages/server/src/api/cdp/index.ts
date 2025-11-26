@@ -4,7 +4,7 @@ import type { AgentServer } from '../../index';
 import { sendError, sendSuccess } from '../shared/response-utils';
 import { requireAuth, type AuthenticatedRequest } from '../../middleware';
 import { CdpTransactionManager } from '@/managers/cdp-transaction-manager';
-import { MAINNET_NETWORKS } from '@/constants/chains';
+import { MAINNET_NETWORKS, NATIVE_TOKEN_ADDRESS } from '@/constants/chains';
 
 export function cdpRouter(serverInstance: AgentServer): express.Router {
   const router = express.Router();
@@ -353,9 +353,125 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
   });
 
   /**
+   * Wrapped token addresses - matches action handler exactly
+   */
+  const WETH_ADDRESSES: Record<string, string> = {
+    "base": "0x4200000000000000000000000000000000000006",
+    "base-sepolia": "0x4200000000000000000000000000000000000006",
+    "ethereum": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "arbitrum": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    "optimism": "0x4200000000000000000000000000000000000006",
+    "polygon": "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+  };
+
+  const WMATIC_ADDRESS = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
+
+  /**
+   * Helper function to resolve token to address - matches action handler signature exactly
+   * Uses the same logic as cdp-wallet-swap.ts action handler
+   */
+  async function resolveTokenToAddress(
+    token: string,
+    network: string
+  ): Promise<`0x${string}` | null> {
+    logger.debug(`[CDP API] Resolving token: ${token} on network: ${network}`);
+    const trimmedToken = token.trim();
+    
+    // For native ETH - CDP uses special native token address
+    // EXCEPTION: On Polygon, ETH refers to WETH (bridged ETH), not the native gas token
+    if (trimmedToken.toLowerCase() === "eth") {
+      if (network === "polygon") {
+        const wethAddress = WETH_ADDRESSES[network];
+        logger.info(`[CDP API] Using WETH contract address for ETH on Polygon: ${wethAddress}`);
+        return wethAddress as `0x${string}`;
+      }
+      logger.info(`[CDP API] Using native token address for ETH: ${NATIVE_TOKEN_ADDRESS}`);
+      return NATIVE_TOKEN_ADDRESS as `0x${string}`;
+    }
+    
+    // For explicit WETH - use actual WETH contract address
+    if (trimmedToken.toLowerCase() === "weth") {
+      const wethAddress = WETH_ADDRESSES[network];
+      if (wethAddress) {
+        logger.info(`[CDP API] Using WETH contract address for ${network}: ${wethAddress}`);
+        return wethAddress as `0x${string}`;
+      }
+      logger.warn(`[CDP API] No WETH address configured for network ${network}`);
+    }
+    
+    // For native MATIC/POL on Polygon - use native token address
+    if ((trimmedToken.toLowerCase() === "matic" || trimmedToken.toLowerCase() === "pol") && network === "polygon") {
+      logger.info(`[CDP API] Using native token address for ${trimmedToken.toUpperCase()}: ${NATIVE_TOKEN_ADDRESS}`);
+      return NATIVE_TOKEN_ADDRESS as `0x${string}`;
+    }
+    
+    // For explicit WMATIC on Polygon - use actual WMATIC contract address
+    if (trimmedToken.toLowerCase() === "wmatic" && network === "polygon") {
+      logger.info(`[CDP API] Using WMATIC contract address for Polygon: ${WMATIC_ADDRESS}`);
+      return WMATIC_ADDRESS as `0x${string}`;
+    }
+    
+    // If it looks like an address, validate it via searchTokens (simpler than CoinGecko validation for API route)
+    if (trimmedToken.startsWith("0x") && trimmedToken.length === 42) {
+      logger.debug(`[CDP API] Token ${token} looks like an address, validating via searchTokens`);
+      try {
+        const searchResult = await cdpTransactionManager.searchTokens({
+          query: trimmedToken,
+          chain: network,
+        });
+        
+        // Check if address exists in search results
+        const foundToken = searchResult.tokens?.find(
+          (t: any) => t.contractAddress?.toLowerCase() === trimmedToken.toLowerCase() && t.chain === network
+        );
+        
+        if (foundToken) {
+          logger.info(`[CDP API] Validated address ${token} exists: ${foundToken.symbol} (${foundToken.name})`);
+          return trimmedToken as `0x${string}`;
+        }
+        logger.warn(`[CDP API] Address ${token} not found via searchTokens for network ${network} - may be fake/invalid`);
+      } catch (error) {
+        logger.warn(`[CDP API] Failed to validate address ${token}:`, error instanceof Error ? error.message : String(error));
+      }
+      // Still return the address even if validation fails (let transaction manager handle it)
+      return trimmedToken as `0x${string}`;
+    }
+    
+    // Try to resolve symbol to address via searchTokens
+    logger.debug(`[CDP API] Resolving token symbol from searchTokens for ${trimmedToken}`);
+    try {
+      const searchResult = await cdpTransactionManager.searchTokens({
+        query: trimmedToken,
+        chain: network,
+      });
+      
+      // Find exact symbol match
+      const matchedToken = searchResult.tokens?.find(
+        (t: any) => t.symbol?.toLowerCase() === trimmedToken.toLowerCase() && t.chain === network && t.contractAddress
+      );
+      
+      if (matchedToken?.contractAddress) {
+        logger.info(`[CDP API] Resolved ${token} to ${matchedToken.contractAddress} via searchTokens`);
+        return matchedToken.contractAddress.toLowerCase() as `0x${string}`;
+      }
+    } catch (error) {
+      logger.warn(`[CDP API] Failed to resolve token symbol ${token}:`, error instanceof Error ? error.message : String(error));
+    }
+    
+    logger.warn(`[CDP API] Could not resolve token ${token} on ${network}`);
+    return null;
+  }
+
+  /**
    * POST /api/cdp/wallet/swap-price
    * Get swap price estimate for authenticated user
    * SECURITY: Uses userId from JWT token, not from request body
+   * 
+   * Resolves token symbols/addresses to proper addresses before getting swap price.
+   * Handles:
+   * - Native tokens: 'eth', 'matic', 'pol' -> NATIVE_TOKEN_ADDRESS
+   * - Token symbols: 'USDC', 'CBBTC' -> resolved via searchTokens
+   * - Token addresses: '0x...' -> used directly
    */
   router.post('/wallet/swap-price', async (req: AuthenticatedRequest, res) => {
     try {
@@ -366,11 +482,26 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_REQUEST', 'Missing required fields: network, fromToken, toToken, fromAmount');
       }
 
+      // Resolve token symbols/addresses to proper addresses (same logic as action handler)
+      logger.debug(`[CDP API] Resolving tokens for swap price: ${fromToken} -> ${toToken} on ${network}`);
+      
+      const resolvedFromToken = await resolveTokenToAddress(fromToken, network);
+      const resolvedToToken = await resolveTokenToAddress(toToken, network);
+      
+      if (!resolvedFromToken) {
+        return sendError(res, 400, 'TOKEN_RESOLUTION_FAILED', `Could not resolve source token: ${fromToken}`);
+      }
+      if (!resolvedToToken) {
+        return sendError(res, 400, 'TOKEN_RESOLUTION_FAILED', `Could not resolve destination token: ${toToken}`);
+      }
+
+      logger.debug(`[CDP API] Resolved tokens: ${resolvedFromToken} -> ${resolvedToToken}`);
+
       const result = await cdpTransactionManager.getSwapPrice({
         userId,
         network,
-        fromToken,
-        toToken,
+        fromToken: resolvedFromToken,
+        toToken: resolvedToToken,
         fromAmount,
       });
 
@@ -394,6 +525,12 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
    * POST /api/cdp/wallet/swap
    * Execute token swap for authenticated user (CDP SDK with viem fallback, or Uniswap V3)
    * SECURITY: Uses userId from JWT token, not from request body
+   * 
+   * Resolves token symbols/addresses to proper addresses before executing swap.
+   * Handles:
+   * - Native tokens: 'eth', 'matic', 'pol' -> NATIVE_TOKEN_ADDRESS
+   * - Token symbols: 'USDC', 'CBBTC' -> resolved via searchTokens
+   * - Token addresses: '0x...' -> used directly
    */
   router.post('/wallet/swap', async (req: AuthenticatedRequest, res) => {
     try {
@@ -404,11 +541,26 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
         return sendError(res, 400, 'INVALID_REQUEST', 'Missing required fields: network, fromToken, toToken, fromAmount, slippageBps');
       }
 
+      // Resolve token symbols/addresses to proper addresses (same logic as action handler)
+      logger.debug(`[CDP API] Resolving tokens for swap: ${fromToken} -> ${toToken} on ${network}`);
+      
+      const resolvedFromToken = await resolveTokenToAddress(fromToken, network);
+      const resolvedToToken = await resolveTokenToAddress(toToken, network);
+      
+      if (!resolvedFromToken) {
+        return sendError(res, 400, 'TOKEN_RESOLUTION_FAILED', `Could not resolve source token: ${fromToken}`);
+      }
+      if (!resolvedToToken) {
+        return sendError(res, 400, 'TOKEN_RESOLUTION_FAILED', `Could not resolve destination token: ${toToken}`);
+      }
+
+      logger.debug(`[CDP API] Resolved tokens: ${resolvedFromToken} -> ${resolvedToToken}`);
+
       const result = await cdpTransactionManager.swap({
         userId,
-            network,
-            fromToken,
-            toToken,
+        network,
+        fromToken: resolvedFromToken,
+        toToken: resolvedToToken,
         fromAmount,
         slippageBps,
       });

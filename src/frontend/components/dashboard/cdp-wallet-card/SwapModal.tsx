@@ -287,19 +287,74 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
     setWarning(null);
 
     try {
-      // Convert amount to base units (with decimals) - avoid scientific notation
-      // Cap at actual balance to prevent exceeding balance
-      const amountInBaseUnits = convertToBaseUnits(fromAmount, fromToken.decimals, fromToken.balance);
+      // Ensure fromAmount is a string
+      const amountStr = String(fromAmount).trim();
+      if (!amountStr || isNaN(parseFloat(amountStr))) {
+        throw new Error('Invalid amount');
+      }
 
-      // Send token address or 'eth' for native token - server will normalize it
-      const fromTokenAddress = fromToken.contractAddress || 'eth';
-      const toTokenAddress = toToken.contractAddress || 'eth';
+      // Convert amount to base units (with decimals) - avoid scientific notation
+      // Note: fromToken.balance is in decimal format (e.g., "5.476522"), not base units
+      // So we need to convert it to base units for comparison
+      const balanceInBaseUnits = convertToBaseUnits(fromToken.balance, fromToken.decimals);
+      const amountInBaseUnits = convertToBaseUnits(amountStr, fromToken.decimals, balanceInBaseUnits);
+
+      // Ensure amountInBaseUnits is a string (not a number)
+      const amountInBaseUnitsStr = String(amountInBaseUnits);
+      
+      // Validate it's a valid BigInt string (no decimals, only digits)
+      if (!/^\d+$/.test(amountInBaseUnitsStr)) {
+        throw new Error(`Invalid base units format: ${amountInBaseUnitsStr}`);
+      }
+
+      // Resolve token addresses - prefer contractAddress, fallback to symbol
+      // For native tokens, use specific symbols (eth, pol, etc.)
+      let fromTokenAddress: string;
+      if (fromToken.contractAddress) {
+        fromTokenAddress = fromToken.contractAddress;
+      } else {
+        // Native token mapping
+        const nativeTokenMap: Record<string, string> = {
+          'base': 'eth',
+          'ethereum': 'eth',
+          'polygon': 'pol',
+          'arbitrum': 'eth',
+          'optimism': 'eth',
+        };
+        fromTokenAddress = nativeTokenMap[fromToken.chain.toLowerCase()] || fromToken.symbol.toLowerCase();
+      }
+
+      let toTokenAddress: string;
+      if (toToken.contractAddress) {
+        toTokenAddress = toToken.contractAddress;
+      } else {
+        // Native token mapping
+        const nativeTokenMap: Record<string, string> = {
+          'base': 'eth',
+          'ethereum': 'eth',
+          'polygon': 'pol',
+          'arbitrum': 'eth',
+          'optimism': 'eth',
+        };
+        toTokenAddress = nativeTokenMap[toToken.chain.toLowerCase()] || toToken.symbol.toLowerCase();
+      }
+
+      console.log('[SwapModal] Getting swap price:', {
+        network: fromToken.chain,
+        fromToken: fromTokenAddress,
+        toToken: toTokenAddress,
+        fromAmount: amountInBaseUnitsStr,
+        fromAmountOriginal: fromAmount,
+        fromTokenDecimals: fromToken.decimals,
+        fromTokenSymbol: fromToken.symbol,
+        toTokenSymbol: toToken.symbol,
+      });
 
       const result = await elizaClient.cdp.getSwapPrice({
         network: fromToken.chain,
         fromToken: fromTokenAddress,
         toToken: toTokenAddress,
-        fromAmount: amountInBaseUnits,
+        fromAmount: amountInBaseUnitsStr,
       });
 
       const CDP_NETWORKS = ['base', 'ethereum'];
@@ -318,10 +373,11 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
         setToAmount('');
         setWarning('Insufficient liquidity for this swap');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error estimating swap price:', err);
+      const errorMessage = err?.response?.data?.message || err?.message || 'Failed to get swap price';
       setToAmount('');
-      setWarning('Failed to get swap price. Please try again.');
+      setWarning(`Failed to get swap price: ${errorMessage}. Please try again.`);
     } finally {
       setIsLoadingPrice(false);
     }
@@ -339,11 +395,26 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
       return;
     }
 
+    // Validate amount doesn't exceed balance
+    // Use raw balance (decimal string) and convert both to base units for accurate comparison
     const amount = parseFloat(fromAmount);
-    const balance = parseFloat(fromToken.balanceFormatted);
+    const balance = parseFloat(fromToken.balance);
 
-    if (amount > balance) {
-      showError('Insufficient Balance', `Insufficient ${fromToken.symbol} balance`, modalId);
+    if (isNaN(amount) || isNaN(balance) || amount <= 0) {
+      showError('Validation Error', 'Please enter a valid amount', modalId);
+      return;
+    }
+
+    // Convert both to base units for accurate comparison (avoid floating point precision issues)
+    const balanceInBaseUnits = convertToBaseUnits(fromToken.balance, fromToken.decimals);
+    const amountInBaseUnitsForValidation = convertToBaseUnits(fromAmount, fromToken.decimals);
+    
+    // Compare as BigInt strings to avoid precision issues
+    const balanceBigInt = BigInt(balanceInBaseUnits);
+    const amountBigInt = BigInt(amountInBaseUnitsForValidation);
+
+    if (amountBigInt > balanceBigInt) {
+      showError('Insufficient Balance', `Insufficient ${fromToken.symbol} balance. You have ${fromToken.balanceFormatted} ${fromToken.symbol}`, modalId);
       return;
     }
 
@@ -351,15 +422,44 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
       showLoading('Swapping Tokens', 'Please wait while we process your swap...', modalId);
       
       // Convert amount to base units - avoid scientific notation
-      // Cap at actual balance to prevent TRANSFER_FROM_FAILED errors
-      const amountInBaseUnits = convertToBaseUnits(fromAmount, fromToken.decimals, fromToken.balance);
+      // Note: fromToken.balance is in decimal format, convert it to base units for comparison
+      const balanceInBaseUnits = convertToBaseUnits(fromToken.balance, fromToken.decimals);
+      const amountInBaseUnits = convertToBaseUnits(fromAmount, fromToken.decimals, balanceInBaseUnits);
       
       // Convert slippage to basis points (1% = 100 bps)
       const slippageBps = Math.round(parseFloat(slippage) * 100);
 
-      // Send token address or 'eth' for native token - server will normalize it
-      const fromTokenAddress = fromToken.contractAddress || 'eth';
-      const toTokenAddress = toToken.contractAddress || 'eth';
+      // Resolve token addresses - prefer contractAddress, fallback to symbol
+      // For native tokens, use specific symbols (eth, pol, etc.)
+      let fromTokenAddress: string;
+      if (fromToken.contractAddress) {
+        fromTokenAddress = fromToken.contractAddress;
+      } else {
+        // Native token mapping
+        const nativeTokenMap: Record<string, string> = {
+          'base': 'eth',
+          'ethereum': 'eth',
+          'polygon': 'pol',
+          'arbitrum': 'eth',
+          'optimism': 'eth',
+        };
+        fromTokenAddress = nativeTokenMap[fromToken.chain.toLowerCase()] || fromToken.symbol.toLowerCase();
+      }
+
+      let toTokenAddress: string;
+      if (toToken.contractAddress) {
+        toTokenAddress = toToken.contractAddress;
+      } else {
+        // Native token mapping
+        const nativeTokenMap: Record<string, string> = {
+          'base': 'eth',
+          'ethereum': 'eth',
+          'polygon': 'pol',
+          'arbitrum': 'eth',
+          'optimism': 'eth',
+        };
+        toTokenAddress = nativeTokenMap[toToken.chain.toLowerCase()] || toToken.symbol.toLowerCase();
+      }
 
       const result = await elizaClient.cdp.swap({
         network: fromToken.chain,
@@ -371,6 +471,9 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
 
       console.log(' Swap successful:', result);
       
+      // Trigger wallet refresh FIRST to get updated balances
+      onSuccess();
+      
       // Show success
       showSuccess(
         'Swap Successful!',
@@ -379,14 +482,13 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
         false // Don't auto-close
       );
       
-      // Reset form
-      setFromToken(null);
-      setToToken(null);
-      setFromAmount('');
-      setToAmount('');
-      
-      // Trigger wallet refresh
-      onSuccess();
+      // Reset form after a short delay to allow balance refresh
+      setTimeout(() => {
+        setFromToken(null);
+        setToToken(null);
+        setFromAmount('');
+        setToAmount('');
+      }, 500);
       
     } catch (err: any) {
       console.error('Error executing swap:', err);
