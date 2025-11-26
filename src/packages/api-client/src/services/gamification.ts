@@ -34,6 +34,18 @@ export interface UserSummary {
   swapsCompleted?: number;
 }
 
+export interface ReferralStats {
+  totalReferrals: number;
+  activatedReferrals: number;
+  totalPointsEarned: number;
+}
+
+export interface ReferralCodeResponse {
+  code: string;
+  stats: ReferralStats;
+  referralLink: string;
+}
+
 export class GamificationService extends BaseApiClient {
   /**
    * Get leaderboard data
@@ -74,6 +86,21 @@ export class GamificationService extends BaseApiClient {
   ): Promise<UserSummary> {
     return this.get<UserSummary>(
       `/api/agents/${agentId}/plugins/gamification/summary`,
+      { params: { userId } }
+    );
+  }
+
+  /**
+   * Get or create referral code for user
+   * @param agentId Agent ID to route the request to
+   * @param userId User ID to get referral code for
+   */
+  async getReferralCode(
+    agentId: UUID,
+    userId: UUID
+  ): Promise<ReferralCodeResponse> {
+    return this.get<ReferralCodeResponse>(
+      `/api/agents/${agentId}/plugins/gamification/referral`,
       { params: { userId } }
     );
   }

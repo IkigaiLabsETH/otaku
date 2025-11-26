@@ -75,6 +75,28 @@ async function handleGetUserSummary(req: Request, res: Response, runtime: IAgent
   }
 }
 
+// Referral code route handler
+async function handleGetReferralCode(req: Request, res: Response, runtime: IAgentRuntime) {
+  try {
+    const userId = req.query.userId as string | undefined;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const referralService = runtime.getService('referral') as ReferralService;
+    if (!referralService) {
+      return res.status(503).json({ error: 'Referral service not available' });
+    }
+
+    const { code, stats } = await referralService.getOrCreateCode(userId as any);
+    res.json({ code, stats, referralLink: `https://otaku.so/?ref=${code}` });
+  } catch (error) {
+    logger.error({ error }, '[GamificationPlugin] Error fetching referral code');
+    res.status(500).json({ error: 'Error fetching referral code' });
+  }
+}
+
 export const gamificationPlugin: Plugin = {
   name: 'gamification',
   description: 'Points economy, leaderboards, and referral system for Otaku',
@@ -106,6 +128,11 @@ export const gamificationPlugin: Plugin = {
       path: '/summary',
       type: 'GET',
       handler: handleGetUserSummary,
+    },
+    {
+      path: '/referral',
+      type: 'GET',
+      handler: handleGetReferralCode,
     },
   ],
 };

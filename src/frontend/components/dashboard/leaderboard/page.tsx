@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { elizaClient } from "@/lib/elizaClient";
 import type { RebelRanking } from "@/types/dashboard";
-import type { LeaderboardEntry } from '@elizaos/api-client/src/services/gamification';
-import { Trophy, RefreshCw } from "lucide-react";
+import type { LeaderboardEntry, ReferralCodeResponse } from '@elizaos/api-client/src/services/gamification';
+import { Trophy, RefreshCw, Copy, Check } from "lucide-react";
 import { UUID } from '@elizaos/core';
 
 // Type assertion for gamification service (will be available after API client rebuild)
@@ -22,6 +22,7 @@ interface LeaderboardPageProps {
 
 export default function LeaderboardPage({ agentId, userId }: LeaderboardPageProps) {
   const [scope, setScope] = useState<'weekly' | 'all_time'>('weekly');
+  const [copied, setCopied] = useState(false);
 
   const { data: leaderboardData, isLoading, error, refetch } = useQuery({
     queryKey: ['leaderboard', agentId, scope, userId],
@@ -67,6 +68,31 @@ export default function LeaderboardPage({ agentId, userId }: LeaderboardPageProp
 
   const handleRefresh = () => {
     refetch();
+  };
+
+  // Query for referral code
+  const { data: referralData, isLoading: isLoadingReferral, refetch: refetchReferral } = useQuery({
+    queryKey: ['referralCode', agentId, userId],
+    queryFn: async () => {
+      if (!gamificationClient || !userId) {
+        throw new Error('Gamification service or userId not available');
+      }
+      return await gamificationClient.getReferralCode(agentId, userId);
+    },
+    enabled: !!userId && !!agentId,
+    staleTime: Infinity, // Referral code doesn't change
+  });
+
+  const handleCopyReferralLink = async () => {
+    if (!referralData?.referralLink) return;
+    
+    try {
+      await navigator.clipboard.writeText(referralData.referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy referral link:', err);
+    }
   };
 
   return (
@@ -200,6 +226,75 @@ export default function LeaderboardPage({ agentId, userId }: LeaderboardPageProp
                 {leaderboardData.entries.find((e: LeaderboardEntry) => e.userId === userId)?.points.toLocaleString() || 0} POINTS
               </Badge>
             </div>
+          </DashboardCard>
+        )}
+
+        {/* Referral Link Card */}
+        {userId && (
+          <DashboardCard title="Referral Link">
+            {isLoadingReferral ? (
+              <div className="space-y-3">
+                <div className="h-10 bg-muted rounded animate-pulse" />
+                <div className="h-9 bg-muted rounded w-32 animate-pulse" />
+              </div>
+            ) : referralData ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 p-3 bg-muted rounded-lg border">
+                    <div className="text-xs text-muted-foreground mb-1">Your Referral Link</div>
+                    <div className="text-sm font-mono break-all">{referralData.referralLink}</div>
+                  </div>
+                  <Button
+                    onClick={handleCopyReferralLink}
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2 text-green-500" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Signups: </span>
+                    <span className="font-semibold">{referralData.stats.totalReferrals}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Activated: </span>
+                    <span className="font-semibold">{referralData.stats.activatedReferrals}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Points Earned: </span>
+                    <span className="font-semibold">{referralData.stats.totalPointsEarned.toLocaleString()}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Share your referral link to earn points when friends sign up and activate their accounts!
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">Unable to load referral code</p>
+                <Button
+                  onClick={() => refetchReferral()}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Retry
+                </Button>
+              </div>
+            )}
           </DashboardCard>
         )}
       </div>
