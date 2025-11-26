@@ -1,4 +1,5 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle, useMemo } from 'react';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Bullet } from '../../ui/bullet';
@@ -75,6 +76,7 @@ export interface CDPWalletCardRef {
 export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
   ({ userId, walletAddress, onBalanceChange, onActionClick }, ref) => {
   const { showModal } = useModal();
+  const queryClient = useQueryClient();
   
   // Format address for display (shortened)
   const shortAddress = walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : '';
@@ -84,23 +86,23 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
   const [hidePopupTimeout, setHidePopupTimeout] = useState<NodeJS.Timeout | null>(null);
   const [activeTab, setActiveTab] = useState<'tokens' | 'collections' | 'history'>('tokens');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
-  // Tokens state
-  const [tokens, setTokens] = useState<Token[]>([]);
-  const [totalUsdValue, setTotalUsdValue] = useState(0);
-  const [isLoadingTokens, setIsLoadingTokens] = useState(true);
-  const [tokensError, setTokensError] = useState<string | null>(null);
-  
-  // NFTs state
-  const [nfts, setNfts] = useState<NFT[]>([]);
-  const [isLoadingNfts, setIsLoadingNfts] = useState(false);
-  const [nftsError, setNftsError] = useState<string | null>(null);
-  
-  // Transaction history state
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
 
+  // ============ TanStack Query: Tokens ============
+  // Fetch tokens from all chains in parallel using useQueries
+  const tokenQueries = useQueries({
+    queries: SUPPORTED_CHAINS.map((chain) => ({
+      queryKey: ['cdp-tokens', userId, chain],
+      queryFn: async () => {
+        const data = await elizaClient.cdp.getTokens(chain);
+        return data?.tokens || [];
+      },
+      enabled: !!userId,
+      staleTime: 30_000, // 30 seconds
+      gcTime: 5 * 60_000, // 5 minutes (formerly cacheTime)
+    })),
+  });
+
+  // Combine tokens from all chain queries
   const getChainSortOrder = (chain: string): number => {
     const index = SUPPORTED_CHAINS.indexOf(chain as (typeof SUPPORTED_CHAINS)[number]);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
@@ -126,9 +128,42 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
     });
   };
 
+  // Derive tokens state from queries - combines results from all chains
+  const tokens = useMemo(() => {
+    const allTokens: Token[] = [];
+    for (const query of tokenQueries) {
+      if (query.data) {
+        allTokens.push(...query.data);
+      }
+    }
+    return sortTokensByUsdValueDesc(allTokens);
+  }, [tokenQueries.map(q => q.data)]);
+
+  const isLoadingTokens = tokenQueries.some(q => q.isLoading);
+  const tokensError = tokenQueries.find(q => q.error)?.error?.message || null;
+  
+  // Calculate total USD value from tokens
+  const totalUsdValue = useMemo(() => {
+    return tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
+  }, [tokens]);
+
+  // ============ TanStack Query: NFTs ============
+  const nftQueries = useQueries({
+    queries: SUPPORTED_CHAINS.map((chain) => ({
+      queryKey: ['cdp-nfts', userId, chain],
+      queryFn: async () => {
+        const data = await elizaClient.cdp.getNFTs(chain);
+        return data?.nfts || [];
+      },
+      enabled: !!userId && activeTab === 'collections',
+      staleTime: 60_000, // 1 minute
+      gcTime: 5 * 60_000,
+    })),
+  });
+
   // Helper: Sort NFTs by chain order (matches SUPPORTED_CHAINS order)
   const sortNftsByChainOrder = (nftsToSort: NFT[]): NFT[] => {
-    return nftsToSort.sort((a, b) => {
+    return [...nftsToSort].sort((a, b) => {
       const aIndex = SUPPORTED_CHAINS.indexOf(a.chain as any);
       const bIndex = SUPPORTED_CHAINS.indexOf(b.chain as any);
       // If chain not found, put it at the end
@@ -138,218 +173,90 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
     });
   };
 
-  // Expose refresh methods via ref
-  useImperativeHandle(ref, () => ({
-    refreshTokens: async () => {
-      console.log(' Refreshing tokens via ref...');
-      await syncTokens();
-    },
-    refreshNFTs: async () => {
-      console.log(' Refreshing NFTs via ref...');
-      await syncNfts();
-    },
-    refreshAll: async () => {
-      console.log(' Refreshing all wallet data via ref...');
-      await Promise.all([syncTokens(), syncNfts()]);
-    },
-  }));
+  // Derive NFTs state from queries
+  const nfts = useMemo(() => {
+    const allNfts: NFT[] = [];
+    for (const query of nftQueries) {
+      if (query.data) {
+        allNfts.push(...query.data);
+      }
+    }
+    return sortNftsByChainOrder(allNfts);
+  }, [nftQueries.map(q => q.data)]);
 
-  // Calculate total USD value whenever tokens change
-  useEffect(() => {
-    const total = tokens.reduce((sum, token) => sum + (token.usdValue || 0), 0);
-    setTotalUsdValue(total);
-  }, [tokens]);
+  const isLoadingNfts = nftQueries.some(q => q.isLoading);
+  const nftsError = nftQueries.find(q => q.error)?.error?.message || null;
 
-  // Sync tokens (force refresh) concurrently across all chains with progressive updates
+  // ============ TanStack Query: Transaction History ============
+  const historyQuery = useQuery({
+    queryKey: ['cdp-history', userId],
+    queryFn: async () => {
+      const data = await elizaClient.cdp.getHistory();
+      return data?.transactions || [];
+    },
+    enabled: !!userId && activeTab === 'history',
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+  });
+
+  const transactions = historyQuery.data || [];
+  const isLoadingHistory = historyQuery.isLoading;
+  const historyError = historyQuery.error?.message || null;
+
+  // ============ Refresh Functions ============
+  // Invalidate and refetch tokens (for manual sync - bypasses cache on server)
   const syncTokens = async () => {
     if (!userId) return;
     
-    setIsLoadingTokens(true);
-    setTokensError(null);
-    
-    try {
-      // Fetch all chains concurrently with sync and update as each completes
-      const chainPromises = SUPPORTED_CHAINS.map(async (chain) => {
+    // Use sync endpoint (bypasses server cache) for each chain
+    await Promise.all(
+      SUPPORTED_CHAINS.map(async (chain) => {
         try {
-          const data = await elizaClient.cdp.syncTokens(chain);
-          
-          // Update UI immediately when this chain returns
-          if (data && data.tokens) {
-            setTokens(prevTokens => {
-              // Remove old tokens from this chain
-              const otherChainTokens = prevTokens.filter(token => token.chain !== chain);
-              // Add new tokens from this chain
-              const mergedTokens = [...otherChainTokens, ...data.tokens];
-              return sortTokensByUsdValueDesc(mergedTokens);
-            });
-          }
-          
-          return data;
+          await elizaClient.cdp.syncTokens(chain);
         } catch (err) {
           console.error(`Error syncing tokens for ${chain}:`, err);
-          return null;
         }
-      });
-
-      // Wait for all chain syncs to complete
-      await Promise.all(chainPromises);
-    } catch (error) {
-      console.error('Error syncing tokens:', error);
-      setTokensError('Failed to sync tokens');
-      setTokens([]);
-    } finally {
-      setIsLoadingTokens(false);
-    }
+      })
+    );
+    
+    // Invalidate queries to refetch with fresh data
+    await queryClient.invalidateQueries({ queryKey: ['cdp-tokens', userId] });
   };
 
-  // Sync NFTs (force refresh) concurrently across all chains with progressive updates
+  // Invalidate and refetch NFTs
   const syncNfts = async () => {
     if (!userId) return;
     
-    setIsLoadingNfts(true);
-    setNftsError(null);
-    
-    try {
-      // Fetch all chains concurrently with sync and update as each completes
-      const chainPromises = SUPPORTED_CHAINS.map(async (chain) => {
+    // Use sync endpoint (bypasses server cache) for each chain
+    await Promise.all(
+      SUPPORTED_CHAINS.map(async (chain) => {
         try {
-          const data = await elizaClient.cdp.syncNFTs(chain);
-          
-          // Update UI immediately when this chain returns
-          if (data && data.nfts) {
-            // Replace only this chain's NFTs, keep others intact
-            setNfts(prevNfts => {
-              // Remove old NFTs from this chain
-              const otherChainNfts = prevNfts.filter(nft => nft.chain !== chain);
-              // Add new NFTs from this chain
-              const mergedNfts = [...otherChainNfts, ...data.nfts];
-              // Sort by chain order to maintain consistent display
-              return sortNftsByChainOrder(mergedNfts);
-            });
-          }
-          
-          return data;
+          await elizaClient.cdp.syncNFTs(chain);
         } catch (err) {
           console.error(`Error syncing NFTs for ${chain}:`, err);
-          return null;
         }
-      });
-
-      // Wait for all chain syncs to complete
-      await Promise.all(chainPromises);
-    } catch (error) {
-      console.error('Error syncing NFTs:', error);
-      setNftsError('Failed to sync NFTs');
-      setNfts([]);
-    } finally {
-      setIsLoadingNfts(false);
-    }
+      })
+    );
+    
+    // Invalidate queries to refetch with fresh data
+    await queryClient.invalidateQueries({ queryKey: ['cdp-nfts', userId] });
   };
 
-  // Fetch tokens concurrently across all chains with progressive chain-by-chain updates
-  const fetchTokens = async () => {
-    if (!userId) return;
-    
-    setIsLoadingTokens(true);
-    setTokensError(null);
-    
-    try {
-      // Fetch all chains concurrently and update UI as each chain completes
-      const chainPromises = SUPPORTED_CHAINS.map(async (chain) => {
-        try {
-          const data = await elizaClient.cdp.getTokens(chain);
-          
-          // Update UI immediately when this chain returns
-          if (data && data.tokens) {
-            setTokens(prevTokens => {
-              // Remove old tokens from this chain
-              const otherChainTokens = prevTokens.filter(token => token.chain !== chain);
-              // Add new tokens from this chain
-              const mergedTokens = [...otherChainTokens, ...data.tokens];
-              return sortTokensByUsdValueDesc(mergedTokens);
-            });
-          }
-          
-          return data;
-        } catch (err) {
-          console.error(`Error fetching tokens for ${chain}:`, err);
-          return null;
-        }
-      });
-
-      // Wait for all chains to complete (but UI already updated progressively)
-      await Promise.all(chainPromises);
-    } catch (error) {
-      console.error('Error fetching tokens:', error);
-      setTokensError('Failed to fetch tokens');
-      setTokens([]);
-    } finally {
-      setIsLoadingTokens(false);
-    }
-  };
-
-  // Fetch NFTs concurrently across all chains with progressive chain-by-chain updates
-  const fetchNfts = async () => {
-    if (!userId) return;
-    
-    setIsLoadingNfts(true);
-    setNftsError(null);
-    
-    try {
-      // Fetch all chains concurrently and update UI as each chain completes
-      const chainPromises = SUPPORTED_CHAINS.map(async (chain) => {
-        try {
-          const data = await elizaClient.cdp.getNFTs(chain);
-          
-          // Update UI immediately when this chain returns
-          if (data && data.nfts) {
-            // Replace only this chain's NFTs, keep others intact
-            setNfts(prevNfts => {
-              // Remove old NFTs from this chain
-              const otherChainNfts = prevNfts.filter(nft => nft.chain !== chain);
-              // Add new NFTs from this chain
-              const mergedNfts = [...otherChainNfts, ...data.nfts];
-              // Sort by chain order to maintain consistent display
-              return sortNftsByChainOrder(mergedNfts);
-            });
-          }
-          
-          return data;
-        } catch (err) {
-          console.error(`Error fetching NFTs for ${chain}:`, err);
-          return null;
-        }
-      });
-
-      // Wait for all chains to complete (but UI already updated progressively)
-      await Promise.all(chainPromises);
-    } catch (error) {
-      console.error('Error fetching NFTs:', error);
-      setNftsError('Failed to fetch NFTs');
-      setNfts([]);
-    } finally {
-      setIsLoadingNfts(false);
-    }
-  };
-
-  // Fetch transaction history
-  const fetchHistory = async () => {
-    if (!userId) return;
-    
-    setIsLoadingHistory(true);
-    setHistoryError(null);
-    
-    try {
-      const data = await elizaClient.cdp.getHistory();
-      setTransactions(data.transactions || []);
-    } catch (error) {
-      console.error('Error fetching history:', error);
-      setHistoryError('Failed to fetch transaction history');
-      setTransactions([]);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+  // Expose refresh methods via ref
+  useImperativeHandle(ref, () => ({
+    refreshTokens: async () => {
+      console.log('Refreshing tokens via ref...');
+      await syncTokens();
+    },
+    refreshNFTs: async () => {
+      console.log('Refreshing NFTs via ref...');
+      await syncNfts();
+    },
+    refreshAll: async () => {
+      console.log('Refreshing all wallet data via ref...');
+      await Promise.all([syncTokens(), syncNfts()]);
+    },
+  }));
 
   // Notify parent of balance changes
   useEffect(() => {
@@ -358,21 +265,7 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
     }
   }, [totalUsdValue, onBalanceChange]);
 
-  // Initial load
-  useEffect(() => {
-    fetchTokens();
-  }, [userId]);
-
-  // Load data based on active tab
-  useEffect(() => {
-    if (activeTab === 'collections' && nfts.length === 0 && !isLoadingNfts && !nftsError) {
-      fetchNfts();
-    } else if (activeTab === 'history' && transactions.length === 0 && !isLoadingHistory && !historyError) {
-      fetchHistory();
-    }
-  }, [activeTab]);
-
-  // Refresh all data using sync APIs with concurrent chain-by-chain updates
+  // Refresh handler for manual refresh button
   const handleManualRefresh = async () => {
     if (!userId) return;
     
@@ -383,7 +276,7 @@ export const CDPWalletCard = forwardRef<CDPWalletCardRef, CDPWalletCardProps>(
       } else if (activeTab === 'collections') {
         await syncNfts();
       } else if (activeTab === 'history') {
-        await fetchHistory();
+        await queryClient.invalidateQueries({ queryKey: ['cdp-history', userId] });
       }
     } catch (error) {
       console.error('Error syncing data:', error);
