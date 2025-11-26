@@ -507,9 +507,28 @@ export class CdpTransactionManager {
         // Determine if native token (tokenAddress is empty or null for native)
         const isNative = !token.tokenAddress || token.tokenAddress === '0x0000000000000000000000000000000000000000';
         
+        // For native tokens, use our chain config which has correct symbol/name
+        // Alchemy sometimes returns empty metadata for native tokens
+        const chainConfig = getChainConfig(chainName);
+        let tokenSymbol: string;
+        let tokenName: string;
+        let tokenIcon: string | undefined;
+        
+        if (isNative && chainConfig?.nativeToken) {
+          // Use our chain config for native tokens - guaranteed correct
+          tokenSymbol = chainConfig.nativeToken.symbol;
+          tokenName = chainConfig.nativeToken.name;
+          tokenIcon = token.tokenMetadata?.logo || undefined;
+        } else {
+          // For ERC20s, use Alchemy metadata
+          tokenSymbol = token.tokenMetadata?.symbol?.toUpperCase() || 'UNKNOWN';
+          tokenName = token.tokenMetadata?.name || 'Unknown Token';
+          tokenIcon = token.tokenMetadata?.logo || undefined;
+        }
+        
         const formattedToken = {
-          symbol: token.tokenMetadata?.symbol?.toUpperCase() || 'UNKNOWN',
-          name: token.tokenMetadata?.name || 'Unknown Token',
+          symbol: tokenSymbol,
+          name: tokenName,
           balance: balance.toString(),
           balanceFormatted: balance.toFixed(6).replace(/\.?0+$/, ''),
           usdValue: isNaN(usdValue) ? 0 : usdValue,
@@ -517,7 +536,7 @@ export class CdpTransactionManager {
           contractAddress: isNative ? null : token.tokenAddress,
           chain: chainName,
           decimals,
-          icon: token.tokenMetadata?.logo || undefined,
+          icon: tokenIcon,
         };
         
         // Cache icon if available
