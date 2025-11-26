@@ -113,6 +113,48 @@ export const cdpWalletInfo: Action = {
       }
 
       const accountName = wallet.metadata?.accountName as string;
+      
+      // Get entity information for context
+      let entityId = message.entityId;
+      let entityName = "";
+      try {
+        const entity = await runtime.getEntityById(entityId);
+        if (entity) {
+          logger.debug(`[USER_WALLET_INFO] Agent entity metadata:`, JSON.stringify(entity.metadata, null, 2));
+          logger.debug(`[USER_WALLET_INFO] Agent entity names:`, entity.names);
+          
+          // Try to get displayName from agent entity first
+          entityName = (entity.metadata?.displayName as string);
+          
+          // If not found, try to get the actual user entity (via author_id) which has the displayName
+          if (!entityName && entity.metadata?.author_id) {
+            try {
+              const userEntityId = entity.metadata.author_id as string;
+              logger.debug(`[USER_WALLET_INFO] Fetching user entity: ${userEntityId}`);
+              const userEntity = await runtime.getEntityById(userEntityId);
+              if (userEntity) {
+                logger.debug(`[USER_WALLET_INFO] User entity metadata:`, JSON.stringify(userEntity.metadata, null, 2));
+                entityName = (userEntity.metadata?.displayName as string) || 
+                             (userEntity.names && userEntity.names.length > 0 ? userEntity.names[0] : undefined);
+                // Use user entity ID for consistency
+                entityId = userEntityId;
+              }
+            } catch (userEntityError) {
+              logger.warn("[USER_WALLET_INFO] Could not fetch user entity:", userEntityError instanceof Error ? userEntityError.message : String(userEntityError));
+            }
+          }
+          
+          // Final fallback to agent entity names
+          if (!entityName) {
+            entityName = entity.names && entity.names.length > 0 ? entity.names[0] : entityId;
+          }
+          
+          logger.debug(`[USER_WALLET_INFO] Resolved entityName: ${entityName} (entityId: ${entityId})`);
+        }
+      } catch (error) {
+        logger.warn("[USER_WALLET_INFO] Could not fetch entity name:", error instanceof Error ? error.message : String(error));
+        entityName = entityId; // Fallback to entityId if fetch fails
+      }
 
       if (!accountName) {
         const errorMsg = "Could not find account name for wallet";
@@ -160,6 +202,9 @@ export const cdpWalletInfo: Action = {
 
       // Format the response
       let text = ` **Wallet Information${chain ? ` (${chain.charAt(0).toUpperCase() + chain.slice(1)})` : ''}**\n\n`;
+      if (entityName) {
+        text += ` **Display Name:** ${entityName} (Entity ID: ${entityId})\n`;
+      }
       text += ` **Address:** \`${walletInfo.address}\`\n`;
       text += `$ **Total Value:** $${walletInfo.totalUsdValue.toFixed(2)}\n\n`;
 
@@ -229,6 +274,8 @@ export const cdpWalletInfo: Action = {
         tokens: walletInfo.tokens,
         nfts: walletInfo.nfts,
         totalUsdValue: walletInfo.totalUsdValue,
+        entityId,
+        entityName,
         ...(chain && { chain }),
       };
 

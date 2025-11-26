@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import DashboardCard from "@/components/dashboard/card";
 import type { RebelRanking } from "@/types/dashboard";
-
 import { cn } from "@/lib/utils";
 
 interface RebelsRankingProps {
@@ -11,13 +10,12 @@ interface RebelsRankingProps {
 export default function RebelsRanking({ rebels }: RebelsRankingProps) {
   return (
     <DashboardCard
-      title="REBELS RANKING"
+      title="Leaderboard"
       intent="default"
-      addon={<Badge variant="outline-warning">2 NEW</Badge>}
     >
       <div className="space-y-4">
         {rebels.map((rebel) => (
-          <div key={rebel.id} className="flex items-center justify-between">
+          <div key={rebel.id} className="flex items-center w-full">
             <div className="flex items-center gap-1 w-full">
               <div
                 className={cn(
@@ -77,7 +75,7 @@ export default function RebelsRanking({ rebels }: RebelsRankingProps) {
                       {rebel.subtitle}
                     </span>
                   )}
-                  {rebel.streak && !rebel.featured && (
+                  {rebel.streak && (
                     <span className="text-sm text-muted-foreground italic">
                       {rebel.streak}
                     </span>

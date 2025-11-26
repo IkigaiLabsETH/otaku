@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 import DotsVerticalIcon from "@/components/icons/dots-vertical"
 import { Bullet } from "@/components/ui/bullet"
 import PlusIcon from "@/components/icons/plus"
-import { LogOut } from "lucide-react"
+import { LogOut, Trophy, User } from "lucide-react"
 
 interface Channel {
   id: string
@@ -46,6 +46,7 @@ interface DashboardSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSignOut?: () => void
   onAccountClick?: () => void
   onChatClick?: () => void
+  onLeaderboardClick?: () => void
   onHomeClick?: () => void
 }
 
@@ -60,6 +61,7 @@ export function DashboardSidebar({
   onSignOut,
   onAccountClick,
   onChatClick,
+  onLeaderboardClick,
   onHomeClick,
   ...props
 }: DashboardSidebarProps) {
@@ -318,6 +320,23 @@ export function DashboardSidebar({
       </SidebarContent>
 
       <SidebarFooter className="p-0">
+        {onLeaderboardClick && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={onLeaderboardClick}
+                    className="w-full"
+                  >
+                    <Trophy className="mr-2 h-4 w-4" />
+                    <span className="font-medium text-sm">Leaderboard</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
         <SidebarGroup>
           <SidebarGroupLabel>
             <Bullet className="mr-2" />
@@ -355,7 +374,20 @@ export function DashboardSidebar({
                           }}
                           className="flex items-center px-4 py-2 text-sm hover:bg-accent text-left w-full"
                         >
+                          <User className="mr-2 h-4 w-4" />
                           Account
+                        </button>
+                      )}
+                      {onLeaderboardClick && (
+                        <button 
+                          onClick={() => {
+                            onLeaderboardClick();
+                            setIsPopoverOpen(false);
+                          }}
+                          className="flex items-center px-4 py-2 text-sm hover:bg-accent text-left w-full"
+                        >
+                          <Trophy className="mr-2 h-4 w-4" />
+                          Leaderboard
                         </button>
                       )}
                       {onSignOut && (
