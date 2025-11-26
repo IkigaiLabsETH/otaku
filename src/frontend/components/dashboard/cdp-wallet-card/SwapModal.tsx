@@ -732,13 +732,17 @@ export function SwapModalContent({ tokens, userId, onSuccess }: SwapModalContent
               readOnly
               placeholder="0.0"
               disabled={!toToken}
-              className={`w-full bg-muted border border-border rounded-lg p-3 text-sm focus:outline-none cursor-not-allowed ${
+              className={`w-full bg-muted border border-border rounded-lg p-3 pr-24 text-sm focus:outline-none cursor-not-allowed ${
                 !toToken ? 'opacity-50' : ''
               }`}
             />
-            {isLoadingPrice && (
+            {isLoadingPrice ? (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-            )}
+            ) : toAmount && toToken?.usdPrice ? (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                ${(parseFloat(toAmount) * toToken.usdPrice).toFixed(2)}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
