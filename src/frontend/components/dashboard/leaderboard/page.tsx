@@ -187,7 +187,7 @@ export default function LeaderboardPage({ agentId, userId }: LeaderboardPageProp
         </Tabs>
 
         {/* User Rank Card */}
-        {leaderboardData?.userRank && leaderboardData.userRank > 0 && (
+        {leaderboardData?.userRank != null && leaderboardData.userRank > 0 && (
           <DashboardCard title="Your Rank">
             <div className="flex items-center justify-between">
               <div>
