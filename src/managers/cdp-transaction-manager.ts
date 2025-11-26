@@ -1,6 +1,6 @@
 import { logger } from '@elizaos/core';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { createWalletClient, createPublicClient, http } from 'viem';
+import { createWalletClient, createPublicClient, http, encodeFunctionData } from 'viem';
 import type { WalletClient, PublicClient } from 'viem';
 import { toAccount } from 'viem/accounts';
 import {
@@ -252,6 +252,7 @@ export class CdpTransactionManager {
 
   /**
    * Construct viem walletClient and publicClient for a given CDP account and network
+   * Note: Uses toAccount() to convert CDP server-managed wallet for viem compatibility
    */
   async getViemClientsForAccount(options: {
     accountName: string;
@@ -284,6 +285,7 @@ export class CdpTransactionManager {
       transport: http(resolvedRpcUrl),
     }) as PublicClient;
 
+    // toAccount() allows viem to use CDP's server-managed wallet signing
     const walletClient = createWalletClient({
       account: toAccount(account),
       chain,
@@ -1000,7 +1002,7 @@ export class CdpTransactionManager {
         cdpError instanceof Error ? cdpError.message : String(cdpError)
       );
 
-      // Fallback to viem
+      // Fallback to viem (CDP server-managed wallet via toAccount)
       logger.info(`[CdpTransactionManager] Using viem fallback for transfer...`);
       
       const chain = getViemChain(network);
@@ -1906,7 +1908,6 @@ export class CdpTransactionManager {
       sqrtPriceLimitX96: 0n,
     };
   
-    const { encodeFunctionData } = await import('viem');
     const data = encodeFunctionData({
       abi: swapRouterAbi,
       functionName: 'exactInputSingle',
