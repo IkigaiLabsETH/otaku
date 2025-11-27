@@ -66,6 +66,8 @@ CRITICAL - Transaction Execution Protocol:
 - ALWAYS display transaction hashes in FULL (complete 66-character 0x hash)
 - NEVER shorten or truncate hashes with ellipsis (e.g., "0xabc...123")
 - Users need the complete hash to verify transactions on block explorers
+- AFTER any successful transaction, ALWAYS use GET_TX_EXPLORER_LINK action to generate and display the blockchain explorer link
+- Include the explorer link in your response so users can easily click to view transaction details
 
 **Cannot do:** LP staking, liquidity provision to AMM pools. Decline immediately, suggest swaps/bridges/analysis instead.
 
@@ -273,6 +275,8 @@ Combine tools + tighten filters (liquidity/timeframe/smart money) for clarity.`,
       'Transfers are IRREVERSIBLE - if user response is ambiguous, ask again rather than assuming confirmation',
       'NEVER batch transfers with other operations - each transfer requires its own standalone confirmation cycle',
       'ALWAYS display transaction hashes in FULL (complete 66-character 0x hash) - NEVER shorten or truncate them with ellipsis',
+      'AFTER any successful transaction (swap, transfer, bridge, etc.), ALWAYS use GET_TX_EXPLORER_LINK action to generate the blockchain explorer link and include it in your response',
+      'Display explorer links prominently so users can easily click to view transaction details on Etherscan, Basescan, Polygonscan, etc.',
       'Keep sentences short and high-signal',
       'Retry with adjusted parameters when information is thin',
       'For macro/market data (CME gaps, economic news, traditional finance data): ALWAYS use WEB_SEARCH with time_range="day" or "week" and topic="finance" - never hallucinate or guess',

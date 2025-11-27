@@ -12,6 +12,8 @@ import { cdpWalletSwap } from "./actions/cdp-wallet-swap";
 import { cdpWalletTokenTransfer } from "./actions/cdp-wallet-token-transfer";
 import { cdpWalletNftTransfer } from "./actions/cdp-wallet-nft-transfer";
 import { cdpResolveEns } from "./actions/cdp-resolve-ens";
+import { cdpTxExplorerLink } from "./actions/cdp-tx-explorer-link";
+import { cdpCheckTxConfirmation } from "./actions/cdp-check-tx-confirmation";
 // import { cdpWalletFetchWithPayment } from "./actions/cdp-wallet-fetch-with-payment";
 // import { cdpWalletUnwrap } from "./actions/cdp-wallet-unwrap";
 
@@ -36,6 +38,8 @@ export type { CdpNetwork } from "./types";
  * - USER_WALLET_TOKEN_TRANSFER: Transfer ERC20 tokens
  * - USER_WALLET_NFT_TRANSFER: Transfer NFTs
  * - USER_WALLET_SWAP: Swap tokens via DEX aggregators
+ * - GET_TX_EXPLORER_LINK: Generate blockchain explorer links for transaction hashes
+ * - CHECK_TX_CONFIRMATION: Check block confirmation status for transactions using viem
  * - FETCH_WITH_PAYMENT: Make paid requests to x402 APIs
  */
 export const cdpPlugin: Plugin = {
@@ -44,7 +48,7 @@ export const cdpPlugin: Plugin = {
     "Coinbase Developer Platform plugin providing authenticated EVM account creation, token transfers, NFT transfers, swaps, and x402 paid API requests via CDP SDK",
   evaluators: [],
   providers: [walletStateProvider],
-  actions: [cdpWalletInfo, cdpWalletCheckBalance, cdpWalletTokenTransfer, cdpWalletNftTransfer, cdpWalletSwap, cdpResolveEns],
+  actions: [cdpWalletInfo, cdpWalletCheckBalance, cdpWalletTokenTransfer, cdpWalletNftTransfer, cdpWalletSwap, cdpResolveEns, cdpTxExplorerLink, cdpCheckTxConfirmation],
   services: [CdpService],
 };
 
