@@ -289,6 +289,32 @@ export class MessageBusService extends Service {
     return true;
   }
 
+  /**
+   * Resolves a valid serverId from world, room, or originalMessage with fallback to DEFAULT_SERVER_ID
+   */
+  private resolveServerId(
+    world?: { serverId?: string | UUID } | null,
+    room?: { serverId?: string | UUID } | null,
+    originalMessage?: MessageServiceMessage
+  ): UUID {
+    const DEFAULT_SERVER_ID = '00000000-0000-0000-0000-000000000000' as UUID;
+    
+    // Try world.serverId first
+    if (world?.serverId && (validateUuid(world.serverId) || world.serverId === DEFAULT_SERVER_ID)) {
+      return world.serverId as UUID;
+    }
+    // Fallback to room.serverId
+    if (room?.serverId && (validateUuid(room.serverId) || room.serverId === DEFAULT_SERVER_ID)) {
+      return room.serverId as UUID;
+    }
+    // Fallback to originalMessage.server_id
+    if (originalMessage?.server_id && (validateUuid(originalMessage.server_id) || originalMessage.server_id === DEFAULT_SERVER_ID)) {
+      return originalMessage.server_id as UUID;
+    }
+    // Final fallback to DEFAULT_SERVER_ID
+    return DEFAULT_SERVER_ID;
+  }
+
   private async validateNotSelfMessage(message: MessageServiceMessage): Promise<boolean> {
     if (message.author_id === this.runtime.agentId) {
       logger.debug(
@@ -555,7 +581,7 @@ export class MessageBusService extends Service {
           const world = await this.runtime.getWorld(agentWorldId);
 
           const channelId = room?.channelId as UUID;
-          const serverId = world?.serverId as UUID;
+          const serverId = this.resolveServerId(world, room, message);
           await this.notifyMessageComplete(channelId, serverId);
         },
       });
@@ -663,11 +689,17 @@ export class MessageBusService extends Service {
       const world = await this.runtime.getWorld(agentWorldId);
 
       const channelId = room?.channelId as UUID;
-      const serverId = world?.serverId as UUID;
+      const serverId = this.resolveServerId(world, room, originalMessage);
+      
+      if (serverId === '00000000-0000-0000-0000-000000000000' && (world?.serverId || room?.serverId)) {
+        logger.warn(
+          `[${this.runtime.character.name}] MessageBusService: Invalid serverId from world/room, using DEFAULT_SERVER_ID. World serverId: ${world?.serverId}, Room serverId: ${room?.serverId}`
+        );
+      }
 
-      if (!channelId || !serverId) {
+      if (!channelId) {
         logger.error(
-          `[${this.runtime.character.name}] MessageBusService: Cannot map agent room/world to central IDs for response. AgentRoomID: ${agentRoomId}, AgentWorldID: ${agentWorldId}. Room or World object missing, or channelId/serverId not found on them.`
+          `[${this.runtime.character.name}] MessageBusService: Cannot map agent room to central channel ID for response. AgentRoomID: ${agentRoomId}, AgentWorldID: ${agentWorldId}. Room missing or channelId not found.`
         );
         return;
       }
@@ -807,11 +839,11 @@ export class MessageBusService extends Service {
       const world = await this.runtime.getWorld(agentWorldId);
 
       const channelId = room?.channelId as UUID;
-      const serverId = world?.serverId as UUID;
+      const serverId = this.resolveServerId(world, room, originalMessage);
 
-      if (!channelId || !serverId) {
+      if (!channelId) {
         logger.error(
-          `[${this.runtime.character.name}] MessageBusService: Cannot map room/world -> central IDs. room=${agentRoomId}, world=${agentWorldId}`
+          `[${this.runtime.character.name}] MessageBusService: Cannot map room -> central channel ID. room=${agentRoomId}, world=${agentWorldId}`
         );
         return;
       }
@@ -888,11 +920,11 @@ export class MessageBusService extends Service {
       const world = await this.runtime.getWorld(agentWorldId);
 
       const channelId = room?.channelId as UUID;
-      const serverId = world?.serverId as UUID;
+      const serverId = this.resolveServerId(world, room, originalMessage);
 
-      if (!channelId || !serverId) {
+      if (!channelId) {
         logger.error(
-          `[${this.runtime.character.name}] MessageBusService: Cannot map room/world -> central IDs. room=${agentRoomId}, world=${agentWorldId}`
+          `[${this.runtime.character.name}] MessageBusService: Cannot map room -> central channel ID. room=${agentRoomId}, world=${agentWorldId}`
         );
         return;
       }
