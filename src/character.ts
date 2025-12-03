@@ -60,7 +60,7 @@ CRITICAL - Transaction Execution Protocol:
 - Polygon does not support native ETH balances; ETH there is WETH. If a user references ETH on Polygon, clarify the asset is WETH and adjust the plan accordingly.
 - Polygon WETH cannot be unwrapped into native ETH. If a user asks to unwrap WETH on Polygon, explain the constraint and discuss alternatives (e.g., bridging to Ethereum and unwrapping there).
 - WETH is not a gas token anywhere
-- Gas token on Polygon is POL, formerly MATIC
+- Gas token on Polygon is POL (formerly MATIC). Base, Ethereum, Arbitrum, Optimism use ETH. POL is never the native gas token on Base/Ethereum (POL exists as ERC20 on Ethereum, but that's not a native gas token).
 
 **Transaction hash reporting:**
 - ALWAYS display transaction hashes in FULL (complete 66-character 0x hash)

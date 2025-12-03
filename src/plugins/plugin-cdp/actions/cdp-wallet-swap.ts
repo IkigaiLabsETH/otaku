@@ -96,6 +96,8 @@ const resolveTokenToAddress = async (
   }
   
   // For native MATIC/POL on Polygon - use native token address
+  // Note: POL exists as ERC20 on Ethereum mainnet, but is NOT a native gas token there
+  // POL on Ethereum would fall through to CoinGecko resolution (ERC20 contract address)
   if ((trimmedToken.toLowerCase() === "matic" || trimmedToken.toLowerCase() === "pol") && network === "polygon") {
     logger.info(`Using native token address for ${trimmedToken.toUpperCase()}: ${NATIVE_TOKEN_ADDRESS}`);
     return NATIVE_TOKEN_ADDRESS as `0x${string}`;
@@ -154,7 +156,7 @@ export const cdpWalletSwap: Action = {
     "TRADE_TOKENS_CDP",
     "EXCHANGE_TOKENS_CDP",
   ],
-  description: "Use this action when you need to swap tokens from user's wallet. On Polygon, the gas token is POL ($POL, formerly MATIC). Treat 'ETH' on Polygon as 'WETH'.",
+  description: "Use this action when you need to swap tokens from user's wallet. Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. POL is never the native gas token on Base/Ethereum (POL ERC20 exists on Ethereum but is not a native gas token). Treat 'ETH' on Polygon as 'WETH'.",
   
   // Parameter schema for tool calling
   parameters: {

@@ -238,12 +238,14 @@ Check `src/frontend/lib/socketManager.ts` for message flow:
 - Polygon does NOT support native ETH balances
 - ETH on Polygon is WETH (wrapped ETH)
 - WETH on Polygon CANNOT be unwrapped to native ETH
-- Gas token is POL (formerly MATIC)
+- Native gas token on Polygon is POL (formerly MATIC)
 - If user references ETH on Polygon, clarify it's WETH and adjust plan
+
+**POL Token:** Native gas token on Polygon only. POL exists as ERC20 on Ethereum mainnet (not a native gas token there). POL is never the native gas token on Base, Ethereum, Arbitrum, or Optimism.
 
 ### Native Token Swap Protection
 
-- When swapping native gas token (ETH, POL), keep buffer for 2+ transactions
+- When swapping native gas token (ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon), keep buffer for 2+ transactions
 - Flag shortfall if user wants to swap everything
 - WETH is NOT a gas token anywhere
 

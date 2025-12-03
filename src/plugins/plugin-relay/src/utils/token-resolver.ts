@@ -258,6 +258,13 @@ export async function resolveTokenToAddress(
     logger.debug(`MATIC on ${network} needs to be resolved via CoinGecko`);
     // Fall through to normal resolution
   }
+  
+  // Handle POL on other chains (ERC20 token on Ethereum, not native gas token)
+  // POL exists as ERC20 on Ethereum mainnet, but is NOT a native gas token anywhere except Polygon
+  if (trimmedToken.toLowerCase() === "pol" && network !== "polygon") {
+    logger.debug(`POL on ${network} is an ERC20 token (not native gas token), resolving via CoinGecko`);
+    // Fall through to normal resolution (will resolve to ERC20 contract address)
+  }
   if (trimmedToken.startsWith("0x") && trimmedToken.length === 42) {
     logger.debug(`Token ${token} looks like an address, validating with CoinGecko`);
     const metadata = await getTokenMetadata(trimmedToken, network);

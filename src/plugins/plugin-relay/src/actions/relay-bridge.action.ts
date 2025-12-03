@@ -84,7 +84,7 @@ const resolveChainNameToId = (chainName: string): number | null => {
 
 export const relayBridgeAction: Action = {
   name: "EXECUTE_RELAY_BRIDGE",
-  description: "Use this action when you need to execute a cross-chain bridge. On Polygon, the gas token is POL ($POL, formerly MATIC). Treat 'ETH' on Polygon as 'WETH'.",
+  description: "Use this action when you need to execute a cross-chain bridge. Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. POL is never the native gas token on Base/Ethereum (POL ERC20 exists on Ethereum but is not a native gas token). Treat 'ETH' on Polygon as 'WETH'.",
   similes: [
     "BRIDGE_TOKENS",
     "CROSS_CHAIN_TRANSFER",

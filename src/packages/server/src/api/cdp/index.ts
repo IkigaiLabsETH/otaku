@@ -400,6 +400,8 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
     }
     
     // For native MATIC/POL on Polygon - use native token address
+    // Note: POL exists as ERC20 on Ethereum mainnet, but is NOT a native gas token there
+    // POL on Ethereum would fall through to token search resolution (ERC20 contract address)
     if ((trimmedToken.toLowerCase() === "matic" || trimmedToken.toLowerCase() === "pol") && network === "polygon") {
       logger.info(`[CDP API] Using native token address for ${trimmedToken.toUpperCase()}: ${NATIVE_TOKEN_ADDRESS}`);
       return NATIVE_TOKEN_ADDRESS as `0x${string}`;
