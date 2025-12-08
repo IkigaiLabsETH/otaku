@@ -97,7 +97,7 @@ Open `.env` and fill in the secrets marked as **required** in the sample file. Y
 - Coinbase credentials (`VITE_CDP_PROJECT_ID`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`)
 - `ALCHEMY_API_KEY`
 
-By default the server stores data in an embedded PGlite database at `./.eliza/.elizadb`. Set `POSTGRES_URL` (for example to a Railway Postgres connection string) if you want to use PostgreSQL instead.
+By default the server stores data in an embedded PGlite database at `./.eliza/.elizadb`. Set `POSTGRES_URL` (for example to a Neon or Railway Postgres connection string) if you want to use PostgreSQL instead.
 
 ### 3. Start the development server
 
@@ -428,7 +428,7 @@ Open the **Variables** tab for the web service and mirror the values from your l
 | `VITE_CDP_PROJECT_ID` | CDP project for frontend login |
 | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` | Backend wallet operations |
 | `ALCHEMY_API_KEY` | Chain data and balances |
-| `POSTGRES_URL` | Paste the `DATABASE_URL` from the pgvector service |
+| `POSTGRES_URL` | PostgreSQL connection string (from Neon, Railway, or other provider) |
 | `X402_RECEIVING_WALLET`, `X402_PUBLIC_URL`, `X402_FACILITATOR_URL` | x402 payment configuration |
 | `NODE_ENV` | Set to `production` |
 | `LOG_LEVEL` | Optional logging verbosity |
