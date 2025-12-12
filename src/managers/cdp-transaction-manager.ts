@@ -1642,6 +1642,18 @@ export class CdpTransactionManager {
         } catch (gaslessError) {
           const errorMsg = gaslessError instanceof Error ? gaslessError.message : String(gaslessError);
           logger.warn(`[CdpTransactionManager] Gasless swap failed: ${errorMsg}`);
+          
+          // Check if error is approval-related and enhance the message
+          const errorLower = errorMsg.toLowerCase();
+          if (errorLower.includes('insufficient_balance') || errorLower.includes('allowance')) {
+            const nativeToken = network === 'polygon' ? 'POL' : 'ETH';
+            throw new Error(
+              `This token requires a one-time approval before gasless swaps can work. ` +
+              `You need approximately $0.50 worth of ${nativeToken} to approve the token. ` +
+              `After approval, all future swaps will be gasless.`
+            );
+          }
+          
           logger.info(`[CdpTransactionManager] Falling back to regular swap methods...`);
           // Continue to regular swap flow - user might have just enough gas
         }
