@@ -606,10 +606,18 @@ export const cdpWalletSwap: Action = {
       logger.info("[USER_WALLET_SWAP] CDP swap executed successfully");
       logger.debug(`[USER_WALLET_SWAP] Swap result: ${JSON.stringify(result)}`);
 
-      const successText = ` Successfully swapped ${amountToSwap} tokens on ${swapParams.network}\n` +
-                         `Transaction Hash: ${result.transactionHash}\n` +
-                         `From: ${fromToken}\n` +
-                         `To: ${toToken}`;
+      // Check if this is a pending gasless transaction
+      const isPending = result.transactionHash.startsWith('pending:');
+      const pendingId = isPending ? result.transactionHash.replace('pending:', '') : null;
+
+      let successText: string;
+      if (isPending) {
+        successText = `Gasless swap submitted! Transaction is being processed by relayers (ID: ${pendingId}). ` +
+                     `This may take 1-2 minutes. The swap will complete without you needing to pay gas.`;
+      } else {
+        successText = `Successfully swapped ${swapParams.fromToken} to ${swapParams.toToken} on ${swapParams.network}. ` +
+                     `Transaction: ${result.transactionHash}`;
+      }
 
       logger.debug("[USER_WALLET_SWAP] Sending success callback");
       callback?.({
@@ -621,6 +629,8 @@ export const cdpWalletSwap: Action = {
           fromToken: String(fromToken),
           toToken: String(toToken),
           amount: String(amountToSwap),
+          isPending,
+          pendingId,
         },
       });
 
@@ -635,11 +645,14 @@ export const cdpWalletSwap: Action = {
           toToken: String(toToken),
           amount: String(amountToSwap),
           slippageBps: swapParams.slippageBps ? Number(swapParams.slippageBps) : 100,
+          isPending,
+          pendingId,
         },
         values: {
           swapSuccess: true,
-          transactionHash: result.transactionHash,
+          transactionHash: isPending ? pendingId : result.transactionHash,
           volumeUsd: volumeUsd > 0 ? volumeUsd : undefined,
+          isPending,
         },
         input: inputParams,
       } as ActionResult & { input: typeof inputParams };
