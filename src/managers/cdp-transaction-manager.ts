@@ -15,6 +15,13 @@ import {
   UNISWAP_V3_QUOTER,
   WRAPPED_NATIVE_TOKEN,
   UNISWAP_POOL_FEES,
+  isGaslessSupported,
+  get0xChainId,
+  MIN_GAS_FOR_SWAP,
+  GASLESS_POLL_MAX_ATTEMPTS,
+  GASLESS_POLL_INITIAL_INTERVAL_MS,
+  GASLESS_POLL_MAX_INTERVAL_MS,
+  GASLESS_POLL_BACKOFF_MULTIPLIER,
 } from '@/constants/chains';
 
 // ============================================================================
@@ -72,6 +79,8 @@ interface SwapPriceResult {
   liquidityAvailable: boolean;
   toAmount: string;
   minToAmount: string;
+  isGasless?: boolean;  // True if this quote is for a gasless swap
+  gasDeductedAmount?: string;  // Amount deducted for gas (for gasless swaps)
 }
 
 interface SwapResult {
@@ -83,6 +92,8 @@ interface SwapResult {
   toAmount: string;
   network: string;
   method: string;
+  /** For gasless swaps that are still pending confirmation, this contains the 0x zid for tracking */
+  pendingId?: string;
 }
 
 interface SendResult {
@@ -1463,6 +1474,47 @@ export class CdpTransactionManager {
 
     logger.info(`[CdpTransactionManager] Swap price retrieved. Liquidity available: ${swapPriceResult.liquidityAvailable}`);
 
+    // Check if user lacks gas and provide gasless quote if available
+    // This provides more accurate pricing for users without gas
+    const canUseGasless = normalizedFromToken !== NATIVE_TOKEN_ADDRESS && isGaslessSupported(network);
+    
+    if (canUseGasless && swapPriceResult.liquidityAvailable) {
+      try {
+        const hasGas = await this.checkHasGasForSwap(userId, network, account.address);
+        
+        if (!hasGas) {
+          logger.info(`[CdpTransactionManager] User lacks gas, checking gasless quote for more accurate pricing`);
+          
+          const gaslessQuote = await this.getGaslessQuote(
+            network,
+            fromToken,
+            toToken,
+            BigInt(fromAmount),
+            account.address
+          );
+
+          if (gaslessQuote && gaslessQuote.liquidityAvailable) {
+            logger.info(`[CdpTransactionManager] Gasless quote available. Output: ${gaslessQuote.toAmount} (gas deducted: ${gaslessQuote.gasDeductedAmount})`);
+            
+            return {
+              liquidityAvailable: true,
+              toAmount: gaslessQuote.toAmount,
+              minToAmount: gaslessQuote.toAmount,
+              isGasless: true,
+              gasDeductedAmount: gaslessQuote.gasDeductedAmount,
+              fromAmount,
+              fromToken,
+              toToken,
+              network,
+            };
+          }
+        }
+      } catch (gaslessCheckError) {
+        logger.debug(`[CdpTransactionManager] Gasless quote check failed:`, gaslessCheckError instanceof Error ? gaslessCheckError.message : String(gaslessCheckError));
+        // Continue with regular quote
+      }
+    }
+
     return {
       ...swapPriceResult,
       fromAmount,
@@ -1548,7 +1600,57 @@ export class CdpTransactionManager {
     let transactionHash: string | undefined;
     let method: string = 'unknown';
     let toAmount: string = '0';
+    let pendingId: string | undefined;
 
+    // =========================================================================
+    // GASLESS SWAP: Try gasless first if user lacks gas (ERC20 tokens only)
+    // =========================================================================
+    // Gasless swaps only work for ERC20 -> any token swaps (not native token swaps)
+    // because native tokens require gas for wrapping/unwrapping
+    const canTryGasless = normalizedFromToken !== NATIVE_TOKEN_ADDRESS && isGaslessSupported(network);
+    
+    if (canTryGasless) {
+      const hasGas = await this.checkHasGasForSwap(userId, network, account.address);
+      
+      if (!hasGas) {
+        logger.info(`[CdpTransactionManager] User lacks gas, attempting gasless swap on ${network}`);
+        
+        try {
+          const gaslessResult = await this.executeGaslessSwapWith0x(
+            account,
+            userId,
+            network,
+            fromToken,
+            toToken,
+            BigInt(fromAmount),
+            slippageBps
+          );
+
+          logger.info(`[CdpTransactionManager] Gasless swap successful: ${gaslessResult.transactionHash}`);
+          
+          return {
+            transactionHash: gaslessResult.transactionHash,
+            from: account.address,
+            fromToken,
+            toToken,
+            fromAmount: fromAmount.toString(),
+            toAmount: gaslessResult.toAmount,
+            network,
+            method: gaslessResult.method,
+            pendingId: gaslessResult.pendingId,
+          };
+        } catch (gaslessError) {
+          const errorMsg = gaslessError instanceof Error ? gaslessError.message : String(gaslessError);
+          logger.warn(`[CdpTransactionManager] Gasless swap failed: ${errorMsg}`);
+          logger.info(`[CdpTransactionManager] Falling back to regular swap methods...`);
+          // Continue to regular swap flow - user might have just enough gas
+        }
+      }
+    }
+
+    // =========================================================================
+    // REGULAR SWAP: CDP SDK -> 0x API -> Uniswap V3 fallback chain
+    // =========================================================================
     if (isCdpSwapSupported(network)) {
       try {
         logger.info(`[CdpTransactionManager] Attempting swap with CDP SDK...`);
@@ -1779,22 +1881,55 @@ export class CdpTransactionManager {
         }
       }
     } else {
-      // Non-CDP-supported networks: use 0x API
+      // Non-CDP-supported networks: use 0x API with gasless fallback
       logger.info(`[CdpTransactionManager] Using 0x API for swap on ${network}`);
 
-      const result = await this.executeSwapWith0x(
-        account,
-        network,
-        fromToken,
-        toToken,
-        BigInt(fromAmount),
-        slippageBps
-      );
+      try {
+        const result = await this.executeSwapWith0x(
+          account,
+          network,
+          fromToken,
+          toToken,
+          BigInt(fromAmount),
+          slippageBps
+        );
 
-      transactionHash = result.transactionHash;
-      toAmount = result.toAmount;
-      method = result.method;
-      logger.info(`[CdpTransactionManager] Swap successful with method: ${result.method}`);
+        transactionHash = result.transactionHash;
+        toAmount = result.toAmount;
+        method = result.method;
+        logger.info(`[CdpTransactionManager] Swap successful with method: ${result.method}`);
+      } catch (regularSwapError) {
+        const errorMsg = regularSwapError instanceof Error ? regularSwapError.message : String(regularSwapError);
+        logger.warn(`[CdpTransactionManager] 0x API swap failed: ${errorMsg}`);
+        
+        // Try gasless as final fallback if available
+        if (canTryGasless) {
+          logger.info(`[CdpTransactionManager] Attempting gasless swap as final fallback`);
+          
+          try {
+            const gaslessResult = await this.executeGaslessSwapWith0x(
+              account,
+              userId,
+              network,
+              fromToken,
+              toToken,
+              BigInt(fromAmount),
+              slippageBps
+            );
+
+            transactionHash = gaslessResult.transactionHash;
+            toAmount = gaslessResult.toAmount;
+            method = `${gaslessResult.method}-fallback`;
+            pendingId = gaslessResult.pendingId;
+            logger.info(`[CdpTransactionManager] Gasless fallback successful: ${transactionHash}`);
+          } catch (gaslessFallbackError) {
+            // Both regular and gasless failed - throw the original error
+            throw regularSwapError;
+          }
+        } else {
+          throw regularSwapError;
+        }
+      }
     }
 
     if (!transactionHash) {
@@ -1810,6 +1945,7 @@ export class CdpTransactionManager {
       toAmount,
       network,
       method,
+      pendingId,
     };
   }
 
@@ -2552,6 +2688,536 @@ export class CdpTransactionManager {
     return {
       transactionHash: hash,
       toAmount: quote.buyAmount,
+    };
+  }
+
+  // ============================================================================
+  // Private Helper Methods - 0x Gasless API
+  // ============================================================================
+
+  /**
+   * Check if user has enough gas to execute a regular swap
+   * @returns true if user has sufficient gas, false if gasless should be used
+   * 
+   * IMPORTANT: Returns false on errors to prefer gasless path when uncertain.
+   * This is safer because gasless will gracefully fall back to regular swap if it fails,
+   * but assuming user has gas when they don't leads to failed transactions.
+   */
+  private async checkHasGasForSwap(
+    userId: string,
+    network: string,
+    providedAddress?: string
+  ): Promise<boolean> {
+    try {
+      const chain = getViemChain(network);
+      if (!chain) {
+        logger.debug(`[CdpTransactionManager] Unknown chain ${network}, defaulting to gasless check`);
+        return false; // Prefer gasless when uncertain
+      }
+
+      const alchemyKey = process.env.ALCHEMY_API_KEY;
+      if (!alchemyKey) {
+        logger.debug(`[CdpTransactionManager] No Alchemy API key, defaulting to gasless check`);
+        return false; // Prefer gasless when uncertain
+      }
+
+      const rpcUrl = getRpcUrl(network, alchemyKey);
+      if (!rpcUrl) {
+        logger.debug(`[CdpTransactionManager] No RPC URL for ${network}, defaulting to gasless check`);
+        return false; // Prefer gasless when uncertain
+      }
+
+      // Get user's address
+      let address = providedAddress;
+      if (!address) {
+        const client = this.getCdpClient();
+        const account = await client.evm.getOrCreateAccount({ name: userId });
+        address = account.address;
+      }
+
+      const publicClient = createPublicClient({
+        chain,
+        transport: http(rpcUrl),
+      });
+
+      const balance = await publicClient.getBalance({
+        address: address as `0x${string}`,
+      });
+
+      const hasEnoughGas = balance >= MIN_GAS_FOR_SWAP;
+      logger.debug(`[CdpTransactionManager] Gas check for ${userId.substring(0, 8)}... on ${network}: ${balance.toString()} wei (need ${MIN_GAS_FOR_SWAP.toString()}, has enough: ${hasEnoughGas})`);
+      
+      return hasEnoughGas;
+    } catch (error) {
+      // IMPORTANT: Return false on errors to prefer gasless path when uncertain
+      // Gasless will gracefully fall back to regular swap if it fails
+      logger.warn(`[CdpTransactionManager] Failed to check gas balance, preferring gasless:`, error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }
+
+  /**
+   * Get a quote from the 0x Gasless API
+   * Used for price estimation when user doesn't have gas
+   */
+  private async get0xGaslessQuote(
+    network: string,
+    fromToken: string,
+    toToken: string,
+    fromAmount: bigint,
+    takerAddress: string
+  ): Promise<{
+    buyAmount: string;
+    approval: any | null;
+    trade: any;
+    liquidityAvailable: boolean;
+  } | null> {
+    const apiKey = process.env.OX_API_KEY;
+    if (!apiKey) {
+      logger.debug('[CdpTransactionManager] 0x API key not configured for gasless');
+      return null;
+    }
+
+    if (!isGaslessSupported(network)) {
+      logger.debug(`[CdpTransactionManager] Gasless not supported on ${network}`);
+      return null;
+    }
+
+    const chainId = get0xChainId(network);
+    if (!chainId) {
+      logger.debug(`[CdpTransactionManager] No chain ID for gasless on ${network}`);
+      return null;
+    }
+
+    try {
+      const normalizedFromToken = normalizeTokenAddress(fromToken);
+      const normalizedToToken = normalizeTokenAddress(toToken);
+
+      // Native token swaps are not supported by gasless API (need gas to unwrap)
+      if (normalizedFromToken === NATIVE_TOKEN_ADDRESS) {
+        logger.debug('[CdpTransactionManager] Cannot do gasless swap FROM native token');
+        return null;
+      }
+
+      const params = new URLSearchParams({
+        chainId: chainId.toString(),
+        sellToken: normalizedFromToken,
+        buyToken: normalizedToToken,
+        sellAmount: fromAmount.toString(),
+        taker: takerAddress,
+      });
+
+      // Add fee parameters
+      const feeRecipient = process.env.SWAP_FEE_RECIPIENT || '0xE42b492846A2A220FB607745A63aF7d91A035d12';
+      const feeRecipientBps = process.env.SWAP_FEE_BPS || '10';
+      params.append('swapFeeRecipient', feeRecipient);
+      params.append('swapFeeBps', feeRecipientBps);
+      params.append('swapFeeToken', normalizedFromToken);
+
+      const url = `https://api.0x.org/gasless/quote?${params.toString()}`;
+
+      logger.info(`[CdpTransactionManager] Fetching 0x gasless quote for ${network}`);
+      const response = await fetch(url, {
+        headers: {
+          '0x-api-key': apiKey,
+          '0x-version': 'v2',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.warn(`[CdpTransactionManager] 0x Gasless API error (${response.status}): ${errorText.substring(0, 200)}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (!data.trade) {
+        logger.warn('[CdpTransactionManager] 0x Gasless API returned no trade data');
+        return null;
+      }
+
+      logger.info(`[CdpTransactionManager] 0x Gasless quote: ${data.buyAmount || 'N/A'} tokens`);
+      return {
+        buyAmount: data.buyAmount || '0',
+        approval: data.approval || null,
+        trade: data.trade,
+        liquidityAvailable: Boolean(data.trade),
+      };
+    } catch (error) {
+      logger.warn('[CdpTransactionManager] 0x Gasless API request failed:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  /**
+   * Poll for gasless swap transaction status with exponential backoff
+   * 
+   * Uses exponential backoff starting at GASLESS_POLL_INITIAL_INTERVAL_MS,
+   * multiplying by GASLESS_POLL_BACKOFF_MULTIPLIER each attempt,
+   * capped at GASLESS_POLL_MAX_INTERVAL_MS.
+   * 
+   * @param zid - The 0x transaction ID to poll
+   * @param apiKey - The 0x API key
+   * @returns Status object with transactionHash on success, reason on failure
+   */
+  private async pollGaslessSwapStatus(
+    zid: string,
+    apiKey: string
+  ): Promise<{
+    status: 'pending' | 'confirmed' | 'failed';
+    transactionHash?: string;
+    reason?: string;
+    zid: string;
+  }> {
+    let currentInterval = GASLESS_POLL_INITIAL_INTERVAL_MS;
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5;
+
+    for (let attempt = 0; attempt < GASLESS_POLL_MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetch(`https://api.0x.org/gasless/status/${zid}`, {
+          headers: {
+            '0x-api-key': apiKey,
+            '0x-version': 'v2',
+          },
+        });
+
+        if (!response.ok) {
+          consecutiveErrors++;
+          logger.warn(`[CdpTransactionManager] Gasless status check failed (attempt ${attempt + 1}/${GASLESS_POLL_MAX_ATTEMPTS}): HTTP ${response.status}`);
+          
+          // If we've had too many consecutive errors, give up
+          if (consecutiveErrors >= maxConsecutiveErrors) {
+            return {
+              status: 'failed',
+              reason: `API unresponsive after ${consecutiveErrors} consecutive errors (HTTP ${response.status})`,
+              zid,
+            };
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, currentInterval));
+          currentInterval = Math.min(currentInterval * GASLESS_POLL_BACKOFF_MULTIPLIER, GASLESS_POLL_MAX_INTERVAL_MS);
+          continue;
+        }
+
+        // Reset consecutive errors on success
+        consecutiveErrors = 0;
+        const data = await response.json();
+
+        if (data.status === 'confirmed') {
+          logger.info(`[CdpTransactionManager] Gasless swap confirmed after ${attempt + 1} attempts`);
+          return {
+            status: 'confirmed',
+            transactionHash: data.transactions?.[0]?.hash,
+            zid,
+          };
+        }
+
+        if (data.status === 'failed') {
+          return {
+            status: 'failed',
+            reason: data.reason || 'Unknown error from 0x API',
+            zid,
+          };
+        }
+
+        // Still pending, apply exponential backoff and retry
+        logger.debug(`[CdpTransactionManager] Gasless swap pending (attempt ${attempt + 1}/${GASLESS_POLL_MAX_ATTEMPTS}), waiting ${currentInterval}ms`);
+        await new Promise(resolve => setTimeout(resolve, currentInterval));
+        currentInterval = Math.min(currentInterval * GASLESS_POLL_BACKOFF_MULTIPLIER, GASLESS_POLL_MAX_INTERVAL_MS);
+      } catch (error) {
+        consecutiveErrors++;
+        logger.warn(`[CdpTransactionManager] Gasless status poll error (attempt ${attempt + 1}):`, error instanceof Error ? error.message : String(error));
+        
+        // If we've had too many consecutive errors, give up
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          return {
+            status: 'failed',
+            reason: `Network error after ${consecutiveErrors} consecutive failures: ${error instanceof Error ? error.message : String(error)}`,
+            zid,
+          };
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, currentInterval));
+        currentInterval = Math.min(currentInterval * GASLESS_POLL_BACKOFF_MULTIPLIER, GASLESS_POLL_MAX_INTERVAL_MS);
+      }
+    }
+
+    return {
+      status: 'pending',
+      reason: `Status check timed out after ${GASLESS_POLL_MAX_ATTEMPTS} attempts - transaction may still complete. Track with zid: ${zid}`,
+      zid,
+    };
+  }
+
+  /**
+   * Get a gasless quote from 0x Gasless API (without executing)
+   * Used for price estimation when user lacks gas
+   */
+  private async getGaslessQuote(
+    network: string,
+    fromToken: string,
+    toToken: string,
+    fromAmount: bigint,
+    takerAddress: string
+  ): Promise<{
+    toAmount: string;
+    gasDeductedAmount: string;
+    liquidityAvailable: boolean;
+  } | null> {
+    const apiKey = process.env.OX_API_KEY;
+    if (!apiKey) {
+      logger.warn(`[CdpTransactionManager] 0x API key not configured for gasless quote`);
+      return null;
+    }
+
+    if (!isGaslessSupported(network)) {
+      logger.debug(`[CdpTransactionManager] Gasless not supported on ${network}`);
+      return null;
+    }
+
+    const chainId = get0xChainId(network);
+    if (!chainId) {
+      logger.warn(`[CdpTransactionManager] Invalid chain ID for gasless quote: ${network}`);
+      return null;
+    }
+
+    const normalizedFromToken = normalizeTokenAddress(fromToken);
+    const normalizedToToken = normalizeTokenAddress(toToken);
+
+    // Native token swaps cannot be gasless
+    if (normalizedFromToken === NATIVE_TOKEN_ADDRESS) {
+      return null;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        chainId: chainId.toString(),
+        sellToken: normalizedFromToken,
+        buyToken: normalizedToToken,
+        sellAmount: fromAmount.toString(),
+        taker: takerAddress,
+        // Use indicative quote (doesn't require signatures)
+        checkApproval: 'false',
+      });
+
+      const response = await fetch(`https://api.0x.org/gasless/price?${params}`, {
+        headers: {
+          '0x-api-key': apiKey,
+          '0x-version': 'v2',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.warn(`[CdpTransactionManager] Gasless quote failed: ${response.status} - ${errorText}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (!data.buyAmount) {
+        logger.warn(`[CdpTransactionManager] Gasless quote returned no buyAmount`);
+        return null;
+      }
+
+      // Calculate gas deduction (difference from a regular swap quote)
+      // The buyAmount already has gas costs deducted
+      const gasDeductedAmount = data.fees?.gasFee?.amount || '0';
+
+      return {
+        toAmount: data.buyAmount,
+        gasDeductedAmount,
+        liquidityAvailable: true,
+      };
+    } catch (error) {
+      logger.warn(`[CdpTransactionManager] Gasless quote error:`, error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
+  /**
+   * Execute a gasless swap using 0x Gasless API
+   * The user's wallet only signs messages - no gas is needed
+   * Gas is deducted from the swap output by 0x relayers
+   */
+  private async executeGaslessSwapWith0x(
+    account: any,
+    userId: string,
+    network: string,
+    fromToken: string,
+    toToken: string,
+    fromAmount: bigint,
+    slippageBps: number
+  ): Promise<{ transactionHash: string; toAmount: string; method: string; pendingId?: string }> {
+    const apiKey = process.env.OX_API_KEY;
+    if (!apiKey) {
+      throw new Error('0x API key not configured for gasless swaps');
+    }
+
+    if (!isGaslessSupported(network)) {
+      throw new Error(`Gasless swaps not supported on ${network}`);
+    }
+
+    const chainId = get0xChainId(network);
+    if (!chainId) {
+      throw new Error(`Invalid chain ID for network: ${network}`);
+    }
+
+    const normalizedFromToken = normalizeTokenAddress(fromToken);
+    const normalizedToToken = normalizeTokenAddress(toToken);
+
+    // Native token swaps cannot be gasless (need gas for wrapping/unwrapping)
+    if (normalizedFromToken === NATIVE_TOKEN_ADDRESS) {
+      throw new Error('Cannot execute gasless swap from native token (ETH/POL). You need gas to swap native tokens.');
+    }
+
+    // Step 1: Get gasless quote
+    logger.info(`[CdpTransactionManager] Getting gasless quote for swap on ${network}`);
+    
+    const params = new URLSearchParams({
+      chainId: chainId.toString(),
+      sellToken: normalizedFromToken,
+      buyToken: normalizedToToken,
+      sellAmount: fromAmount.toString(),
+      taker: account.address,
+    });
+
+    // Add fee parameters
+    const feeRecipient = process.env.SWAP_FEE_RECIPIENT || '0xE42b492846A2A220FB607745A63aF7d91A035d12';
+    const feeRecipientBps = process.env.SWAP_FEE_BPS || '10';
+    params.append('swapFeeRecipient', feeRecipient);
+    params.append('swapFeeBps', feeRecipientBps);
+    params.append('swapFeeToken', normalizedFromToken);
+
+    const quoteUrl = `https://api.0x.org/gasless/quote?${params.toString()}`;
+
+    const quoteResponse = await fetch(quoteUrl, {
+      headers: {
+        '0x-api-key': apiKey,
+        '0x-version': 'v2',
+      },
+    });
+
+    if (!quoteResponse.ok) {
+      const errorText = await quoteResponse.text();
+      throw new Error(`0x Gasless quote failed (${quoteResponse.status}): ${errorText.substring(0, 200)}`);
+    }
+
+    const quote = await quoteResponse.json();
+
+    if (!quote.trade) {
+      throw new Error('0x Gasless API returned invalid quote (no trade data)');
+    }
+
+    logger.info(`[CdpTransactionManager] Gasless quote received: ${quote.buyAmount} tokens expected`);
+
+    // Step 2: Get viem wallet client for signing
+    const { walletClient } = await this.getViemClientsForAccount({
+      accountName: userId,
+      network,
+    });
+
+    // Step 3: Sign approval if needed (gasless approval via Permit)
+    let signedApproval = null;
+    if (quote.approval && quote.approval.eip712) {
+      logger.info(`[CdpTransactionManager] Signing gasless approval (Permit)`);
+      
+      const approvalSignature = await walletClient.signTypedData({
+        domain: quote.approval.eip712.domain,
+        types: quote.approval.eip712.types,
+        primaryType: quote.approval.eip712.primaryType,
+        message: quote.approval.eip712.message,
+      });
+
+      signedApproval = {
+        ...quote.approval,
+        signature: approvalSignature,
+      };
+      
+      logger.info(`[CdpTransactionManager] Gasless approval signed`);
+    }
+
+    // Step 4: Sign the trade message
+    logger.info(`[CdpTransactionManager] Signing gasless trade`);
+    
+    const tradeSignature = await walletClient.signTypedData({
+      domain: quote.trade.eip712.domain,
+      types: quote.trade.eip712.types,
+      primaryType: quote.trade.eip712.primaryType,
+      message: quote.trade.eip712.message,
+    });
+
+    const signedTrade = {
+      ...quote.trade,
+      signature: tradeSignature,
+    };
+
+    logger.info(`[CdpTransactionManager] Gasless trade signed`);
+
+    // Step 5: Submit the gasless swap
+    logger.info(`[CdpTransactionManager] Submitting gasless swap to 0x relayers`);
+
+    const submitResponse = await fetch('https://api.0x.org/gasless/submit', {
+      method: 'POST',
+      headers: {
+        '0x-api-key': apiKey,
+        '0x-version': 'v2',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chainId,
+        approval: signedApproval,
+        trade: signedTrade,
+      }),
+    });
+
+    if (!submitResponse.ok) {
+      const errorText = await submitResponse.text();
+      throw new Error(`0x Gasless submit failed (${submitResponse.status}): ${errorText.substring(0, 200)}`);
+    }
+
+    const submitResult = await submitResponse.json();
+
+    if (!submitResult.zid) {
+      throw new Error('0x Gasless submit did not return a transaction ID (zid)');
+    }
+
+    logger.info(`[CdpTransactionManager] Gasless swap submitted: zid=${submitResult.zid}`);
+
+    // Step 6: Poll for completion
+    logger.info(`[CdpTransactionManager] Waiting for gasless swap confirmation...`);
+    
+    const status = await this.pollGaslessSwapStatus(submitResult.zid, apiKey);
+
+    if (status.status === 'failed') {
+      throw new Error(`Gasless swap failed: ${status.reason}`);
+    }
+
+    if (status.status === 'pending') {
+      // Transaction is still processing but we have a zid
+      // Return with pendingId for tracking - caller should use this for status updates
+      logger.warn(`[CdpTransactionManager] Gasless swap still pending after timeout: zid=${status.zid}`);
+      
+      // Return a placeholder hash with pendingId for tracking
+      // The actual transaction may still complete - caller should inform user
+      return {
+        transactionHash: `pending:${status.zid}`,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless-pending',
+        pendingId: status.zid,
+      };
+    }
+
+    // Transaction confirmed with real hash
+    const transactionHash = status.transactionHash!;
+    logger.info(`[CdpTransactionManager] Gasless swap completed: ${transactionHash}`);
+
+    return {
+      transactionHash,
+      toAmount: quote.buyAmount || '0',
+      method: '0x-gasless',
     };
   }
 
