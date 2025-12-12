@@ -58,37 +58,21 @@ export async function getEntityWallet(
       };
     }
 
-    const walletEntityId = entity.metadata?.author_id;
+    // After entity migration fix: entities now have walletAddress directly in their metadata
+    // First check if entity has wallet address directly (frontend-created entities)
+    let walletAddress = entity.metadata?.walletAddress as string | undefined;
+    let walletEntityId = entityId; // Default to the entity itself
 
-    if (!walletEntityId) {
-      const errorText = "Wallet entity ID not found in entity metadata.";
-
-      return {
-        success: false,
-        result: {
-          text: errorText,
-          success: false,
-          values: { walletCreated: false, error: true },
-          data: { error: "Wallet entity ID not found" },
-        },
-      };
+    // Fallback: Check for legacy author_id indirection (for edge cases with old server-created entities)
+    if (!walletAddress && entity.metadata?.author_id) {
+      walletEntityId = entity.metadata.author_id;
+      const walletEntity = await runtime.getEntityById(walletEntityId);
+      if (walletEntity) {
+        walletAddress = walletEntity.metadata?.walletAddress as string;
+      }
     }
 
-    const walletEntity = await runtime.getEntityById(walletEntityId);
-    if (!walletEntity) {
-      const errorText = "Wallet entity not found.";
-      return {
-        success: false,
-        result: {
-          text: errorText,
-          success: false,
-          values: { walletCreated: false, error: true },
-          data: { error: "Wallet entity not found" },
-        },
-      };
-    }
-    const walletAddress = walletEntity.metadata?.walletAddress as string;
-    // Check if wallet already exists in entity metadata
+    // Check if wallet exists
     if (!walletAddress) {
       const errorText =
         "Unable to fetch user's wallet information. Please create a wallet first.";
@@ -111,31 +95,6 @@ export async function getEntityWallet(
             error: "Wallet not found",
           },
           error: new Error("Wallet not found"),
-        },
-      };
-    }
-
-    if (!walletAddress) {
-      const errorText = "Wallet address not found in entity metadata.";
-
-      if (callback) {
-        await callback({
-          text: errorText,
-          content: { error: "Wallet address not found" },
-        });
-      }
-
-      return {
-        success: false,
-        result: {
-          text: errorText,
-          success: false,
-          values: { walletCreated: false, error: true },
-          data: {
-            actionName,
-            error: "Wallet address not found",
-          },
-          error: new Error("Wallet address not found"),
         },
       };
     }
