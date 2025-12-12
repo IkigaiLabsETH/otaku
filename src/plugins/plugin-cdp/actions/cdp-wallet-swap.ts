@@ -652,21 +652,50 @@ export const cdpWalletSwap: Action = {
         logger.debug(`[USER_WALLET_SWAP] Processing error message: ${error.message}`);
         const errorLower = error.message.toLowerCase();
         
-        // Map error patterns to user-friendly messages
+        // Map error patterns to user-friendly messages with context
         const errorPatterns = [
-          { match: ["one-time approval", "permit2"], message: error.message },
-          { match: ["insufficient token balance"], message: "Insufficient token balance for this swap." },
-          { match: ["insufficient balance to execute", "insufficient funds for gas"], 
-            message: "Insufficient gas to execute the swap. You need a small amount of ETH for transaction fees." },
-          { match: ["no route", "no liquidity", "liquidity pool"], 
-            message: "No swap route found for this token pair. Try swapping to ETH/WETH first." },
-          { match: ["slippage"], message: "Swap failed due to price movement. Try increasing slippage tolerance." },
-          { match: ["not authenticated"], message: "CDP service is not authenticated. Please check your API credentials." },
+          { 
+            match: ["one-time approval"],
+            message: error.message, // Use detailed message from manager
+            context: "approval_required"
+          },
+          { 
+            match: ["insufficient token balance"],
+            message: "Insufficient token balance for this swap.",
+            context: "insufficient_balance"
+          },
+          { 
+            match: ["insufficient balance to execute", "insufficient funds for gas"],
+            message: "Insufficient gas for transaction. Tried gasless but token may need approval first. You need ~$0.50 ETH for approval, then swaps will be gasless.",
+            context: "insufficient_gas"
+          },
+          { 
+            match: ["no route", "no liquidity", "liquidity pool"],
+            message: "No direct swap route found. This token may only trade against ETH/WETH. Try swapping to WETH first, then WETH to your target token.",
+            context: "no_route"
+          },
+          { 
+            match: ["slippage"],
+            message: "Swap failed due to price movement exceeding slippage tolerance. Try again or increase slippage.",
+            context: "slippage_exceeded"
+          },
+          { 
+            match: ["not authenticated"],
+            message: "CDP service authentication failed. Check API credentials.",
+            context: "auth_error"
+          },
+          {
+            match: ["reverted"],
+            message: "Transaction reverted on-chain. Likely due to insufficient liquidity or multi-hop routing not supported. Try swapping through WETH as intermediate token.",
+            context: "tx_reverted"
+          },
         ];
         
+        let errorContext = "unknown";
         for (const pattern of errorPatterns) {
           if (pattern.match.some(term => errorLower.includes(term))) {
             errorMessage = pattern.message;
+            errorContext = pattern.context;
             break;
           }
         }
@@ -675,6 +704,8 @@ export const cdpWalletSwap: Action = {
         if (errorMessage === "Failed to execute swap.") {
           errorMessage = `Swap failed: ${error.message}`;
         }
+        
+        logger.info(`[USER_WALLET_SWAP] Error classified as: ${errorContext}`);
       }
       
       // Try to capture input params even in failure
