@@ -666,7 +666,7 @@ export const cdpWalletSwap: Action = {
           },
           { 
             match: ["insufficient balance to execute", "insufficient funds for gas"],
-            message: "You need about $0.50 worth of ETH for gas. I tried a gasless swap, but this token needs a one-time approval first (which costs gas). After that approval, all future swaps will be gasless.",
+            message: "You don't have enough ETH for gas. I tried a gasless swap, but this token needs a one-time approval first (which costs gas). After that approval, all future swaps will be gasless.",
             context: "insufficient_gas"
           },
           { 

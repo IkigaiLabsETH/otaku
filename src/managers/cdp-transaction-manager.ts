@@ -1649,7 +1649,7 @@ export class CdpTransactionManager {
             const nativeToken = network === 'polygon' ? 'POL' : 'ETH';
             throw new Error(
               `This token requires a one-time approval before gasless swaps can work. ` +
-              `You need approximately $0.50 worth of ${nativeToken} to approve the token. ` +
+              `You need some ${nativeToken} to approve the token. ` +
               `After approval, all future swaps will be gasless.`
             );
           }
