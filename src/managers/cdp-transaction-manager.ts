@@ -3222,62 +3222,90 @@ export class CdpTransactionManager {
 
     logger.info(`[CdpTransactionManager] Gasless swap submitted: zid=${submitResult.zid}`);
 
-    // Step 6: Poll for transaction hash until we get it or it fails
-    logger.info(`[CdpTransactionManager] Polling for gasless transaction hash...`);
+    // Step 6: Poll for transaction status using exponential backoff
+    logger.info(`[CdpTransactionManager] Polling for gasless transaction confirmation...`);
     
-    let transactionHash: string | null = null;
-    let attempts = 0;
-    const maxAttempts = 60; // Poll up to 2 minutes (60 * 2s = 120s)
-    
-    while (attempts < maxAttempts) {
-      try {
-        const statusResponse = await fetch(`https://api.0x.org/gasless/status/${submitResult.zid}`, {
-          headers: {
-            '0x-api-key': apiKey,
-            '0x-version': 'v2',
-          },
-        });
+    const pollResult = await this.pollGaslessSwapStatus(submitResult.zid, apiKey);
 
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          
-          // Check for transaction hash
-          if (statusData.transactions && statusData.transactions.length > 0) {
-            transactionHash = statusData.transactions[0].hash;
-            logger.info(`[CdpTransactionManager] Got transaction hash from gasless status: ${transactionHash}`);
-            break;
-          }
-          
-          // Check for explicit failure
-          if (statusData.status === 'failed') {
-            throw new Error(`Gasless swap failed: ${statusData.reason || 'Transaction failed on 0x relayers'}`);
-          }
-          
-          // Still pending - continue polling
-          logger.debug(`[CdpTransactionManager] Gasless swap still pending (attempt ${attempts + 1}/${maxAttempts})`);
-        } else {
-          logger.debug(`[CdpTransactionManager] Status API returned ${statusResponse.status} (attempt ${attempts + 1})`);
-        }
-      } catch (pollError) {
-        logger.debug(`[CdpTransactionManager] Status poll attempt ${attempts + 1} failed:`, pollError instanceof Error ? pollError.message : String(pollError));
-        // If it's a failure error (not just polling issue), rethrow
-        if (pollError instanceof Error && pollError.message.includes('Gasless swap failed')) {
-          throw pollError;
-        }
-      }
+    if (pollResult.status === 'failed') {
+      throw new Error(`Gasless swap failed: ${pollResult.reason || 'Unknown error from 0x relayers'}`);
+    }
+
+    if (pollResult.status === 'pending') {
+      // Transaction still pending after max attempts - return with tracking info instead of failing
+      logger.warn(`[CdpTransactionManager] Gasless swap status check timed out after ${GASLESS_POLL_MAX_ATTEMPTS} attempts`);
+      logger.warn(`[CdpTransactionManager] Transaction may still be processing. Track status with zid: ${pollResult.zid}`);
       
-      attempts++;
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second intervals
+      // Return with pending indicator so user can track the transaction
+      // The pendingId field allows the frontend to poll for updates
+      return {
+        transactionHash: `PENDING_${pollResult.zid}`,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless-pending',
+        pendingId: pollResult.zid,
+      };
     }
 
-    // Must have transaction hash to proceed
+    // Confirmed - extract transaction hash
+    const transactionHash = pollResult.transactionHash;
     if (!transactionHash) {
-      throw new Error(`Gasless swap timed out after ${maxAttempts * 2} seconds. The transaction may have failed or status API is unavailable. Check 0x status with zid: ${submitResult.zid}`);
+      throw new Error(`Gasless swap confirmed but no transaction hash received. zid: ${pollResult.zid}`);
     }
 
-    // Verify transaction with viem
-    logger.info(`[CdpTransactionManager] Verifying gasless transaction with viem: ${transactionHash}`);
-    await this.waitForTransactionConfirmation(transactionHash, network, 'gasless swap');
+    // Wait for transaction to appear on-chain (race condition: 0x may return hash before relayer submits)
+    logger.info(`[CdpTransactionManager] Waiting for gasless transaction to appear on-chain: ${transactionHash}`);
+    
+    const chain = getViemChain(network);
+    if (!chain) {
+      logger.warn(`[CdpTransactionManager] Cannot verify gasless transaction on unsupported network: ${network}`);
+      // Return without verification for unsupported networks
+      return {
+        transactionHash,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless',
+        pendingId: submitResult.zid,
+      };
+    }
+
+    const alchemyKey = process.env.ALCHEMY_API_KEY;
+    if (!alchemyKey) {
+      logger.warn(`[CdpTransactionManager] Cannot verify gasless transaction: Alchemy API key not configured`);
+      // Return without verification if no RPC access
+      return {
+        transactionHash,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless',
+        pendingId: submitResult.zid,
+      };
+    }
+
+    const rpcUrl = getRpcUrl(network, alchemyKey);
+    if (!rpcUrl) {
+      logger.warn(`[CdpTransactionManager] Cannot verify gasless transaction: No RPC URL for ${network}`);
+      return {
+        transactionHash,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless',
+        pendingId: submitResult.zid,
+      };
+    }
+
+    try {
+      // Verify transaction is on-chain and wait for confirmation
+      await this.waitForTransactionConfirmation(transactionHash, network, 'gasless swap');
+    } catch (confirmError) {
+      // If confirmation fails, the transaction may still be pending submission by relayers
+      logger.warn(`[CdpTransactionManager] Gasless transaction confirmation failed:`, confirmError instanceof Error ? confirmError.message : String(confirmError));
+      logger.warn(`[CdpTransactionManager] Transaction may still be processing. Track with zid: ${submitResult.zid}`);
+      
+      // Return with pending status and both hash and zid for tracking
+      return {
+        transactionHash: `PENDING_${transactionHash}`,
+        toAmount: quote.buyAmount || '0',
+        method: '0x-gasless-confirming',
+        pendingId: submitResult.zid,
+      };
+    }
     
     return {
       transactionHash,
