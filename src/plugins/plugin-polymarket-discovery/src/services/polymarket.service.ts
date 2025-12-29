@@ -717,7 +717,7 @@ export class PolymarketService extends Service {
     try {
       // Use Polygon RPC to check for bytecode
       const rpcUrl = "https://polygon-rpc.com";
-      const response = await fetch(rpcUrl, {
+      const response = await this.fetchWithTimeout(rpcUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1283,8 +1283,9 @@ export class PolymarketService extends Service {
       const orderbooks = await response.json() as OrderBook[];
 
       // Convert to summaries with calculated metrics
-      const summaries: OrderbookSummary[] = orderbooks.map((orderbook, index) => {
-        const tokenId = tokenIds[index];
+      // Use asset_id from API response instead of array index to handle out-of-order or partial results
+      const summaries: OrderbookSummary[] = orderbooks.map((orderbook) => {
+        const tokenId = orderbook.asset_id;
         const bestBid = orderbook.bids.length > 0 ? orderbook.bids[0].price : undefined;
         const bestAsk = orderbook.asks.length > 0 ? orderbook.asks[0].price : undefined;
 
