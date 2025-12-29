@@ -102,3 +102,84 @@ export function truncateAddress(
   const suffix = address.slice(-suffixLength);
   return `${prefix}...${suffix}`;
 }
+
+/**
+ * Format number as USD currency
+ *
+ * @param value - Number or string to format
+ * @param decimals - Number of decimal places (default: 2)
+ * @returns Formatted currency string (e.g., "$1,234.56")
+ */
+export function formatCurrency(
+  value: number | string,
+  decimals: number = 2
+): string {
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(numValue)) return "$0.00";
+
+  return numValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
+ * Format number with thousand separators
+ *
+ * @param value - Number or string to format
+ * @param decimals - Number of decimal places (default: 0)
+ * @returns Formatted number string (e.g., "1,234")
+ */
+export function formatNumber(
+  value: number | string,
+  decimals: number = 0
+): string {
+  const numValue = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(numValue)) return "0";
+
+  return numValue.toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
+ * Format number as percentage
+ *
+ * @param value - Number to format (e.g., 0.5 or 50)
+ * @param decimals - Number of decimal places (default: 2)
+ * @param isDecimal - Whether value is decimal (0-1) or already percentage (0-100) (default: true)
+ * @returns Formatted percentage string (e.g., "50.00%")
+ */
+export function formatPercentage(
+  value: number,
+  decimals: number = 2,
+  isDecimal: boolean = true
+): string {
+  if (isNaN(value)) return "0.00%";
+
+  const percentValue = isDecimal ? value * 100 : value;
+  return `${percentValue.toFixed(decimals)}%`;
+}
+
+/**
+ * Format price change with value and percentage
+ *
+ * @param firstPrice - Starting price
+ * @param lastPrice - Ending price
+ * @returns Object with change value and percentage
+ */
+export function formatPriceChange(
+  firstPrice: number,
+  lastPrice: number
+): { value: number; percentage: number; formatted: string } {
+  const change = lastPrice - firstPrice;
+  // Handle edge case where firstPrice is 0 to avoid Infinity
+  const changePercent = firstPrice === 0 ? 0 : (change / firstPrice) * 100;
+  const sign = change >= 0 ? "+" : "";
+  const formatted = `${sign}${change.toFixed(4)} (${sign}${changePercent.toFixed(2)}%)`;
+
+  return { value: change, percentage: changePercent, formatted };
+}

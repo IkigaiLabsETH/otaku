@@ -19,6 +19,7 @@ import type {
   MarketsResponse,
   MarketPrices,
   OrderBook,
+  OrderbookSummary,
   MarketSearchParams,
   MarketCategory,
   CachedMarket,
@@ -29,6 +30,15 @@ import type {
   Position,
   Balance,
   Trade,
+  PolymarketEvent,
+  PolymarketEventDetail,
+  EventFilters,
+  ClosedPosition,
+  UserActivity,
+  TopHolder,
+  OpenInterestData,
+  VolumeData,
+  SpreadData,
 } from "../types";
 
 export class PolymarketService extends Service {
@@ -50,11 +60,17 @@ export class PolymarketService extends Service {
   private priceHistoryCacheTtl: number = 300000; // 5 minutes (historical data changes less frequently)
   private positionsCacheTtl: number = 60000; // 1 minute
   private tradesCacheTtl: number = 30000; // 30 seconds
+  private eventCacheTtl: number = 60000; // 1 minute (event data stable)
+  private analyticsCacheTtl: number = 30000; // 30 seconds (analytics change less frequently)
+  private closedPositionsCacheTtl: number = 60000; // 1 minute (historical data stable)
+  private userActivityCacheTtl: number = 60000; // 1 minute (historical data stable)
+  private topHoldersCacheTtl: number = 60000; // 1 minute (historical data stable)
   private maxRetries: number = 3;
   private requestTimeout: number = 10000; // 10 seconds
   private maxMarketCacheSize: number = 100; // Max markets in cache
   private maxPriceCacheSize: number = 200; // Max prices in cache
   private maxPriceHistoryCacheSize: number = 50; // Max price histories in cache
+  private maxEventCacheSize: number = 50; // Max events in cache
 
   // In-memory LRU caches
   private marketCache: Map<string, CachedMarket> = new Map();
@@ -67,7 +83,23 @@ export class PolymarketService extends Service {
   private positionsCacheOrder: string[] = []; // Track access order for LRU
   private tradesCache: Map<string, { data: Trade[]; timestamp: number }> = new Map();
   private tradesCacheOrder: string[] = []; // Track access order for LRU
+  private eventsCache: Map<string, { data: PolymarketEventDetail; timestamp: number }> = new Map();
+  private eventsCacheOrder: string[] = []; // Track access order for LRU
+  private eventsListCache: { data: PolymarketEvent[]; timestamp: number } | null = null;
   private marketsListCache: { data: PolymarketMarket[]; timestamp: number } | null = null;
+
+  // Phase 3B: Analytics caches
+  private openInterestCache: { data: OpenInterestData; timestamp: number } | null = null;
+  private liveVolumeCache: { data: VolumeData; timestamp: number } | null = null;
+  private spreadsCache: { data: SpreadData[]; timestamp: number } | null = null;
+
+  // Phase 5A: Extended portfolio caches
+  private closedPositionsCache: Map<string, { data: ClosedPosition[]; timestamp: number }> = new Map();
+  private closedPositionsCacheOrder: string[] = []; // Track access order for LRU
+  private userActivityCache: Map<string, { data: UserActivity[]; timestamp: number }> = new Map();
+  private userActivityCacheOrder: string[] = []; // Track access order for LRU
+  private topHoldersCache: Map<string, { data: TopHolder[]; timestamp: number }> = new Map();
+  private topHoldersCacheOrder: string[] = []; // Track access order for LRU
 
   constructor(runtime: IAgentRuntime) {
     super(runtime);
@@ -690,7 +722,24 @@ export class PolymarketService extends Service {
         }),
       });
 
-      const data = await response.json() as { result: string };
+      const data = await response.json() as { result?: string; error?: { code: number; message: string } };
+
+      // Check for JSON-RPC error response (rate limiting, server error, etc.)
+      if (data.error) {
+        logger.warn(
+          `[PolymarketService] RPC error checking contract: ${data.error.message}. Assuming EOA.`
+        );
+        return false; // Default to treating as EOA on RPC error
+      }
+
+      // Check if result field exists
+      if (data.result === undefined) {
+        logger.warn(
+          `[PolymarketService] Invalid RPC response (missing result field). Assuming EOA.`
+        );
+        return false;
+      }
+
       // '0x' means no code (EOA), anything else means contract
       return data.result !== "0x";
     } catch (error) {
@@ -876,6 +925,560 @@ export class PolymarketService extends Service {
   }
 
   /**
+   * Phase 4: Events API Methods
+   */
+
+  /**
+   * Get events from Gamma API
+   *
+   * Fetches higher-level event groupings that contain multiple markets.
+   * Results are cached for 60s as event data is relatively stable.
+   *
+   * @param filters - Optional filters for active status, tags, pagination
+   * @returns Array of events with metadata
+   */
+  async getEvents(filters?: EventFilters): Promise<PolymarketEvent[]> {
+    const { active, closed, tag, limit = 20, offset = 0 } = filters || {};
+    logger.info(`[PolymarketService] Fetching events with filters: active=${active}, tag=${tag}, limit=${limit}`);
+
+    // Check cache (only cache if no filters, since filtered results vary)
+    if (!filters || (active === undefined && !closed && !tag && offset === 0)) {
+      if (this.eventsListCache) {
+        const age = Date.now() - this.eventsListCache.timestamp;
+        if (age < this.eventCacheTtl) {
+          logger.debug(`[PolymarketService] Returning cached events list (age: ${age}ms)`);
+          return this.eventsListCache.data.slice(0, limit);
+        }
+      }
+    }
+
+    return this.retryFetch(async () => {
+      // Build query parameters
+      const queryParams = new URLSearchParams();
+      queryParams.set("limit", limit.toString());
+      queryParams.set("offset", offset.toString());
+
+      if (active !== undefined) {
+        queryParams.set("active", active.toString());
+      }
+
+      if (closed !== undefined) {
+        queryParams.set("closed", closed.toString());
+      }
+
+      if (tag) {
+        queryParams.set("tag", tag);
+      }
+
+      const url = `${this.gammaApiUrl}/events?${queryParams.toString()}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
+      }
+
+      const events = await response.json() as PolymarketEvent[];
+
+      // Update cache only if no filters
+      if (!filters || (active === undefined && !closed && !tag && offset === 0)) {
+        this.eventsListCache = {
+          data: events,
+          timestamp: Date.now(),
+        };
+      }
+
+      logger.info(`[PolymarketService] Fetched ${events.length} events`);
+      return events;
+    });
+  }
+
+  /**
+   * Get event detail by ID or slug
+   *
+   * Fetches complete event data including all associated markets.
+   * Results are cached with LRU eviction.
+   *
+   * @param eventIdOrSlug - Event ID or URL slug
+   * @returns Event detail with associated markets
+   */
+  async getEventDetail(eventIdOrSlug: string): Promise<PolymarketEventDetail> {
+    logger.info(`[PolymarketService] Fetching event detail: ${eventIdOrSlug}`);
+
+    // Check LRU cache
+    const cached = this.getCached(
+      eventIdOrSlug,
+      this.eventsCache,
+      this.eventsCacheOrder,
+      this.eventCacheTtl
+    );
+
+    if (cached) {
+      logger.debug(`[PolymarketService] Returning cached event (${eventIdOrSlug})`);
+      return cached.data;
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.gammaApiUrl}/events/${eventIdOrSlug}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
+      }
+
+      const event = await response.json() as PolymarketEventDetail;
+
+      // Update LRU cache
+      this.setCached(
+        eventIdOrSlug,
+        {
+          data: event,
+          timestamp: Date.now(),
+        },
+        this.eventsCache,
+        this.eventsCacheOrder,
+        this.maxEventCacheSize
+      );
+
+      logger.info(`[PolymarketService] Fetched event: ${event.title} (${event.markets?.length || 0} markets)`);
+      return event;
+    });
+  }
+
+  /**
+   * Phase 3B: Market Analytics Methods
+   */
+
+  /**
+   * Get market-wide open interest (total value locked)
+   *
+   * Fetches total value locked across all Polymarket markets.
+   * Results are cached for 30s as analytics change less frequently.
+   *
+   * @returns Open interest data with total value and market count
+   */
+  async getOpenInterest(): Promise<OpenInterestData> {
+    logger.info("[PolymarketService] Fetching open interest");
+
+    // Check cache
+    if (this.openInterestCache) {
+      const age = Date.now() - this.openInterestCache.timestamp;
+      if (age < this.analyticsCacheTtl) {
+        logger.debug(`[PolymarketService] Returning cached open interest (age: ${age}ms)`);
+        return this.openInterestCache.data;
+      }
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.clobApiUrl}/misc/open-interest`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as OpenInterestData;
+
+      // Update cache
+      this.openInterestCache = {
+        data,
+        timestamp: Date.now(),
+      };
+
+      logger.info(`[PolymarketService] Fetched open interest: ${data.total_value}`);
+      return data;
+    });
+  }
+
+  /**
+   * Get live trading volume (24h rolling)
+   *
+   * Fetches 24h trading volume across all markets.
+   * Results are cached for 30s as analytics change less frequently.
+   *
+   * @returns Volume data with 24h total and per-market breakdown
+   */
+  async getLiveVolume(): Promise<VolumeData> {
+    logger.info("[PolymarketService] Fetching live volume");
+
+    // Check cache
+    if (this.liveVolumeCache) {
+      const age = Date.now() - this.liveVolumeCache.timestamp;
+      if (age < this.analyticsCacheTtl) {
+        logger.debug(`[PolymarketService] Returning cached live volume (age: ${age}ms)`);
+        return this.liveVolumeCache.data;
+      }
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.clobApiUrl}/misc/live-volume`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as VolumeData;
+
+      // Update cache
+      this.liveVolumeCache = {
+        data,
+        timestamp: Date.now(),
+      };
+
+      logger.info(`[PolymarketService] Fetched live volume: ${data.total_volume_24h}`);
+      return data;
+    });
+  }
+
+  /**
+   * Get bid-ask spreads for markets
+   *
+   * Fetches spread analysis for assessing liquidity quality.
+   * Results are cached for 30s as analytics change less frequently.
+   *
+   * @returns Array of spread data for markets
+   */
+  async getSpreads(): Promise<SpreadData[]> {
+    logger.info("[PolymarketService] Fetching spreads");
+
+    // Check cache
+    if (this.spreadsCache) {
+      const age = Date.now() - this.spreadsCache.timestamp;
+      if (age < this.analyticsCacheTtl) {
+        logger.debug(`[PolymarketService] Returning cached spreads (age: ${age}ms)`);
+        return this.spreadsCache.data;
+      }
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.clobApiUrl}/spreads`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json() as SpreadData[];
+
+      // Update cache
+      this.spreadsCache = {
+        data,
+        timestamp: Date.now(),
+      };
+
+      logger.info(`[PolymarketService] Fetched spreads for ${data.length} markets`);
+      return data;
+    });
+  }
+
+  /**
+   * Phase 3A: Orderbook Methods
+   */
+
+  /**
+   * Get orderbook for a single token with summary metrics
+   *
+   * Fetches orderbook from CLOB API and calculates best bid/ask, spread, and mid price.
+   * Results are cached for 10-15s (orderbooks change frequently).
+   *
+   * @param tokenId - ERC1155 conditional token ID
+   * @param side - Optional filter to BUY or SELL side
+   * @returns Orderbook summary with bids, asks, and calculated metrics
+   */
+  async getOrderbook(tokenId: string, side?: "BUY" | "SELL"): Promise<OrderbookSummary> {
+    logger.info(`[PolymarketService] Fetching orderbook for token: ${tokenId}${side ? ` (${side} side)` : ""}`);
+
+    return this.retryFetch(async () => {
+      const queryParams = new URLSearchParams();
+      queryParams.set("token_id", tokenId);
+      if (side) {
+        queryParams.set("side", side);
+      }
+
+      const url = `${this.clobApiUrl}/book?${queryParams.toString()}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      }
+
+      const orderbook = await response.json() as OrderBook;
+
+      // Calculate summary metrics
+      const bestBid = orderbook.bids.length > 0 ? orderbook.bids[0].price : undefined;
+      const bestAsk = orderbook.asks.length > 0 ? orderbook.asks[0].price : undefined;
+
+      let spread: string | undefined;
+      let midPrice: string | undefined;
+
+      if (bestBid && bestAsk) {
+        const bidNum = parseFloat(bestBid);
+        const askNum = parseFloat(bestAsk);
+        spread = (askNum - bidNum).toFixed(4);
+        midPrice = ((bidNum + askNum) / 2).toFixed(4);
+      }
+
+      const summary: OrderbookSummary = {
+        token_id: tokenId,
+        market: orderbook.market,
+        asset_id: orderbook.asset_id,
+        timestamp: orderbook.timestamp,
+        hash: (orderbook as any).hash,
+        bids: orderbook.bids,
+        asks: orderbook.asks,
+        best_bid: bestBid,
+        best_ask: bestAsk,
+        spread,
+        mid_price: midPrice,
+      };
+
+      logger.info(
+        `[PolymarketService] Fetched orderbook - ${orderbook.bids.length} bids, ${orderbook.asks.length} asks, ` +
+        `best: ${bestBid || "N/A"}/${bestAsk || "N/A"}`
+      );
+
+      return summary;
+    });
+  }
+
+  /**
+   * Get orderbooks for multiple tokens
+   *
+   * Fetches orderbooks for up to 100 tokens in a single batch request.
+   * Results are cached for 10-15s (orderbooks change frequently).
+   *
+   * @param tokenIds - Array of ERC1155 conditional token IDs (max 100)
+   * @returns Array of orderbook summaries
+   */
+  async getOrderbooks(tokenIds: string[]): Promise<OrderbookSummary[]> {
+    logger.info(`[PolymarketService] Fetching orderbooks for ${tokenIds.length} tokens`);
+
+    if (tokenIds.length === 0) {
+      return [];
+    }
+
+    if (tokenIds.length > 100) {
+      logger.warn(`[PolymarketService] Token IDs exceeds max of 100, truncating to first 100`);
+      tokenIds = tokenIds.slice(0, 100);
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.clobApiUrl}/books`;
+      const response = await this.fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token_ids: tokenIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      }
+
+      const orderbooks = await response.json() as OrderBook[];
+
+      // Convert to summaries with calculated metrics
+      const summaries: OrderbookSummary[] = orderbooks.map((orderbook, index) => {
+        const tokenId = tokenIds[index];
+        const bestBid = orderbook.bids.length > 0 ? orderbook.bids[0].price : undefined;
+        const bestAsk = orderbook.asks.length > 0 ? orderbook.asks[0].price : undefined;
+
+        let spread: string | undefined;
+        let midPrice: string | undefined;
+
+        if (bestBid && bestAsk) {
+          const bidNum = parseFloat(bestBid);
+          const askNum = parseFloat(bestAsk);
+          spread = (askNum - bidNum).toFixed(4);
+          midPrice = ((bidNum + askNum) / 2).toFixed(4);
+        }
+
+        return {
+          token_id: tokenId,
+          market: orderbook.market,
+          asset_id: orderbook.asset_id,
+          timestamp: orderbook.timestamp,
+          hash: (orderbook as any).hash,
+          bids: orderbook.bids,
+          asks: orderbook.asks,
+          best_bid: bestBid,
+          best_ask: bestAsk,
+          spread,
+          mid_price: midPrice,
+        };
+      });
+
+      logger.info(`[PolymarketService] Fetched ${summaries.length} orderbooks`);
+      return summaries;
+    });
+  }
+
+  /**
+   * Phase 5A: Extended Portfolio Methods
+   */
+
+  /**
+   * Get closed positions (historical resolved markets)
+   *
+   * Fetches resolved positions with final outcomes and payouts.
+   * Results are cached for 60s as historical data is stable.
+   *
+   * @param walletAddress - User's EOA or proxy wallet address
+   * @returns Array of closed positions with win/loss info
+   */
+  async getClosedPositions(walletAddress: string): Promise<ClosedPosition[]> {
+    logger.info(`[PolymarketService] Fetching closed positions for wallet: ${walletAddress}`);
+
+    // Get proxy address (derive if EOA, pass through if already proxy)
+    const proxyAddress = await this.getOrDeriveProxyAddress(walletAddress);
+
+    // Check LRU cache
+    const cached = this.getCached(
+      proxyAddress,
+      this.closedPositionsCache,
+      this.closedPositionsCacheOrder,
+      this.closedPositionsCacheTtl
+    );
+
+    if (cached) {
+      logger.debug(`[PolymarketService] Returning cached closed positions (wallet: ${proxyAddress})`);
+      return cached.data;
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.dataApiUrl}/closed-positions?user=${proxyAddress}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+      }
+
+      const closedPositions = await response.json() as ClosedPosition[];
+
+      // Update LRU cache
+      this.setCached(
+        proxyAddress,
+        {
+          data: closedPositions,
+          timestamp: Date.now(),
+        },
+        this.closedPositionsCache,
+        this.closedPositionsCacheOrder,
+        100 // Max 100 wallets cached
+      );
+
+      logger.info(`[PolymarketService] Fetched ${closedPositions.length} closed positions for wallet: ${proxyAddress}`);
+      return closedPositions;
+    });
+  }
+
+  /**
+   * Get user activity log (deposits, withdrawals, trades, redemptions)
+   *
+   * Fetches on-chain activity history for a wallet.
+   * Results are cached for 60s as historical data is stable.
+   *
+   * @param walletAddress - User's EOA or proxy wallet address
+   * @returns Array of user activity entries
+   */
+  async getUserActivity(walletAddress: string): Promise<UserActivity[]> {
+    logger.info(`[PolymarketService] Fetching user activity for wallet: ${walletAddress}`);
+
+    // Get proxy address (derive if EOA, pass through if already proxy)
+    const proxyAddress = await this.getOrDeriveProxyAddress(walletAddress);
+
+    // Check LRU cache
+    const cached = this.getCached(
+      proxyAddress,
+      this.userActivityCache,
+      this.userActivityCacheOrder,
+      this.userActivityCacheTtl
+    );
+
+    if (cached) {
+      logger.debug(`[PolymarketService] Returning cached user activity (wallet: ${proxyAddress})`);
+      return cached.data;
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.dataApiUrl}/user-activity?user=${proxyAddress}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+      }
+
+      const activity = await response.json() as UserActivity[];
+
+      // Update LRU cache
+      this.setCached(
+        proxyAddress,
+        {
+          data: activity,
+          timestamp: Date.now(),
+        },
+        this.userActivityCache,
+        this.userActivityCacheOrder,
+        100 // Max 100 wallets cached
+      );
+
+      logger.info(`[PolymarketService] Fetched ${activity.length} activity entries for wallet: ${proxyAddress}`);
+      return activity;
+    });
+  }
+
+  /**
+   * Get top holders in a market
+   *
+   * Fetches major participants by position size.
+   * Results are cached for 60s as holder data changes gradually.
+   *
+   * @param marketId - Market condition ID
+   * @returns Array of top holders with position sizes
+   */
+  async getTopHolders(marketId: string): Promise<TopHolder[]> {
+    logger.info(`[PolymarketService] Fetching top holders for market: ${marketId}`);
+
+    // Check LRU cache
+    const cached = this.getCached(
+      marketId,
+      this.topHoldersCache,
+      this.topHoldersCacheOrder,
+      this.topHoldersCacheTtl
+    );
+
+    if (cached) {
+      logger.debug(`[PolymarketService] Returning cached top holders (market: ${marketId})`);
+      return cached.data;
+    }
+
+    return this.retryFetch(async () => {
+      const url = `${this.dataApiUrl}/top-holders?market=${marketId}`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+      }
+
+      const holders = await response.json() as TopHolder[];
+
+      // Update LRU cache
+      this.setCached(
+        marketId,
+        {
+          data: holders,
+          timestamp: Date.now(),
+        },
+        this.topHoldersCache,
+        this.topHoldersCacheOrder,
+        100 // Max 100 markets cached
+      );
+
+      logger.info(`[PolymarketService] Fetched ${holders.length} top holders for market: ${marketId}`);
+      return holders;
+    });
+  }
+
+  /**
    * Clear all caches
    */
   clearCache(): void {
@@ -889,7 +1492,19 @@ export class PolymarketService extends Service {
     this.positionsCacheOrder = [];
     this.tradesCache.clear();
     this.tradesCacheOrder = [];
+    this.eventsCache.clear();
+    this.eventsCacheOrder = [];
+    this.eventsListCache = null;
     this.marketsListCache = null;
+    this.openInterestCache = null;
+    this.liveVolumeCache = null;
+    this.spreadsCache = null;
+    this.closedPositionsCache.clear();
+    this.closedPositionsCacheOrder = [];
+    this.userActivityCache.clear();
+    this.userActivityCacheOrder = [];
+    this.topHoldersCache.clear();
+    this.topHoldersCacheOrder = [];
     logger.info("[PolymarketService] Cache cleared");
   }
 }

@@ -79,6 +79,24 @@ export interface OrderBook {
   asset_id: string;
   bids: OrderBookEntry[];
   asks: OrderBookEntry[];
+  hash?: string;
+}
+
+/**
+ * Phase 3A: Orderbook summary with calculated metrics
+ */
+export interface OrderbookSummary {
+  token_id: string;
+  market: string;
+  asset_id: string;
+  timestamp: number;
+  hash?: string;
+  bids: OrderBookEntry[];
+  asks: OrderBookEntry[];
+  best_bid?: string;
+  best_ask?: string;
+  spread?: string;
+  mid_price?: string;
 }
 
 /**
@@ -266,3 +284,132 @@ export interface Trade {
   timestamp: number;           // Unix timestamp
   transaction_hash?: string;   // On-chain tx hash
 }
+
+/**
+ * Phase 3B: Market Analytics Types
+ */
+
+/**
+ * Open interest data for market-wide exposure metrics
+ */
+export interface OpenInterestData {
+  total_value: string;         // Total value locked across all markets
+  markets_count?: number;      // Number of active markets
+  timestamp?: number;          // Data timestamp
+}
+
+/**
+ * Live volume data for real-time trading activity
+ */
+export interface VolumeData {
+  total_volume_24h: string;    // 24h volume across all markets
+  markets?: Array<{
+    condition_id: string;      // Market identifier
+    volume: string;            // Market-specific volume
+    question?: string;         // Market question
+  }>;
+  timestamp?: number;          // Data timestamp
+}
+
+/**
+ * Spread data for bid-ask analysis
+ */
+export interface SpreadData {
+  condition_id: string;        // Market identifier
+  spread: string;              // Bid-ask spread
+  spread_percentage: string;   // Spread as percentage
+  best_bid: string;            // Best bid price
+  best_ask: string;            // Best ask price
+  question?: string;           // Market question
+  liquidity_score?: number;    // Liquidity quality score (0-100)
+}
+
+/**
+ * Phase 4: Events API Types
+ */
+
+/**
+ * Polymarket Event (higher-level grouping of markets)
+ */
+export interface PolymarketEvent {
+  id: string;                  // Event ID
+  slug?: string;               // URL-friendly slug
+  title: string;               // Event title
+  description?: string;        // Event description
+  start_date?: string;         // ISO 8601 start date
+  end_date?: string;           // ISO 8601 end date
+  image?: string;              // Event image URL
+  icon?: string;               // Event icon URL
+  active?: boolean;            // Event is active
+  closed?: boolean;            // Event is closed
+  archived?: boolean;          // Event is archived
+  tags?: string[];             // Event tags
+  markets?: PolymarketMarket[]; // Associated markets (only in detail view)
+  market_count?: number;       // Number of markets in event
+}
+
+/**
+ * Event detail response (includes associated markets)
+ */
+export interface PolymarketEventDetail extends PolymarketEvent {
+  markets: PolymarketMarket[];  // Full list of markets for this event
+}
+
+/**
+ * Event filters for browsing
+ */
+export interface EventFilters {
+  active?: boolean;            // Filter by active status
+  closed?: boolean;            // Include closed events
+  tag?: string;                // Filter by tag
+  limit?: number;              // Results limit (default 20)
+  offset?: number;             // Pagination offset
+}
+/**
+ * Phase 5A: Extended Portfolio Types
+ */
+
+/**
+ * Closed position (resolved market)
+ */
+export interface ClosedPosition {
+  market: string;              // Market identifier
+  condition_id: string;        // Condition ID
+  asset_id: string;            // Token ID
+  outcome: "YES" | "NO";       // Outcome position
+  size: string;                // Position size
+  avg_price: string;           // Average entry price
+  settlement_price: string;    // Final settlement price (0 or 1)
+  pnl: string;                 // Realized profit/loss
+  pnl_percentage: string;      // PnL as percentage
+  closed_at: number;           // Unix timestamp of settlement
+  payout: string;              // Total payout received
+  won: boolean;                // True if position won
+}
+
+/**
+ * User activity entry (on-chain events)
+ */
+export interface UserActivity {
+  id: string;                  // Activity ID
+  type: "DEPOSIT" | "WITHDRAWAL" | "TRADE" | "REDEMPTION"; // Activity type
+  amount: string;              // Amount in USDC
+  timestamp: number;           // Unix timestamp
+  transaction_hash: string;    // On-chain tx hash
+  market?: string;             // Related market (for trades)
+  outcome?: "YES" | "NO";      // Related outcome (for trades)
+  status: "CONFIRMED" | "PENDING"; // Transaction status
+}
+
+/**
+ * Top holder in a market
+ */
+export interface TopHolder {
+  address: string;             // Wallet address (may be anonymized)
+  outcome: "YES" | "NO";       // Outcome held
+  size: string;                // Position size
+  value: string;               // Current value in USD
+  percentage: string;          // % of total market liquidity
+  is_public: boolean;          // Whether wallet is publicly identified
+}
+

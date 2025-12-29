@@ -15,6 +15,7 @@ import {
   logger,
 } from "@elizaos/core";
 import { PolymarketService } from "../services/polymarket.service";
+import { formatPriceChange } from "../utils/actionHelpers";
 
 interface GetMarketPriceHistoryParams {
   conditionId?: string;
@@ -41,15 +42,7 @@ function daysToInterval(days: number): string {
   return "max";
 }
 
-// Helper to format price change
-function formatPriceChange(
-  firstPrice: number,
-  lastPrice: number
-): { value: number; percentage: number } {
-  const change = lastPrice - firstPrice;
-  const changePercent = (change / firstPrice) * 100;
-  return { value: change, percentage: changePercent };
-}
+// Note: formatPriceChange moved to actionHelpers.ts for reuse
 
 export const getMarketPriceHistoryAction: Action = {
   name: "GET_POLYMARKET_PRICE_HISTORY",

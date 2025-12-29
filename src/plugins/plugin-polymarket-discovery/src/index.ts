@@ -35,6 +35,24 @@ import { getUserPositionsAction } from "./actions/getUserPositions.action";
 import { getUserBalanceAction } from "./actions/getUserBalance.action";
 import { getUserTradeHistoryAction } from "./actions/getUserTradeHistory.action";
 
+// Phase 3A: Orderbook Actions
+import { getOrderbookAction } from "./actions/getOrderbook.action";
+import { getOrderbooksAction } from "./actions/getOrderbooks.action";
+
+// Phase 3B: Market Analytics Actions
+import { getOpenInterestAction } from "./actions/getOpenInterest.action";
+import { getLiveVolumeAction } from "./actions/getLiveVolume.action";
+import { getSpreadsAction } from "./actions/getSpreads.action";
+
+// Phase 4: Events API Actions
+import { getEventsAction } from "./actions/getEvents.action";
+import { getEventDetailAction } from "./actions/getEventDetail.action";
+
+// Phase 5A: Extended Portfolio Actions
+import { getClosedPositionsAction } from "./actions/getClosedPositions.action";
+import { getUserActivityAction } from "./actions/getUserActivity.action";
+import { getTopHoldersAction } from "./actions/getTopHolders.action";
+
 // Types
 export type * from "./types";
 
@@ -55,6 +73,24 @@ export type * from "./types";
  * - GET_POLYMARKET_POSITIONS: User positions across markets
  * - GET_POLYMARKET_BALANCE: Portfolio balance and P&L
  * - GET_POLYMARKET_TRADE_HISTORY: Trade history
+ *
+ * Phase 3A - Orderbook Actions:
+ * - GET_POLYMARKET_ORDERBOOK: Single token orderbook with depth
+ * - GET_POLYMARKET_ORDERBOOKS: Multiple token orderbooks (batch)
+ *
+ * Phase 3B - Market Analytics:
+ * - GET_POLYMARKET_OPEN_INTEREST: Market-wide exposure metrics
+ * - GET_POLYMARKET_LIVE_VOLUME: Real-time trading volume
+ * - GET_POLYMARKET_SPREADS: Bid-ask spread analysis
+ *
+ * Phase 4 - Events API:
+ * - GET_POLYMARKET_EVENTS: Browse prediction events
+ * - GET_POLYMARKET_EVENT_DETAIL: Event-specific data with markets
+ *
+ * Phase 5A - Extended Portfolio:
+ * - GET_POLYMARKET_CLOSED_POSITIONS: Historical resolved positions
+ * - GET_POLYMARKET_USER_ACTIVITY: On-chain activity log
+ * - GET_POLYMARKET_TOP_HOLDERS: Major participants in market
  *
  * Configuration:
  * - POLYMARKET_GAMMA_API_URL (optional): Gamma API endpoint (default: https://gamma-api.polymarket.com)
@@ -82,6 +118,20 @@ export const polymarketDiscoveryPlugin: Plugin = {
     getUserPositionsAction,
     getUserBalanceAction,
     getUserTradeHistoryAction,
+    // Phase 3A: Orderbook Actions
+    getOrderbookAction,
+    getOrderbooksAction,
+    // Phase 3B: Market Analytics
+    getOpenInterestAction,
+    getLiveVolumeAction,
+    getSpreadsAction,
+    // Phase 4: Events API
+    getEventsAction,
+    getEventDetailAction,
+    // Phase 5A: Extended Portfolio
+    getClosedPositionsAction,
+    getUserActivityAction,
+    getTopHoldersAction,
   ],
   services: [PolymarketService],
 };
