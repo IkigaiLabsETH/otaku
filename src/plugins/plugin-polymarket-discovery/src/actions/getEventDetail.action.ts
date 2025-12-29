@@ -124,7 +124,7 @@ export const getEventDetailAction: Action = {
       }
 
       if (event.tags && event.tags.length > 0) {
-        text += `**Tags:** ${event.tags.join(", ")}\n\n`;
+        text += `**Tags:** ${event.tags.map(t => t.label).join(", ")}\n\n`;
       }
 
       if (event.start_date) {

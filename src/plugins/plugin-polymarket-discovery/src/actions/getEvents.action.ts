@@ -156,7 +156,7 @@ export const getEventsAction: Action = {
         }
 
         if (event.tags && event.tags.length > 0) {
-          text += `   Tags: ${event.tags.join(", ")}\n`;
+          text += `   Tags: ${event.tags.map(t => t.label).join(", ")}\n`;
         }
 
         if (event.id) {

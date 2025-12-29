@@ -267,6 +267,7 @@ export interface Balance {
   positions_value: string;     // Value locked in positions
   realized_pnl: string;        // Realized profit/loss
   unrealized_pnl: string;      // Unrealized profit/loss
+  timestamp?: number;          // Data timestamp
 }
 
 /**
@@ -329,6 +330,15 @@ export interface SpreadData {
  */
 
 /**
+ * Tag structure from Polymarket API
+ */
+export interface PolymarketTag {
+  id: string;                  // Tag ID
+  label: string;               // Tag display label
+  slug: string;                // URL-friendly slug
+}
+
+/**
  * Polymarket Event (higher-level grouping of markets)
  */
 export interface PolymarketEvent {
@@ -343,7 +353,7 @@ export interface PolymarketEvent {
   active?: boolean;            // Event is active
   closed?: boolean;            // Event is closed
   archived?: boolean;          // Event is archived
-  tags?: string[];             // Event tags
+  tags?: PolymarketTag[];      // Event tags
   markets?: PolymarketMarket[]; // Associated markets (only in detail view)
   market_count?: number;       // Number of markets in event
 }

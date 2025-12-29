@@ -862,7 +862,22 @@ export class PolymarketService extends Service {
         throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
-      const balance = await response.json() as Balance;
+      // API returns array: [{ user: "0x...", value: 0 }]
+      const data = await response.json() as Array<{ user: string; value: number }>;
+
+      // Find balance for this user
+      const userBalance = data.find(b => b.user.toLowerCase() === proxyAddress.toLowerCase());
+      const totalValue = userBalance?.value ?? 0;
+
+      // Transform to Balance interface
+      const balance: Balance = {
+        total_value: totalValue.toString(),
+        available_balance: "0",      // Not provided by API
+        positions_value: totalValue.toString(),
+        realized_pnl: "0",
+        unrealized_pnl: "0",
+        timestamp: Date.now()
+      };
 
       logger.info(
         `[PolymarketService] Fetched balance - Total: ${balance.total_value}, Available: ${balance.available_balance}`
@@ -1075,11 +1090,11 @@ export class PolymarketService extends Service {
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.clobApiUrl}/misc/open-interest`;
+      const url = `${this.dataApiUrl}/oi`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
-        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json() as OpenInterestData;
@@ -1116,11 +1131,11 @@ export class PolymarketService extends Service {
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.clobApiUrl}/misc/live-volume`;
+      const url = `${this.dataApiUrl}/live-volume?id=1`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
-        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json() as VolumeData;
@@ -1158,7 +1173,10 @@ export class PolymarketService extends Service {
 
     return this.retryFetch(async () => {
       const url = `${this.clobApiUrl}/spreads`;
-      const response = await this.fetchWithTimeout(url);
+      const response = await this.fetchWithTimeout(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
 
       if (!response.ok) {
         throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
@@ -1407,7 +1425,7 @@ export class PolymarketService extends Service {
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.dataApiUrl}/user-activity?user=${proxyAddress}`;
+      const url = `${this.dataApiUrl}/activity?user=${proxyAddress}`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
@@ -1459,14 +1477,27 @@ export class PolymarketService extends Service {
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.dataApiUrl}/top-holders?market=${marketId}`;
+      const url = `${this.dataApiUrl}/holders?market=${marketId}`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
         throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
-      const holders = await response.json() as TopHolder[];
+      // API returns: [{token: string, holders: [{proxyWallet, amount, outcomeIndex, displayUsernamePublic, ...}]}]
+      // Need to flatten to TopHolder[]
+      const data = await response.json() as Array<{token: string, holders: Array<any>}>;
+
+      const holders: TopHolder[] = data.flatMap(group =>
+        group.holders.map(h => ({
+          address: h.proxyWallet,
+          outcome: h.outcomeIndex === 0 ? "YES" : "NO",
+          size: h.amount.toString(),
+          value: "0", // Not provided by API
+          percentage: "0", // Calculate if needed
+          is_public: h.displayUsernamePublic
+        }))
+      );
 
       // Update LRU cache
       this.setCached(
