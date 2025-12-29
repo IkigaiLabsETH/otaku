@@ -135,11 +135,11 @@ export const getActiveMarketsAction: Action = {
       const marketsWithPrices = await Promise.all(
         markets.map(async (market) => {
           try {
-            const prices = await service.getMarketPrices(market.condition_id);
+            const prices = await service.getMarketPrices(market.conditionId);
             return { market, prices };
           } catch (error) {
             logger.warn(
-              `[GET_ACTIVE_POLYMARKETS] Failed to fetch prices for ${market.condition_id}: ${error instanceof Error ? error.message : String(error)}`
+              `[GET_ACTIVE_POLYMARKETS] Failed to fetch prices for ${market.conditionId}: ${error instanceof Error ? error.message : String(error)}`
             );
             // Return market without prices
             return {
@@ -151,7 +151,7 @@ export const getActiveMarketsAction: Action = {
                 no_price_formatted: "50.0%",
                 spread: "0.0000",
                 last_updated: Date.now(),
-                condition_id: market.condition_id,
+                condition_id: market.conditionId,
               },
             };
           }
@@ -188,7 +188,7 @@ export const getActiveMarketsAction: Action = {
         success: true,
         data: {
           markets: marketsWithPrices.map(({ market, prices }) => ({
-            condition_id: market.condition_id,
+            condition_id: market.conditionId,
             question: market.question,
             category: market.category,
             volume: market.volume,

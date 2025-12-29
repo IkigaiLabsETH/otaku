@@ -178,8 +178,8 @@ export const getMarketDetailAction: Action = {
         }
       }
 
-      if (market.end_date_iso) {
-        const endDate = new Date(market.end_date_iso);
+      if (market.endDateIso) {
+        const endDate = new Date(market.endDateIso);
         text += `**Closes:** ${endDate.toLocaleString()}\n`;
       }
 
@@ -199,13 +199,13 @@ export const getMarketDetailAction: Action = {
         success: true,
         data: {
           market: {
-            condition_id: market.condition_id,
+            condition_id: market.conditionId,
             question: market.question,
             description: market.description,
             category: market.category,
             volume: market.volume,
             liquidity: market.liquidity,
-            end_date: market.end_date_iso,
+            end_date: market.endDateIso,
             active: market.active,
             closed: market.closed,
             resolved: market.resolved,

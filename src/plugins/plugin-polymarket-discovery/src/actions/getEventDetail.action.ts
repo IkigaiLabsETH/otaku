@@ -149,7 +149,7 @@ export const getEventDetailAction: Action = {
               text += `   Volume: $${volumeNum.toLocaleString()}\n`;
             }
           }
-          text += `   Condition ID: ${market.condition_id}\n`;
+          text += `   Condition ID: ${market.conditionId}\n`;
           text += "\n";
         });
       } else {
@@ -170,7 +170,7 @@ export const getEventDetailAction: Action = {
           start_date: event.start_date,
           end_date: event.end_date,
           markets: event.markets?.map((market) => ({
-            condition_id: market.condition_id,
+            condition_id: market.conditionId,
             question: market.question,
             category: market.category,
             volume: market.volume,

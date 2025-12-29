@@ -28,15 +28,17 @@ export interface PolymarketRewards {
 
 /**
  * Complete market data from Gamma API
+ * Note: API returns camelCase fields
  */
 export interface PolymarketMarket {
-  condition_id: string;           // 66 char hex ID (0x...)
+  conditionId: string;             // 66 char hex ID (0x...) - API returns camelCase
   question: string;                // Market question
   description?: string;            // Detailed description
-  market_slug?: string;            // URL-friendly slug
-  end_date_iso?: string;           // ISO 8601 end date
+  slug?: string;                   // URL-friendly slug - API returns camelCase
+  endDateIso?: string;             // ISO 8601 end date - API returns camelCase
   game_start_time?: string;        // ISO 8601 game start
-  tokens: PolymarketToken[];       // Yes/No outcome tokens
+  clobTokenIds?: string;           // CLOB token IDs (comma-separated) - API returns camelCase
+  tokens?: PolymarketToken[];      // Yes/No outcome tokens (if available)
   rewards?: PolymarketRewards;     // Rewards program data
   active?: boolean;                // Market is active
   closed?: boolean;                // Market is closed

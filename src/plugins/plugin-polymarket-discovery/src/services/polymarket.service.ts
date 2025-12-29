@@ -414,7 +414,7 @@ export class PolymarketService extends Service {
       }
 
       const markets = await response.json() as PolymarketMarket[];
-      const market = markets.find((m) => m.condition_id === conditionId);
+      const market = markets.find((m) => m.conditionId === conditionId);
 
       if (!market) {
         throw new Error(`Market not found: ${conditionId}`);
@@ -1116,6 +1116,10 @@ export class PolymarketService extends Service {
    * Fetches 24h trading volume across all markets.
    * Results are cached for 30s as analytics change less frequently.
    *
+   * NOTE: The API returns array format: [{"total": 0, "markets": null}]
+   * The id=1 parameter is required but may return zero volume if no recent activity.
+   * This is expected behavior - the endpoint works correctly.
+   *
    * @returns Volume data with 24h total and per-market breakdown
    */
   async getLiveVolume(): Promise<VolumeData> {
@@ -1138,7 +1142,16 @@ export class PolymarketService extends Service {
         throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json() as VolumeData;
+      // API returns array format: [{"total": 0, "markets": null}]
+      const responseData = await response.json() as Array<{total: number, markets: any}>;
+      const rawData = responseData[0] || {total: 0, markets: null};
+
+      // Transform to expected format
+      const data: VolumeData = {
+        total_volume_24h: rawData.total.toString(),
+        markets: rawData.markets || [],
+        timestamp: Date.now()
+      };
 
       // Update cache
       this.liveVolumeCache = {
@@ -1159,39 +1172,107 @@ export class PolymarketService extends Service {
    *
    * @returns Array of spread data for markets
    */
-  async getSpreads(): Promise<SpreadData[]> {
-    logger.info("[PolymarketService] Fetching spreads");
+  async getSpreads(limit: number = 20): Promise<SpreadData[]> {
+    logger.info(`[PolymarketService] Calculating spreads for top ${limit} markets`);
 
     // Check cache
     if (this.spreadsCache) {
       const age = Date.now() - this.spreadsCache.timestamp;
       if (age < this.analyticsCacheTtl) {
         logger.debug(`[PolymarketService] Returning cached spreads (age: ${age}ms)`);
-        return this.spreadsCache.data;
+        return this.spreadsCache.data.slice(0, limit);
       }
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.clobApiUrl}/spreads`;
-      const response = await this.fetchWithTimeout(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      // Fetch active markets with high volume
+      const markets = await this.getActiveMarkets(limit);
 
-      if (!response.ok) {
-        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      if (markets.length === 0) {
+        logger.warn("[PolymarketService] No active markets found for spread calculation");
+        return [];
       }
 
-      const data = await response.json() as SpreadData[];
+      // Calculate spreads for each market in parallel
+      const spreadPromises = markets.map(async (market) => {
+        try {
+          // Parse clobTokenIds if available
+          let tokenIds: string[] = [];
+          if (market.clobTokenIds) {
+            try {
+              tokenIds = JSON.parse(market.clobTokenIds as any);
+            } catch (e) {
+              logger.debug(`[PolymarketService] Failed to parse clobTokenIds for ${market.conditionId}`);
+              return null;
+            }
+          }
+
+          if (tokenIds.length < 2) {
+            logger.debug(`[PolymarketService] Insufficient token IDs for ${market.conditionId}`);
+            return null;
+          }
+
+          // Fetch orderbooks for both YES and NO tokens
+          const [yesBook, noBook] = await Promise.all([
+            this.getOrderBook(tokenIds[0]),
+            this.getOrderBook(tokenIds[1]),
+          ]);
+
+          // Get best bid and ask from orderbooks
+          const yesBestBid = yesBook.bids[0]?.price;
+          const yesBestAsk = yesBook.asks[0]?.price;
+          const noBestBid = noBook.bids[0]?.price;
+          const noBestAsk = noBook.asks[0]?.price;
+
+          // Skip if no liquidity
+          if (!yesBestBid || !yesBestAsk || !noBestBid || !noBestAsk) {
+            logger.debug(`[PolymarketService] No liquidity for ${market.question}`);
+            return null;
+          }
+
+          // Calculate spread (difference between best ask and best bid for YES token)
+          const bestBid = parseFloat(yesBestBid);
+          const bestAsk = parseFloat(yesBestAsk);
+          const spread = bestAsk - bestBid;
+          const spreadPercentage = ((spread / bestAsk) * 100).toFixed(2);
+
+          // Calculate liquidity score based on spread and volume
+          let liquidityScore = 0;
+          if (spread < 0.01) liquidityScore = 90 + (1 - spread / 0.01) * 10; // 90-100 for <1% spread
+          else if (spread < 0.05) liquidityScore = 70 + (1 - spread / 0.05) * 20; // 70-90 for 1-5%
+          else if (spread < 0.10) liquidityScore = 50 + (1 - spread / 0.10) * 20; // 50-70 for 5-10%
+          else liquidityScore = Math.max(0, 50 - spread * 100); // <50 for >10%
+
+          const spreadData: SpreadData = {
+            condition_id: market.conditionId,
+            spread: spread.toFixed(4),
+            spread_percentage: spreadPercentage,
+            best_bid: bestBid.toFixed(4),
+            best_ask: bestAsk.toFixed(4),
+            question: market.question,
+            liquidity_score: Math.round(liquidityScore),
+          };
+
+          return spreadData;
+        } catch (error) {
+          logger.debug(
+            `[PolymarketService] Failed to calculate spread for ${market.question}: ${error instanceof Error ? error.message : String(error)}`
+          );
+          return null;
+        }
+      });
+
+      const results = await Promise.all(spreadPromises);
+      const spreads = results.filter((s): s is SpreadData => s !== null);
 
       // Update cache
       this.spreadsCache = {
-        data,
+        data: spreads,
         timestamp: Date.now(),
       };
 
-      logger.info(`[PolymarketService] Fetched spreads for ${data.length} markets`);
-      return data;
+      logger.info(`[PolymarketService] Calculated spreads for ${spreads.length}/${markets.length} markets`);
+      return spreads;
     });
   }
 
@@ -1377,7 +1458,32 @@ export class PolymarketService extends Service {
         throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
-      const closedPositions = await response.json() as ClosedPosition[];
+      // Transform API response to ClosedPosition interface
+      // API returns camelCase fields, interface expects snake_case
+      const rawPositions = await response.json() as Array<any>;
+      const closedPositions: ClosedPosition[] = rawPositions.map(raw => {
+        // Calculate pnl_percentage: (realizedPnl / invested) * 100
+        const invested = raw.totalBought * raw.avgPrice;
+        const pnlPercentage = invested > 0 ? ((raw.realizedPnl / invested) * 100).toFixed(2) : "0.00";
+
+        // Calculate payout: totalBought * settlement price
+        const payout = (raw.totalBought * raw.curPrice).toString();
+
+        return {
+          market: raw.title,
+          condition_id: raw.conditionId,
+          asset_id: raw.asset,
+          outcome: raw.outcome.toUpperCase() as "YES" | "NO",
+          size: raw.totalBought.toString(),
+          avg_price: raw.avgPrice.toString(),
+          settlement_price: raw.curPrice.toString(),
+          pnl: raw.realizedPnl.toString(),
+          pnl_percentage: pnlPercentage,
+          closed_at: raw.timestamp,
+          payout,
+          won: raw.curPrice === 1
+        };
+      });
 
       // Update LRU cache
       this.setCached(
@@ -1432,7 +1538,19 @@ export class PolymarketService extends Service {
         throw new Error(`Data API error: ${response.status} ${response.statusText}`);
       }
 
-      const activity = await response.json() as UserActivity[];
+      // Transform API response to UserActivity interface
+      // API returns camelCase fields, interface expects snake_case
+      const rawActivity = await response.json() as Array<any>;
+      const activity: UserActivity[] = rawActivity.map((raw, index) => ({
+        id: raw.transactionHash || `activity_${index}`,
+        type: raw.type as "DEPOSIT" | "WITHDRAWAL" | "TRADE" | "REDEMPTION",
+        amount: raw.usdcSize.toString(),
+        timestamp: raw.timestamp,
+        transaction_hash: raw.transactionHash,
+        market: raw.title,
+        outcome: raw.outcome?.toUpperCase() as "YES" | "NO" | undefined,
+        status: "CONFIRMED" as const
+      }));
 
       // Update LRU cache
       this.setCached(
