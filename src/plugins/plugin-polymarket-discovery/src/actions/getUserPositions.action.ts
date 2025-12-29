@@ -152,21 +152,21 @@ export const getUserPositionsAction: Action = {
       let totalPnl = 0;
 
       positions.forEach((position: PolymarketPosition, index: number) => {
-        const value = parseFloat(position.value);
-        const pnl = parseFloat(position.pnl);
+        const value = position.currentValue || 0;
+        const pnl = position.cashPnl || 0;
 
         totalValue += value;
         totalPnl += pnl;
 
-        text += `**${index + 1}. ${position.outcome} - ${position.market}**\n`;
-        text += `   Size: ${parseFloat(position.size).toFixed(2)} shares @ ${(parseFloat(position.avg_price) * 100).toFixed(1)}% avg\n`;
-        text += `   Current: ${(parseFloat(position.current_price) * 100).toFixed(1)}% | Value: $${value.toFixed(2)}\n`;
+        text += `**${index + 1}. ${position.outcome} - ${position.title}**\n`;
+        text += `   Size: ${position.size.toFixed(2)} shares @ ${(position.avgPrice * 100).toFixed(1)}% avg\n`;
+        text += `   Current: ${(position.curPrice * 100).toFixed(1)}% | Value: $${value.toFixed(2)}\n`;
 
         const pnlSign = pnl >= 0 ? "+" : "";
-        const pnlPercent = position.pnl_percentage;
+        const pnlPercent = position.percentPnl?.toFixed(2) || "0.00";
         text += `   PnL: ${pnlSign}$${pnl.toFixed(2)} (${pnlSign}${pnlPercent}%)\n`;
 
-        text += `   Condition ID: \`${position.condition_id}\`\n`;
+        text += `   Condition ID: \`${position.conditionId}\`\n`;
         text += "\n";
       });
 
@@ -180,15 +180,16 @@ export const getUserPositionsAction: Action = {
         success: true,
         data: {
           positions: positions.map((p) => ({
-            market: p.market,
-            condition_id: p.condition_id,
+            title: p.title,
+            conditionId: p.conditionId,
             outcome: p.outcome,
             size: p.size,
-            avg_price: p.avg_price,
-            current_price: p.current_price,
-            value: p.value,
-            pnl: p.pnl,
-            pnl_percentage: p.pnl_percentage,
+            avgPrice: p.avgPrice,
+            curPrice: p.curPrice,
+            currentValue: p.currentValue,
+            cashPnl: p.cashPnl,
+            percentPnl: p.percentPnl,
+            realizedPnl: p.realizedPnl,
           })),
           count: positions.length,
           total_value: totalValue.toFixed(2),

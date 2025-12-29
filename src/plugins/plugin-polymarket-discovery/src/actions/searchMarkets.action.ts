@@ -40,7 +40,7 @@ export const searchMarketsAction: Action = {
     "LOOK_FOR_MARKETS",
   ],
   description:
-    "Search for prediction markets on Polymarket by keyword or category. Useful for finding markets about specific topics or events.",
+    "Search for prediction markets on Polymarket by keyword or category. Returns condition_id for each market. To get orderbook data, first use GET_POLYMARKET_DETAIL with the condition_id to get the token_ids, then use GET_POLYMARKET_ORDERBOOK with those token_ids.",
 
   parameters: {
     query: {
@@ -228,26 +228,50 @@ export const searchMarketsAction: Action = {
           }
         }
 
+        // Include condition_id so the LLM can reference it for GET_POLYMARKET_DETAIL
+        if (market.condition_id) {
+          text += `   condition_id: \`${market.condition_id}\`\n`;
+        }
+
+        // Include token_ids if available for direct orderbook queries
+        const tokens = market.tokens || [];
+        const yesToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "yes");
+        const noToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "no");
+        if (yesToken) {
+          text += `   yes_token_id: \`${yesToken.token_id}\`\n`;
+        }
+        if (noToken) {
+          text += `   no_token_id: \`${noToken.token_id}\`\n`;
+        }
+
         text += "\n";
       });
 
       text +=
-        "_Use GET_POLYMARKET_DETAIL to get more information about a specific market._";
+        "_Use GET_POLYMARKET_DETAIL with condition_id for full market info, or GET_POLYMARKET_ORDERBOOK with token_id for orderbook depth._";
 
       const result: SearchMarketsActionResult = {
         text,
         success: true,
         data: {
-          markets: marketsWithPrices.map(({ market, prices }) => ({
-            condition_id: market.conditionId,
-            question: market.question,
-            category: market.category,
-            volume: market.volume,
-            yes_price: prices.yes_price,
-            no_price: prices.no_price,
-            yes_price_formatted: prices.yes_price_formatted,
-            no_price_formatted: prices.no_price_formatted,
-          })),
+          markets: marketsWithPrices.map(({ market, prices }) => {
+            const tokens = market.tokens || [];
+            const yesToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "yes");
+            const noToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "no");
+            return {
+              condition_id: market.conditionId,
+              question: market.question,
+              category: market.category,
+              volume: market.volume,
+              yes_price: prices.yes_price,
+              no_price: prices.no_price,
+              yes_price_formatted: prices.yes_price_formatted,
+              no_price_formatted: prices.no_price_formatted,
+              // Include token IDs for multi-step action chaining
+              yes_token_id: yesToken?.token_id || null,
+              no_token_id: noToken?.token_id || null,
+            };
+          }),
           count: marketsWithPrices.length,
           search_query: query,
           search_category: category,

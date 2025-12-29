@@ -1,7 +1,8 @@
 /**
  * GET_POLYMARKET_DETAIL Action
  *
- * Get detailed information about a specific prediction market
+ * Get detailed information about a specific prediction market.
+ * Returns YES and NO token_ids needed for orderbook queries.
  */
 
 import {
@@ -17,6 +18,7 @@ import { PolymarketService } from "../services/polymarket.service";
 
 interface GetMarketDetailParams {
   conditionId?: string;
+  condition_id?: string;
   marketId?: string;
 }
 
@@ -37,12 +39,12 @@ export const getMarketDetailAction: Action = {
     "MARKET_INFORMATION",
   ],
   description:
-    "Get detailed information about a specific Polymarket prediction market including description, odds, volume, and timeline.",
+    "Get detailed information about a specific Polymarket prediction market. Returns the market's YES and NO token_ids which are required for GET_POLYMARKET_ORDERBOOK queries. Use condition_id from search results to get market details including tradeable token IDs.",
 
   parameters: {
     conditionId: {
       type: "string",
-      description: "Market condition ID (66-character hex string starting with 0x)",
+      description: "Market condition ID (hex string starting with 0x, typically 66 characters). Get this from GET_ACTIVE_POLYMARKETS or SEARCH_POLYMARKETS results.",
       required: true,
     },
   },
@@ -82,8 +84,8 @@ export const getMarketDetailAction: Action = {
       const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
       const params = (composedState?.data?.actionParams ?? {}) as Partial<GetMarketDetailParams>;
 
-      // Extract condition ID (support both conditionId and marketId for flexibility)
-      const conditionId = (params.conditionId || params.marketId)?.trim();
+      // Extract condition ID (support multiple naming conventions)
+      const conditionId = (params.conditionId || params.condition_id || params.marketId)?.trim();
 
       if (!conditionId) {
         const errorMsg = "Market condition ID is required";
@@ -101,9 +103,13 @@ export const getMarketDetailAction: Action = {
         return errorResult;
       }
 
-      // Validate condition ID format (should be 66 chars starting with 0x)
-      if (!conditionId.startsWith("0x") || conditionId.length !== 66) {
-        const errorMsg = `Invalid condition ID format: ${conditionId}. Expected 66-character hex string starting with 0x`;
+      // Validate condition ID format (should be hex string starting with 0x)
+      // Accept any valid hex ID with length between 40-70 chars to handle various API formats
+      const isValidHex = /^0x[a-fA-F0-9]+$/.test(conditionId);
+      const isValidLength = conditionId.length >= 40 && conditionId.length <= 70;
+
+      if (!isValidHex || !isValidLength) {
+        const errorMsg = `Invalid condition ID format: ${conditionId}. Expected hex string starting with 0x (40-70 chars)`;
         logger.error(`[GET_POLYMARKET_DETAIL] ${errorMsg}`);
         const errorResult: GetMarketDetailActionResult = {
           text: ` ${errorMsg}`,
@@ -194,6 +200,21 @@ export const getMarketDetailAction: Action = {
 
       text += `\n**Market ID:** \`${conditionId}\``;
 
+      // Extract and display token IDs for orderbook queries
+      const tokens = market.tokens || [];
+      const yesToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "yes");
+      const noToken = tokens.find((t: any) => t.outcome?.toLowerCase() === "no");
+
+      if (yesToken || noToken) {
+        text += `\n\n**Tradeable Token IDs** (use with GET_POLYMARKET_ORDERBOOK):\n`;
+        if (yesToken) {
+          text += `   YES Token: \`${yesToken.token_id}\`\n`;
+        }
+        if (noToken) {
+          text += `   NO Token: \`${noToken.token_id}\`\n`;
+        }
+      }
+
       const result: GetMarketDetailActionResult = {
         text,
         success: true,
@@ -210,6 +231,16 @@ export const getMarketDetailAction: Action = {
             closed: market.closed,
             resolved: market.resolved,
             tags: market.tags,
+          },
+          // Include token IDs for multi-step action chaining
+          tokens: {
+            yes_token_id: yesToken?.token_id || null,
+            no_token_id: noToken?.token_id || null,
+            all_tokens: tokens.map((t: any) => ({
+              token_id: t.token_id,
+              outcome: t.outcome,
+              price: t.price,
+            })),
           },
           prices: {
             yes_price: prices.yes_price,

@@ -16,6 +16,7 @@ import {
 } from "@elizaos/core";
 import { PolymarketService } from "../services/polymarket.service";
 import { formatPriceChange } from "../utils/actionHelpers";
+import type { PriceHistoryStatistics, MarketPriceHistory } from "../types";
 
 interface GetMarketPriceHistoryParams {
   conditionId?: string;
@@ -31,6 +32,20 @@ type GetMarketPriceHistoryInput = {
   interval: string;
 };
 
+/**
+ * Summary data returned by the action (excludes large data_points array)
+ * This is what gets stored in the database and displayed in UI
+ */
+interface PriceHistorySummary {
+  condition_id: string;
+  outcome: "YES" | "NO";
+  token_id: string;
+  interval: string;
+  market_question?: string;
+  current_price?: number;
+  statistics: PriceHistoryStatistics;
+}
+
 type GetMarketPriceHistoryActionResult = ActionResult & {
   input: GetMarketPriceHistoryInput;
 };
@@ -40,6 +55,61 @@ function daysToInterval(days: number): string {
   if (days <= 1) return "1d";
   if (days <= 7) return "1w";
   return "max";
+}
+
+/**
+ * Compute summary statistics from price history data
+ * This allows us to return useful info without storing thousands of data points
+ */
+function computeStatistics(historyData: MarketPriceHistory): PriceHistoryStatistics {
+  const dataPoints = historyData.data_points;
+  
+  if (dataPoints.length === 0) {
+    return {
+      data_points_count: 0,
+      was_downsampled: false,
+      start_price: 0,
+      end_price: 0,
+      high_price: 0,
+      low_price: 0,
+      avg_price: 0,
+      start_timestamp: 0,
+      end_timestamp: 0,
+      price_change: 0,
+      price_change_percent: 0,
+      trend: "stable",
+    };
+  }
+
+  const prices = dataPoints.map(p => p.price);
+  const startPrice = prices[0];
+  const endPrice = prices[prices.length - 1];
+  const highPrice = Math.max(...prices);
+  const lowPrice = Math.min(...prices);
+  const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+  
+  const priceChange = endPrice - startPrice;
+  const priceChangePercent = startPrice > 0 ? (priceChange / startPrice) * 100 : 0;
+  
+  // Determine trend (threshold of 1% to be considered movement)
+  let trend: "up" | "down" | "stable" = "stable";
+  if (priceChangePercent > 1) trend = "up";
+  else if (priceChangePercent < -1) trend = "down";
+
+  return {
+    data_points_count: dataPoints.length,
+    was_downsampled: false, // Service will set this if applicable
+    start_price: startPrice,
+    end_price: endPrice,
+    high_price: highPrice,
+    low_price: lowPrice,
+    avg_price: avgPrice,
+    start_timestamp: dataPoints[0].timestamp,
+    end_timestamp: dataPoints[dataPoints.length - 1].timestamp,
+    price_change: priceChange,
+    price_change_percent: priceChangePercent,
+    trend,
+  };
 }
 
 // Note: formatPriceChange moved to actionHelpers.ts for reuse
@@ -73,7 +143,7 @@ export const getMarketPriceHistoryAction: Action = {
     interval: {
       type: "string",
       description:
-        "Time interval for the chart: '1m', '1h', '6h', '1d', '1w', 'max'. Defaults to '1d' (1 day).",
+        "Time interval for the chart: '1m', '1h', '6h', '1d', '1w', 'max'. Defaults to 'max' (full history).",
       required: false,
     },
     days: {
@@ -180,7 +250,8 @@ export const getMarketPriceHistoryAction: Action = {
       const outcome = outcomeRaw as "YES" | "NO";
 
       // Extract interval parameter (or convert from days)
-      let interval = params.interval?.trim()?.toLowerCase() || "1d";
+      // Default to 'max' to show full market history by default
+      let interval = params.interval?.trim()?.toLowerCase() || "max";
       if (params.days) {
         interval = daysToInterval(params.days);
       }
@@ -239,58 +310,46 @@ export const getMarketPriceHistoryAction: Action = {
         interval
       );
 
-      // Calculate price change
-      let priceChange: { value: number; percentage: number } | null = null;
-      if (historyData.data_points.length > 0) {
-        const firstPrice = historyData.data_points[0].price;
-        const lastPrice =
-          historyData.data_points[historyData.data_points.length - 1].price;
-        priceChange = formatPriceChange(firstPrice, lastPrice);
-      }
+      // Compute statistics from the data (this is what we'll store/return, NOT the full array)
+      const statistics = computeStatistics(historyData);
 
-      // Format summary text
-      let text = `**Market Price History**\n\n`;
+      // Calculate price change for display
+      const priceChange = historyData.data_points.length > 0
+        ? formatPriceChange(statistics.start_price, statistics.end_price)
+        : null;
 
-      if (historyData.market_question) {
-        text += `**Market:** ${historyData.market_question}\n\n`;
-      }
+      // Create summary object (WITHOUT the large data_points array)
+      // This is what gets stored in the database
+      const summary: PriceHistorySummary = {
+        condition_id: historyData.condition_id,
+        outcome: historyData.outcome,
+        token_id: historyData.token_id,
+        interval: historyData.interval,
+        market_question: historyData.market_question,
+        current_price: historyData.current_price,
+        statistics,
+      };
 
-      text += `**${outcome} Outcome - ${interval.toUpperCase()} Chart:**\n`;
-      text += `- Current Price: ${historyData.current_price ? `$${historyData.current_price.toFixed(4)} (${(historyData.current_price * 100).toFixed(1)}%)` : "N/A"}\n`;
-
-      if (priceChange) {
-        const sign = priceChange.value >= 0 ? "+" : "";
-        text += `- Price Change: ${sign}$${priceChange.value.toFixed(4)} (${sign}${priceChange.percentage.toFixed(2)}%)\n`;
-      }
-
-      text += `- Data Points: ${historyData.data_points.length}\n`;
-      text += `- Timeframe: ${interval}\n\n`;
-
-      // Add trend analysis
-      if (priceChange) {
-        const trend = priceChange.value >= 0 ? "upward" : "downward";
-        const strength =
-          Math.abs(priceChange.percentage) > 10
-            ? "strong"
-            : Math.abs(priceChange.percentage) > 5
-              ? "moderate"
-              : "slight";
-        text += `**Trend Analysis:** ${strength} ${trend} movement over the period.\n\n`;
-      }
-
-      text += `Please analyze this price history data and provide insights about the market's trend, volatility, and any notable patterns.`;
+      // Format concise text for agent context
+      // Keep it minimal - agent doesn't need verbose formatting
+      const trendArrow = statistics.trend === "up" ? "↑" : statistics.trend === "down" ? "↓" : "→";
+      const changeSign = statistics.price_change_percent >= 0 ? "+" : "";
+      
+      // Format dates for context
+      const startDate = new Date(statistics.start_timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const endDate = new Date(statistics.end_timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      
+      const text = `Price History: ${historyData.market_question || conditionId} (${outcome})
+Period: ${startDate} → ${endDate} (${interval})
+Start: ${(statistics.start_price * 100).toFixed(1)}% | Current: ${(statistics.end_price * 100).toFixed(1)}% | Change: ${changeSign}${statistics.price_change_percent.toFixed(1)}% ${trendArrow}
+Range: ${(statistics.low_price * 100).toFixed(1)}%-${(statistics.high_price * 100).toFixed(1)}% | Avg: ${(statistics.avg_price * 100).toFixed(1)}%`;
 
       const result: GetMarketPriceHistoryActionResult = {
         text,
         success: true,
-        data: {
-          ...historyData,
-          price_change: priceChange,
-        },
-        values: {
-          ...historyData,
-          price_change: priceChange,
-        },
+        // Return ONLY the summary (no data_points array) to avoid bloating DB/context
+        data: { ...summary } as Record<string, unknown>,
+        values: { ...summary } as Record<string, unknown>,
         input: inputParams,
       };
 
@@ -298,16 +357,14 @@ export const getMarketPriceHistoryAction: Action = {
         await callback({
           text,
           actions: ["GET_POLYMARKET_PRICE_HISTORY"],
-          content: {
-            ...historyData,
-            price_change: priceChange,
-          } as any,
+          // IMPORTANT: Only send summary to avoid storing thousands of data points in DB
+          content: summary as any,
           source: message.content.source,
         });
       }
 
       logger.info(
-        `[GET_POLYMARKET_PRICE_HISTORY] Successfully fetched price history - ${historyData.data_points.length} data points, current: $${historyData.current_price?.toFixed(4) || "N/A"}`
+        `[GET_POLYMARKET_PRICE_HISTORY] Successfully fetched price history - ${statistics.data_points_count} data points analyzed, current: $${statistics.end_price?.toFixed(4) || "N/A"}, trend: ${statistics.trend}`
       );
       return result;
     } catch (error) {
@@ -326,7 +383,7 @@ export const getMarketPriceHistoryAction: Action = {
       const failureInputParams = {
         conditionId: params.conditionId || params.marketId || "",
         outcome: (params.outcome?.toUpperCase() || "YES") as "YES" | "NO",
-        interval: params.interval || (params.days ? daysToInterval(params.days) : "1d"),
+        interval: params.interval || (params.days ? daysToInterval(params.days) : "max"),
       };
 
       const errorText = `Failed to fetch market price history: ${errorMsg}
@@ -334,9 +391,9 @@ export const getMarketPriceHistoryAction: Action = {
 Please check the following:
 1. **Condition ID**: Must be a valid 66-character hex string starting with 0x
 2. **Outcome**: Optional - 'YES' or 'NO' (default: 'YES')
-3. **Interval**: Optional - '1m', '1h', '6h', '1d', '1w', 'max' (default: '1d')
+3. **Interval**: Optional - '1m', '1h', '6h', '1d', '1w', 'max' (default: 'max' for full history)
 
-Example: "Show me the price history for market 0x1234... for the YES outcome over 1 week"`;
+Example: "Show me the price history for market 0x1234... for the YES outcome"`;
 
       const errorResult: GetMarketPriceHistoryActionResult = {
         text: errorText,

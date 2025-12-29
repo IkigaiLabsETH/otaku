@@ -19,7 +19,6 @@ import type {
   MarketsResponse,
   MarketPrices,
   OrderBook,
-  OrderbookSummary,
   MarketSearchParams,
   MarketCategory,
   CachedMarket,
@@ -30,16 +29,62 @@ import type {
   Position,
   Balance,
   Trade,
+  EventFilters,
   PolymarketEvent,
   PolymarketEventDetail,
-  EventFilters,
-  ClosedPosition,
-  UserActivity,
-  TopHolder,
   OpenInterestData,
   VolumeData,
   SpreadData,
+  OrderbookSummary,
+  ClosedPosition,
+  UserActivity,
+  TopHolder,
 } from "../types";
+
+/**
+ * Maps API response from camelCase to snake_case for our interface
+ * The Gamma API returns conditionId but our interface uses condition_id
+ * Also constructs tokens array from clobTokenIds and outcomes if tokens field is missing
+ */
+function mapApiMarketToInterface(apiMarket: any): PolymarketMarket {
+  // Parse outcomes and clobTokenIds (they come as JSON strings)
+  let outcomes: string[] = [];
+  let tokenIds: string[] = [];
+  let prices: string[] = [];
+  
+  try {
+    outcomes = typeof apiMarket.outcomes === 'string' 
+      ? JSON.parse(apiMarket.outcomes) 
+      : (apiMarket.outcomes || []);
+    tokenIds = typeof apiMarket.clobTokenIds === 'string'
+      ? JSON.parse(apiMarket.clobTokenIds)
+      : (apiMarket.clobTokenIds || []);
+    prices = typeof apiMarket.outcomePrices === 'string'
+      ? JSON.parse(apiMarket.outcomePrices)
+      : (apiMarket.outcomePrices || []);
+  } catch {
+    // If parsing fails, leave as empty arrays
+  }
+
+  // Construct tokens array if not present but we have the data
+  let tokens = apiMarket.tokens;
+  if ((!tokens || tokens.length === 0) && outcomes.length > 0 && tokenIds.length > 0) {
+    tokens = outcomes.map((outcome: string, index: number) => ({
+      token_id: tokenIds[index],
+      outcome: outcome,
+      price: prices[index] ? parseFloat(prices[index]) : undefined,
+    }));
+  }
+
+  return {
+    ...apiMarket,
+    condition_id: apiMarket.conditionId || apiMarket.condition_id,
+    end_date_iso: apiMarket.endDate || apiMarket.end_date_iso,
+    market_slug: apiMarket.slug || apiMarket.market_slug,
+    game_start_time: apiMarket.startDate || apiMarket.game_start_time,
+    tokens,
+  };
+}
 
 export class PolymarketService extends Service {
   static serviceType = "POLYMARKET_DISCOVERY_SERVICE" as const;
@@ -60,17 +105,11 @@ export class PolymarketService extends Service {
   private priceHistoryCacheTtl: number = 300000; // 5 minutes (historical data changes less frequently)
   private positionsCacheTtl: number = 60000; // 1 minute
   private tradesCacheTtl: number = 30000; // 30 seconds
-  private eventCacheTtl: number = 60000; // 1 minute (event data stable)
-  private analyticsCacheTtl: number = 30000; // 30 seconds (analytics change less frequently)
-  private closedPositionsCacheTtl: number = 60000; // 1 minute (historical data stable)
-  private userActivityCacheTtl: number = 60000; // 1 minute (historical data stable)
-  private topHoldersCacheTtl: number = 60000; // 1 minute (historical data stable)
   private maxRetries: number = 3;
   private requestTimeout: number = 10000; // 10 seconds
   private maxMarketCacheSize: number = 100; // Max markets in cache
   private maxPriceCacheSize: number = 200; // Max prices in cache
   private maxPriceHistoryCacheSize: number = 50; // Max price histories in cache
-  private maxEventCacheSize: number = 50; // Max events in cache
 
   // In-memory LRU caches
   private marketCache: Map<string, CachedMarket> = new Map();
@@ -83,26 +122,44 @@ export class PolymarketService extends Service {
   private positionsCacheOrder: string[] = []; // Track access order for LRU
   private tradesCache: Map<string, { data: Trade[]; timestamp: number }> = new Map();
   private tradesCacheOrder: string[] = []; // Track access order for LRU
-  private eventsCache: Map<string, { data: PolymarketEventDetail; timestamp: number }> = new Map();
-  private eventsCacheOrder: string[] = []; // Track access order for LRU
-  private eventsListCache: { data: PolymarketEvent[]; timestamp: number } | null = null;
   private marketsListCache: { data: PolymarketMarket[]; timestamp: number } | null = null;
-
+  
+  // Phase 4: Events cache
+  private eventsListCache: { data: any[]; timestamp: number } | null = null;
+  private eventsCache: Map<string, { data: any; timestamp: number }> = new Map();
+  private eventsCacheOrder: string[] = [];
+  private eventCacheTtl: number = 60000; // 1 minute
+  private maxEventCacheSize: number = 50;
+  
   // Phase 3B: Analytics caches
-  private openInterestCache: { data: OpenInterestData; timestamp: number } | null = null;
-  private liveVolumeCache: { data: VolumeData; timestamp: number } | null = null;
-  private spreadsCache: { data: SpreadData[]; timestamp: number } | null = null;
-
+  private openInterestCache: { data: any; timestamp: number } | null = null;
+  private liveVolumeCache: { data: any; timestamp: number } | null = null;
+  private spreadsCache: { data: any[]; timestamp: number } | null = null;
+  private analyticsCacheTtl: number = 30000; // 30 seconds
+  
   // Phase 5A: Extended portfolio caches
-  private closedPositionsCache: Map<string, { data: ClosedPosition[]; timestamp: number }> = new Map();
-  private closedPositionsCacheOrder: string[] = []; // Track access order for LRU
-  private userActivityCache: Map<string, { data: UserActivity[]; timestamp: number }> = new Map();
-  private userActivityCacheOrder: string[] = []; // Track access order for LRU
-  private topHoldersCache: Map<string, { data: TopHolder[]; timestamp: number }> = new Map();
-  private topHoldersCacheOrder: string[] = []; // Track access order for LRU
+  private closedPositionsCache: Map<string, { data: any[]; timestamp: number }> = new Map();
+  private closedPositionsCacheOrder: string[] = [];
+  private closedPositionsCacheTtl: number = 60000; // 1 minute
+  private userActivityCache: Map<string, { data: any[]; timestamp: number }> = new Map();
+  private userActivityCacheOrder: string[] = [];
+  private userActivityCacheTtl: number = 60000; // 1 minute
+  private topHoldersCache: Map<string, { data: any[]; timestamp: number }> = new Map();
+  private topHoldersCacheOrder: string[] = [];
+  private topHoldersCacheTtl: number = 60000; // 1 minute
 
   constructor(runtime: IAgentRuntime) {
     super(runtime);
+  }
+
+  /**
+   * Static start method required by ElizaOS runtime for service registration
+   * This is the factory method that creates and initializes the service instance
+   */
+  static async start(runtime: IAgentRuntime): Promise<PolymarketService> {
+    const instance = new PolymarketService(runtime);
+    await instance.initialize(runtime);
+    return instance;
   }
 
   async initialize(runtime: IAgentRuntime): Promise<void> {
@@ -136,12 +193,6 @@ export class PolymarketService extends Service {
     }
 
     logger.info(`[PolymarketService] Initialized with Gamma API: ${this.gammaApiUrl}, CLOB API: ${this.clobApiUrl}`);
-  }
-
-  static async start(runtime: IAgentRuntime): Promise<PolymarketService> {
-    const service = new PolymarketService(runtime);
-    await service.initialize(runtime);
-    return service;
   }
 
   async stop(): Promise<void> {
@@ -322,7 +373,8 @@ export class PolymarketService extends Service {
         throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json() as PolymarketMarket[];
+      const rawData = await response.json() as any[];
+      const data = rawData.map(mapApiMarketToInterface);
 
       // Parse tokens from JSON strings
       const marketsWithTokens = data.map(market => this.parseTokens(market));
@@ -352,18 +404,28 @@ export class PolymarketService extends Service {
    * @returns Filtered array of markets matching search criteria
    */
   async searchMarkets(params: MarketSearchParams): Promise<PolymarketMarket[]> {
-    const { query, category, active = true, limit = 20, offset = 0 } = params;
-    logger.info(`[PolymarketService] Searching markets: query="${query}", category="${category}", limit=${limit}`);
+    const { query, category, active = true, closed = false, limit = 20, offset = 0 } = params;
+    logger.info(`[PolymarketService] Searching markets: query="${query}", category="${category}", limit=${limit}, closed=${closed}`);
 
     return this.retryFetch(async () => {
       // Build query parameters
       const queryParams = new URLSearchParams();
-      queryParams.set("limit", limit.toString());
+      
+      // IMPORTANT: Since Gamma API doesn't support server-side search, we need to fetch
+      // a larger batch of markets to filter client-side. We fetch more markets than the
+      // requested limit to ensure we can return enough results after filtering.
+      // Use 5x the requested limit (min 100) for keyword searches, or use limit as-is for category filters
+      const fetchLimit = query ? Math.max(limit * 5, 100) : limit;
+      queryParams.set("limit", fetchLimit.toString());
       queryParams.set("offset", offset.toString());
 
       if (active !== undefined) {
         queryParams.set("active", active.toString());
       }
+
+      // IMPORTANT: Filter out closed/resolved markets to avoid returning old historical data
+      // "active=true" alone is not sufficient - markets can be active but closed (resolved)
+      queryParams.set("closed", closed.toString());
 
       // NOTE: Gamma API doesn't provide server-side text search or category filtering.
       // We fetch based on pagination params and filter client-side.
@@ -375,7 +437,8 @@ export class PolymarketService extends Service {
         throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
       }
 
-      let markets = await response.json() as PolymarketMarket[];
+      const rawMarkets = await response.json() as any[];
+      let markets = rawMarkets.map(mapApiMarketToInterface);
 
       // Parse tokens from JSON strings
       markets = markets.map(market => this.parseTokens(market));
@@ -399,8 +462,10 @@ export class PolymarketService extends Service {
         );
       }
 
-      logger.info(`[PolymarketService] Found ${markets.length} markets matching search criteria`);
-      return markets;
+      // Return only the requested number of results
+      const results = markets.slice(0, limit);
+      logger.info(`[PolymarketService] Found ${results.length} markets matching search criteria (out of ${markets.length} matches)`);
+      return results;
     });
   }
 
@@ -436,17 +501,19 @@ export class PolymarketService extends Service {
 
     return this.retryFetch(async () => {
       // NOTE: Gamma API does not provide a /markets/:conditionId endpoint.
-      // We must fetch the full markets list and filter client-side.
-      // This is a known limitation of the Gamma API.
-      const url = `${this.gammaApiUrl}/markets`;
+      // We must fetch active markets and filter client-side.
+      // Use closed=false to get current active markets, not historical closed ones.
+      const url = `${this.gammaApiUrl}/markets?limit=500&active=true&closed=false`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
         throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
       }
 
-      const markets = await response.json() as PolymarketMarket[];
-      const market = markets.find((m) => m.conditionId === conditionId);
+      const rawMarkets = await response.json() as any[];
+      const markets = rawMarkets.map(mapApiMarketToInterface);
+      
+      const market = markets.find((m) => m.condition_id === conditionId);
 
       if (!market) {
         throw new Error(`Market not found: ${conditionId}`);
@@ -590,20 +657,34 @@ export class PolymarketService extends Service {
 
   /**
    * Get available market categories
+   * 
+   * NOTE: Categories are available on the /events endpoint, not /markets.
+   * We fetch active events and aggregate their category field.
    */
   async getMarketCategories(): Promise<MarketCategory[]> {
-    logger.info("[PolymarketService] Fetching market categories");
+    logger.info("[PolymarketService] Fetching market categories from events");
 
     return this.retryFetch(async () => {
-      // Fetch all markets and extract unique categories
-      const markets = await this.getActiveMarkets(500); // Fetch more to get all categories
+      // Fetch events which have the category field (markets don't have it)
+      const url = `${this.gammaApiUrl}/events?limit=500&active=true`;
+      const response = await this.fetchWithTimeout(url);
+
+      if (!response.ok) {
+        throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
+      }
+
+      const events = await response.json() as Array<{
+        category?: string;
+        title?: string;
+        active?: boolean;
+      }>;
 
       const categoryMap = new Map<string, number>();
 
-      for (const market of markets) {
-        if (market.category) {
-          const count = categoryMap.get(market.category) || 0;
-          categoryMap.set(market.category, count + 1);
+      for (const event of events) {
+        if (event.category && event.category !== "null") {
+          const count = categoryMap.get(event.category) || 0;
+          categoryMap.set(event.category, count + 1);
         }
       }
 
@@ -611,7 +692,7 @@ export class PolymarketService extends Service {
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count);
 
-      logger.info(`[PolymarketService] Found ${categories.length} categories`);
+      logger.info(`[PolymarketService] Found ${categories.length} categories from ${events.length} events`);
       return categories;
     });
   }
@@ -677,8 +758,21 @@ export class PolymarketService extends Service {
       const queryParams = new URLSearchParams();
       queryParams.set("market", token.token_id);
       queryParams.set("interval", interval);
-      if (fidelity) {
-        queryParams.set("fidelity", fidelity.toString());
+      
+      // Auto-set fidelity for longer intervals to get full history
+      // Without fidelity, 'max' only returns ~30 days of minute-by-minute data
+      // With fidelity=1440 (daily), we get the complete market history
+      let effectiveFidelity = fidelity;
+      if (!effectiveFidelity) {
+        if (interval === "max") {
+          effectiveFidelity = 1440; // Daily data for full history
+        } else if (interval === "1w") {
+          effectiveFidelity = 360; // 6-hourly for 1 week (reasonable granularity)
+        }
+      }
+      
+      if (effectiveFidelity) {
+        queryParams.set("fidelity", effectiveFidelity.toString());
       }
 
       // Fetch price history from CLOB API
@@ -740,82 +834,22 @@ export class PolymarketService extends Service {
    */
 
   /**
-   * Check if address is a contract (proxy) or EOA
+   * Derive proxy wallet address from EOA address
    *
-   * Makes a simple RPC call to check if the address has bytecode.
-   * EOAs have no code, contracts/proxies do.
+   * Uses @polymarket/sdk's getProxyWalletAddress to compute the deterministic
+   * proxy address for a user's EOA. Polymarket uses Gnosis Safe proxy wallets
+   * for trading to enable gasless orders via meta-transactions.
    *
-   * @param address - Address to check
-   * @returns True if address is a contract (proxy), false if EOA
-   */
-  private async isContract(address: string): Promise<boolean> {
-    try {
-      // Use Polygon RPC to check for bytecode
-      const rpcUrl = "https://polygon-rpc.com";
-      const response = await this.fetchWithTimeout(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "eth_getCode",
-          params: [address, "latest"],
-          id: 1,
-        }),
-      });
-
-      const data = await response.json() as { result?: string; error?: { code: number; message: string } };
-
-      // Check for JSON-RPC error response (rate limiting, server error, etc.)
-      if (data.error) {
-        logger.warn(
-          `[PolymarketService] RPC error checking contract: ${data.error.message}. Assuming EOA.`
-        );
-        return false; // Default to treating as EOA on RPC error
-      }
-
-      // Check if result field exists
-      if (data.result === undefined) {
-        logger.warn(
-          `[PolymarketService] Invalid RPC response (missing result field). Assuming EOA.`
-        );
-        return false;
-      }
-
-      // '0x' means no code (EOA), anything else means contract
-      return data.result !== "0x";
-    } catch (error) {
-      logger.warn(
-        `[PolymarketService] Failed to check if address is contract: ${error instanceof Error ? error.message : String(error)}. Assuming EOA.`
-      );
-      return false; // Default to treating as EOA on error
-    }
-  }
-
-  /**
-   * Get proxy wallet address from EOA or pass through if already proxy
-   *
-   * If the input is an EOA, derives the Gnosis Safe proxy address.
-   * If the input is already a proxy/contract address, returns it as-is.
-   * Polymarket uses Gnosis Safe proxy wallets for trading to enable
-   * gasless orders via meta-transactions.
-   *
-   * @param walletAddress - User's EOA or proxy wallet address
+   * @param eoaAddress - User's externally owned account address
    * @returns Proxy wallet address (checksum format)
    */
-  async getOrDeriveProxyAddress(walletAddress: string): Promise<string> {
-    logger.debug(`[PolymarketService] Getting or deriving proxy for: ${walletAddress}`);
+  deriveProxyAddress(eoaAddress: string): string {
+    logger.debug(`[PolymarketService] Deriving proxy address for EOA: ${eoaAddress}`);
 
-    // Check if address is already a contract (proxy)
-    const isProxy = await this.isContract(walletAddress);
-
-    if (isProxy) {
-      logger.info(`[PolymarketService] Address ${walletAddress} is already a proxy, using as-is`);
-      return walletAddress;
-    }
-
-    // It's an EOA, derive the proxy
-    const proxyAddress = getProxyWalletAddress(this.GNOSIS_PROXY_FACTORY, walletAddress);
-    logger.info(`[PolymarketService] Derived proxy: ${proxyAddress} from EOA: ${walletAddress}`);
+    // Use @polymarket/sdk to derive proxy wallet address
+    // getProxyWalletAddress(factory, user) computes the deterministic CREATE2 address
+    const proxyAddress = getProxyWalletAddress(this.GNOSIS_PROXY_FACTORY, eoaAddress);
+    logger.info(`[PolymarketService] Derived proxy: ${proxyAddress} for EOA: ${eoaAddress}`);
     return proxyAddress;
   }
 
@@ -831,8 +865,8 @@ export class PolymarketService extends Service {
   async getUserPositions(walletAddress: string): Promise<Position[]> {
     logger.info(`[PolymarketService] Fetching positions for wallet: ${walletAddress}`);
 
-    // Get proxy address (derive if EOA, pass through if already proxy)
-    const proxyAddress = await this.getOrDeriveProxyAddress(walletAddress);
+    // Derive proxy address if this is an EOA
+    const proxyAddress = this.deriveProxyAddress(walletAddress);
 
     // Check LRU cache
     const cached = this.getCached(
@@ -877,8 +911,8 @@ export class PolymarketService extends Service {
   /**
    * Get user balance and portfolio summary
    *
-   * Fetches total portfolio value, available balance, and P&L metrics.
-   * Results are cached with positions data.
+   * Fetches total portfolio value from /value endpoint and positions from /positions endpoint.
+   * Computes derived metrics like positions value and P&L from the positions data.
    *
    * @param walletAddress - User's EOA or proxy wallet address
    * @returns Balance summary with total value and P&L
@@ -886,36 +920,50 @@ export class PolymarketService extends Service {
   async getUserBalance(walletAddress: string): Promise<Balance> {
     logger.info(`[PolymarketService] Fetching balance for wallet: ${walletAddress}`);
 
-    // Get proxy address (derive if EOA, pass through if already proxy)
-    const proxyAddress = await this.getOrDeriveProxyAddress(walletAddress);
+    // Derive proxy address if this is an EOA
+    const proxyAddress = this.deriveProxyAddress(walletAddress);
 
     return this.retryFetch(async () => {
-      const url = `${this.dataApiUrl}/value?user=${proxyAddress}`;
-      const response = await this.fetchWithTimeout(url);
+      // Fetch total value from /value endpoint
+      const valueUrl = `${this.dataApiUrl}/value?user=${proxyAddress}`;
+      const valueResponse = await this.fetchWithTimeout(valueUrl);
 
-      if (!response.ok) {
-        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+      if (!valueResponse.ok) {
+        throw new Error(`Data API error: ${valueResponse.status} ${valueResponse.statusText}`);
       }
 
-      // API returns array: [{ user: "0x...", value: 0 }]
-      const data = await response.json() as Array<{ user: string; value: number }>;
+      // API returns array: [{"user":"0x...", "value":123.45}]
+      const valueData = await valueResponse.json() as Array<{ user: string; value: number }>;
+      const totalValue = valueData.length > 0 ? valueData[0].value : 0;
 
-      // Find balance for this user
-      const userBalance = data.find(b => b.user.toLowerCase() === proxyAddress.toLowerCase());
-      const totalValue = userBalance?.value ?? 0;
+      // Fetch positions to calculate positions value and P&L
+      const positions = await this.getUserPositions(walletAddress);
 
-      // Transform to Balance interface
+      // Compute derived metrics from positions
+      let positionsValue = 0;
+      let unrealizedPnl = 0;
+      let realizedPnl = 0;
+
+      for (const position of positions) {
+        positionsValue += position.currentValue || 0;
+        unrealizedPnl += position.cashPnl || 0;
+        realizedPnl += position.realizedPnl || 0;
+      }
+
+      // Available balance = total value - positions value
+      const availableBalance = Math.max(0, totalValue - positionsValue);
+
       const balance: Balance = {
-        total_value: totalValue.toString(),
-        available_balance: "0",      // Not provided by API
-        positions_value: totalValue.toString(),
-        realized_pnl: "0",
-        unrealized_pnl: "0",
-        timestamp: Date.now()
+        total_value: String(totalValue),
+        available_balance: String(availableBalance),
+        positions_value: String(positionsValue),
+        realized_pnl: String(realizedPnl),
+        unrealized_pnl: String(unrealizedPnl),
+        timestamp: Date.now(),
       };
 
       logger.info(
-        `[PolymarketService] Fetched balance - Total: ${balance.total_value}, Available: ${balance.available_balance}`
+        `[PolymarketService] Fetched balance - Total: ${balance.total_value}, Positions: ${balance.positions_value}, Available: ${balance.available_balance}`
       );
       return balance;
     });
@@ -934,8 +982,8 @@ export class PolymarketService extends Service {
   async getUserTrades(walletAddress: string, limit: number = 100): Promise<Trade[]> {
     logger.info(`[PolymarketService] Fetching trades for wallet: ${walletAddress}, limit: ${limit}`);
 
-    // Get proxy address (derive if EOA, pass through if already proxy)
-    const proxyAddress = await this.getOrDeriveProxyAddress(walletAddress);
+    // Derive proxy address if this is an EOA
+    const proxyAddress = this.deriveProxyAddress(walletAddress);
 
     // Create cache key with limit
     const cacheKey = `${proxyAddress}-${limit}`;
@@ -1156,12 +1204,10 @@ export class PolymarketService extends Service {
   /**
    * Get live trading volume (24h rolling)
    *
-   * Fetches 24h trading volume across all markets.
+   * Fetches 24h trading volume by aggregating from Gamma API markets endpoint.
+   * The data-api /live-volume endpoint is unreliable, so we calculate from
+   * individual market volume24hr fields.
    * Results are cached for 30s as analytics change less frequently.
-   *
-   * NOTE: The API returns array format: [{"total": 0, "markets": null}]
-   * The id=1 parameter is required but may return zero volume if no recent activity.
-   * This is expected behavior - the endpoint works correctly.
    *
    * @returns Volume data with 24h total and per-market breakdown
    */
@@ -1178,21 +1224,33 @@ export class PolymarketService extends Service {
     }
 
     return this.retryFetch(async () => {
-      const url = `${this.dataApiUrl}/live-volume?id=1`;
+      // Fetch top markets by 24h volume from Gamma API
+      // The data-api /live-volume endpoint returns zero, so we aggregate from markets
+      const url = `${this.gammaApiUrl}/markets?active=true&closed=false&limit=500&order=volume24hr&ascending=false`;
       const response = await this.fetchWithTimeout(url);
 
       if (!response.ok) {
-        throw new Error(`Data API error: ${response.status} ${response.statusText}`);
+        throw new Error(`Gamma API error: ${response.status} ${response.statusText}`);
       }
 
-      // API returns array format: [{"total": 0, "markets": null}]
-      const responseData = await response.json() as Array<{total: number, markets: any}>;
-      const rawData = responseData[0] || {total: 0, markets: null};
+      const markets = await response.json() as Array<{
+        conditionId: string;
+        question: string;
+        volume24hr: number;
+        volumeNum?: number;
+      }>;
 
-      // Transform to expected format
+      // Aggregate total 24h volume from all fetched markets
+      const totalVolume = markets.reduce((sum, m) => sum + (m.volume24hr || 0), 0);
+
+      // Transform to expected format with top markets
       const data: VolumeData = {
-        total_volume_24h: rawData.total.toString(),
-        markets: rawData.markets || [],
+        total_volume_24h: totalVolume.toFixed(2),
+        markets: markets.slice(0, 20).map(m => ({
+          condition_id: m.conditionId,
+          volume: (m.volume24hr || 0).toFixed(2),
+          question: m.question,
+        })),
         timestamp: Date.now()
       };
 
@@ -1202,7 +1260,7 @@ export class PolymarketService extends Service {
         timestamp: Date.now(),
       };
 
-      logger.info(`[PolymarketService] Fetched live volume: ${data.total_volume_24h}`);
+      logger.info(`[PolymarketService] Fetched live volume: $${(totalVolume / 1_000_000).toFixed(2)}M from ${markets.length} markets`);
       return data;
     });
   }
@@ -1400,7 +1458,8 @@ export class PolymarketService extends Service {
   /**
    * Get orderbooks for multiple tokens
    *
-   * Fetches orderbooks for up to 100 tokens in a single batch request.
+   * Fetches orderbooks for up to 100 tokens. First attempts batch request,
+   * falls back to parallel individual requests if batch API fails.
    * Results are cached for 10-15s (orderbooks change frequently).
    *
    * @param tokenIds - Array of ERC1155 conditional token IDs (max 100)
@@ -1418,7 +1477,8 @@ export class PolymarketService extends Service {
       tokenIds = tokenIds.slice(0, 100);
     }
 
-    return this.retryFetch(async () => {
+    // Try batch endpoint first, fall back to parallel individual requests
+    try {
       const url = `${this.clobApiUrl}/books`;
       const response = await this.fetchWithTimeout(url, {
         method: "POST",
@@ -1426,52 +1486,83 @@ export class PolymarketService extends Service {
         body: JSON.stringify({ token_ids: tokenIds }),
       });
 
-      if (!response.ok) {
-        throw new Error(`CLOB API error: ${response.status} ${response.statusText}`);
+      if (response.ok) {
+        const orderbooks = await response.json() as OrderBook[];
+        
+        // Convert to summaries with calculated metrics
+        const summaries: OrderbookSummary[] = orderbooks.map((orderbook) => {
+          const tokenId = orderbook.asset_id;
+          const bestBid = orderbook.bids.length > 0 ? orderbook.bids[0].price : undefined;
+          const bestAsk = orderbook.asks.length > 0 ? orderbook.asks[0].price : undefined;
+
+          let spread: string | undefined;
+          let midPrice: string | undefined;
+
+          if (bestBid && bestAsk) {
+            const bidNum = parseFloat(bestBid);
+            const askNum = parseFloat(bestAsk);
+            spread = (askNum - bidNum).toFixed(4);
+            midPrice = ((bidNum + askNum) / 2).toFixed(4);
+          }
+
+          return {
+            token_id: tokenId,
+            market: orderbook.market,
+            asset_id: orderbook.asset_id,
+            timestamp: orderbook.timestamp,
+            hash: (orderbook as any).hash,
+            bids: orderbook.bids,
+            asks: orderbook.asks,
+            best_bid: bestBid,
+            best_ask: bestAsk,
+            spread,
+            mid_price: midPrice,
+          };
+        });
+
+        logger.info(`[PolymarketService] Fetched ${summaries.length} orderbooks via batch`);
+        return summaries;
       }
+      
+      // Batch failed, log and fall through to individual requests
+      logger.warn(`[PolymarketService] Batch orderbooks API failed (${response.status}), falling back to individual requests`);
+    } catch (error) {
+      logger.warn(`[PolymarketService] Batch orderbooks failed: ${error instanceof Error ? error.message : String(error)}, falling back to individual requests`);
+    }
 
-      const orderbooks = await response.json() as OrderBook[];
-
-      // Convert to summaries with calculated metrics
-      // Use asset_id from API response instead of array index to handle out-of-order or partial results
-      const summaries: OrderbookSummary[] = orderbooks.map((orderbook) => {
-        const tokenId = orderbook.asset_id;
-        const bestBid = orderbook.bids.length > 0 ? orderbook.bids[0].price : undefined;
-        const bestAsk = orderbook.asks.length > 0 ? orderbook.asks[0].price : undefined;
-
-        let spread: string | undefined;
-        let midPrice: string | undefined;
-
-        if (bestBid && bestAsk) {
-          const bidNum = parseFloat(bestBid);
-          const askNum = parseFloat(bestAsk);
-          spread = (askNum - bidNum).toFixed(4);
-          midPrice = ((bidNum + askNum) / 2).toFixed(4);
-        }
-
-        return {
-          token_id: tokenId,
-          market: orderbook.market,
-          asset_id: orderbook.asset_id,
-          timestamp: orderbook.timestamp,
-          hash: (orderbook as any).hash,
-          bids: orderbook.bids,
-          asks: orderbook.asks,
-          best_bid: bestBid,
-          best_ask: bestAsk,
-          spread,
-          mid_price: midPrice,
-        };
-      });
-
-      logger.info(`[PolymarketService] Fetched ${summaries.length} orderbooks`);
-      return summaries;
+    // Fallback: fetch orderbooks individually in parallel
+    logger.info(`[PolymarketService] Fetching ${tokenIds.length} orderbooks individually (fallback)`);
+    
+    const orderbookPromises = tokenIds.map(async (tokenId) => {
+      try {
+        return await this.getOrderbook(tokenId);
+      } catch (error) {
+        logger.warn(`[PolymarketService] Failed to fetch orderbook for ${tokenId.slice(0, 10)}...: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      }
     });
+
+    const results = await Promise.all(orderbookPromises);
+    const summaries = results.filter((r): r is OrderbookSummary => r !== null);
+
+    logger.info(`[PolymarketService] Fetched ${summaries.length}/${tokenIds.length} orderbooks individually`);
+    return summaries;
   }
 
   /**
    * Phase 5A: Extended Portfolio Methods
    */
+
+  /**
+   * Get or derive proxy address
+   * Helper method to handle both EOA and proxy addresses
+   */
+  private async getOrDeriveProxyAddress(walletAddress: string): Promise<string> {
+    // Simple heuristic: if address looks like a proxy (starts with certain patterns),
+    // use as-is, otherwise derive it
+    // For now, always derive to ensure consistency
+    return this.deriveProxyAddress(walletAddress);
+  }
 
   /**
    * Get closed positions (historical resolved markets)
@@ -1482,7 +1573,7 @@ export class PolymarketService extends Service {
    * @param walletAddress - User's EOA or proxy wallet address
    * @returns Array of closed positions with win/loss info
    */
-  async getClosedPositions(walletAddress: string): Promise<ClosedPosition[]> {
+  async getClosedPositions(walletAddress: string): Promise<any[]> {
     logger.info(`[PolymarketService] Fetching closed positions for wallet: ${walletAddress}`);
 
     // Get proxy address (derive if EOA, pass through if already proxy)
@@ -1702,10 +1793,10 @@ export class PolymarketService extends Service {
     this.positionsCacheOrder = [];
     this.tradesCache.clear();
     this.tradesCacheOrder = [];
+    this.marketsListCache = null;
+    this.eventsListCache = null;
     this.eventsCache.clear();
     this.eventsCacheOrder = [];
-    this.eventsListCache = null;
-    this.marketsListCache = null;
     this.openInterestCache = null;
     this.liveVolumeCache = null;
     this.spreadsCache = null;

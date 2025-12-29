@@ -52,6 +52,10 @@ export interface PolymarketMarket {
   competitive?: number;            // Competitiveness score (0-5)
   enableOrderBook?: boolean;       // Order book enabled
   neg_risk?: boolean;              // Negative risk market
+  // Snake_case aliases added by mapApiMarketToInterface
+  condition_id?: string;           // Alias for conditionId
+  end_date_iso?: string;           // Alias for endDateIso
+  market_slug?: string;            // Alias for slug
 }
 
 /**
@@ -220,6 +224,41 @@ export interface MarketPriceHistory {
   }>;
   current_price?: number;
   market_question?: string;
+  /** Statistics computed from the data - useful for agent context without full data */
+  statistics?: PriceHistoryStatistics;
+}
+
+/**
+ * Summary statistics for price history data
+ * Allows agent to understand the data without seeing all points
+ */
+export interface PriceHistoryStatistics {
+  /** Number of data points returned */
+  data_points_count: number;
+  /** Original number of points before downsampling (if applicable) */
+  original_count?: number;
+  /** Whether the data was downsampled */
+  was_downsampled: boolean;
+  /** Price at the start of the period */
+  start_price: number;
+  /** Price at the end of the period (current) */
+  end_price: number;
+  /** Highest price in the period */
+  high_price: number;
+  /** Lowest price in the period */
+  low_price: number;
+  /** Average price in the period */
+  avg_price: number;
+  /** Start timestamp (ms) */
+  start_timestamp: number;
+  /** End timestamp (ms) */
+  end_timestamp: number;
+  /** Price change (absolute) */
+  price_change: number;
+  /** Price change (percentage) */
+  price_change_percent: number;
+  /** Trend direction: "up", "down", or "stable" */
+  trend: "up" | "down" | "stable";
 }
 
 /**
@@ -245,19 +284,35 @@ export interface ProxyWalletConfig {
 }
 
 /**
- * User position in a market
+ * User position in a market (matches Polymarket Data API response)
  */
 export interface Position {
-  market: string;              // Market identifier
-  condition_id: string;        // Condition ID
-  asset_id: string;            // Token ID
-  outcome: "YES" | "NO";       // Outcome position
-  size: string;                // Position size
-  value: string;               // Current value in USD
-  avg_price: string;           // Average entry price
-  current_price: string;       // Current market price
-  pnl: string;                 // Profit/loss
-  pnl_percentage: string;      // PnL as percentage
+  proxyWallet: string;         // User's proxy wallet address
+  asset: string;               // Token ID
+  conditionId: string;         // Condition ID
+  size: number;                // Position size
+  avgPrice: number;            // Average entry price
+  initialValue: number;        // Initial investment value
+  currentValue: number;        // Current position value in USD
+  cashPnl: number;             // Cash profit/loss (unrealized)
+  percentPnl: number;          // PnL as percentage
+  totalBought: number;         // Total amount bought
+  realizedPnl: number;         // Realized profit/loss
+  percentRealizedPnl: number;  // Realized PnL as percentage
+  curPrice: number;            // Current market price
+  redeemable: boolean;         // Can be redeemed
+  mergeable: boolean;          // Can be merged
+  title: string;               // Market title
+  slug: string;                // Market slug
+  icon: string;                // Market icon URL
+  eventId: string;             // Event ID
+  eventSlug: string;           // Event slug
+  outcome: string;             // "Yes" or "No"
+  outcomeIndex: number;        // 0 or 1
+  oppositeOutcome: string;     // Opposite outcome name
+  oppositeAsset: string;       // Opposite token ID
+  endDate: string;             // Market end date
+  negativeRisk: boolean;       // Negative risk flag
 }
 
 /**

@@ -39,17 +39,17 @@ export const getOrderbookAction: Action = {
     "BID_ASK_DEPTH",
   ],
   description:
-    "Get orderbook depth for a single Polymarket token. Shows bids, asks, best prices, spread, and mid price.",
+    "Get orderbook depth (bids/asks) for a Polymarket outcome token. IMPORTANT: Requires token_id (NOT condition_id). Get token_id from SEARCH_POLYMARKETS (yes_token_id/no_token_id fields) or GET_POLYMARKET_DETAIL (tokens.yes_token_id/tokens.no_token_id). Each market has TWO tokens: YES and NO - use the one you want orderbook for.",
 
   parameters: {
     token_id: {
       type: "string",
-      description: "ERC1155 conditional token ID (YES or NO token)",
+      description: "The ERC1155 token ID for YES or NO outcome. This is a large numeric string (e.g., '15974786252393396629980467963784550802583781222733347534844974829144359265969'). Get this from SEARCH_POLYMARKETS or GET_POLYMARKET_DETAIL. This is different from condition_id!",
       required: true,
     },
     side: {
       type: "string",
-      description: "Optional: Filter to BUY or SELL side only",
+      description: "Optional: Filter to BUY or SELL side only. BUY shows buyers, SELL shows sellers.",
       required: false,
     },
   },
@@ -90,12 +90,18 @@ export const getOrderbookAction: Action = {
         return errorResult;
       }
 
-      // Validate token ID format (should be hex string)
-      if (!tokenId.startsWith("0x")) {
+      // Validate token ID format
+      // Token IDs can be either:
+      // 1. Large decimal numbers (e.g., "15974786252393396629980467963784550802583781222733347534844974829144359265969")
+      // 2. Hex strings starting with 0x
+      const isDecimalFormat = /^\d+$/.test(tokenId) && tokenId.length >= 10;
+      const isHexFormat = /^0x[a-fA-F0-9]+$/.test(tokenId);
+      
+      if (!isDecimalFormat && !isHexFormat) {
         const errorMsg = `Invalid token ID format: ${tokenId}`;
         logger.error(`[GET_POLYMARKET_ORDERBOOK] ${errorMsg}`);
         const errorResult: GetOrderbookActionResult = {
-          text: ` ${errorMsg}. Expected hex string starting with 0x.`,
+          text: ` ${errorMsg}. Expected a large numeric string or hex string starting with 0x.`,
           success: false,
           error: "invalid_token_id",
           input: { token_id: tokenId },

@@ -37,12 +37,12 @@ export const getOrderbooksAction: Action = {
     "COMPARE_LIQUIDITY",
   ],
   description:
-    "Get orderbooks for multiple Polymarket tokens in a single request (max 100). Compare liquidity across markets.",
+    "Get orderbooks for multiple Polymarket tokens in batch (max 100). IMPORTANT: Requires token_ids (NOT condition_ids). Get token_ids from SEARCH_POLYMARKETS or GET_POLYMARKET_DETAIL responses. Useful for comparing liquidity across YES/NO tokens of multiple markets.",
 
   parameters: {
     token_ids: {
       type: "array",
-      description: "Array of ERC1155 conditional token IDs (max 100)",
+      description: "Array of ERC1155 token IDs (max 100). Token IDs are large numeric strings like '15974786252393396629980467963784550802583781222733347534844974829144359265969'. Get these from SEARCH_POLYMARKETS or GET_POLYMARKET_DETAIL.",
       required: true,
     },
   },
@@ -84,13 +84,21 @@ export const getOrderbooksAction: Action = {
       }
 
       // Validate token IDs format
+      // Token IDs can be either:
+      // 1. Large decimal numbers (e.g., "15974786252393396629980467963784550802583781222733347534844974829144359265969")
+      // 2. Hex strings starting with 0x
       tokenIds = tokenIds.map((id) => id.trim());
-      const invalidTokens = tokenIds.filter((id) => !id.startsWith("0x"));
+      const isValidTokenId = (id: string) => {
+        const isDecimalFormat = /^\d+$/.test(id) && id.length >= 10;
+        const isHexFormat = /^0x[a-fA-F0-9]+$/.test(id);
+        return isDecimalFormat || isHexFormat;
+      };
+      const invalidTokens = tokenIds.filter((id) => !isValidTokenId(id));
       if (invalidTokens.length > 0) {
         const errorMsg = `Invalid token ID format: ${invalidTokens[0]}`;
         logger.error(`[GET_POLYMARKET_ORDERBOOKS] ${errorMsg}`);
         const errorResult: GetOrderbooksActionResult = {
-          text: ` ${errorMsg}. All token IDs must be hex strings starting with 0x.`,
+          text: ` ${errorMsg}. Token IDs must be large numeric strings or hex strings starting with 0x.`,
           success: false,
           error: "invalid_token_ids",
           input: { token_ids: tokenIds },
