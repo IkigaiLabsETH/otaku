@@ -573,11 +573,13 @@ export class PolymarketService extends Service {
         throw new Error(`Market ${conditionId} has invalid token structure`);
       }
 
-      const yesToken = market.tokens.find((t) => t.outcome === "Yes");
-      const noToken = market.tokens.find((t) => t.outcome === "No");
+      const yesToken = market.tokens.find((t) => t.outcome.toLowerCase() === "yes");
+      const noToken = market.tokens.find((t) => t.outcome.toLowerCase() === "no");
 
       if (!yesToken || !noToken) {
-        throw new Error(`Market ${conditionId} missing Yes/No tokens`);
+        throw new Error(
+          `Market ${conditionId} missing Yes/No tokens. Available outcomes: ${market.tokens.map((t) => t.outcome).join(", ")}`
+        );
       }
 
       // Fetch orderbooks for both tokens in parallel
@@ -743,9 +745,9 @@ export class PolymarketService extends Service {
         throw new Error(`Market ${conditionId} has invalid token structure`);
       }
 
-      // Find the token for the requested outcome
+      // Find the token for the requested outcome (case-insensitive)
       const token = market.tokens.find(
-        (t) => t.outcome.toUpperCase() === outcome.toUpperCase()
+        (t) => t.outcome.toLowerCase() === outcome.toLowerCase()
       );
 
       if (!token) {
