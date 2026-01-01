@@ -163,7 +163,10 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
       const targetChains = params?.targetChains?.toLowerCase().trim();
       const targetWeights = params?.targetWeights?.trim();
       const slippage = params?.slippage ?? DEFAULT_SLIPPAGE;
-      const confirmHighSlippage = params?.confirmHighSlippage ?? false;
+      // Ensure confirmHighSlippage is strictly boolean for safety
+      const confirmHighSlippage = typeof params?.confirmHighSlippage === "boolean" 
+        ? params.confirmHighSlippage 
+        : false;
 
       // Input parameters object for response
       const inputParams = {

@@ -52,11 +52,20 @@ export interface BuildFlowData {
   to: string;
   chainId: number;
   gasLimit?: string;
+  upperBoundTimestamp?: number;
+}
+
+export interface CcipBridgeFlowData {
+  srcChainId: number;
+  dstChainId: number;
+  srcToken: string;
+  dstToken: string;
+  amount: string;
 }
 
 export interface ComposeFlow {
   type: '/instructions/intent' | '/instructions/intent-simple' | '/instructions/build' | '/instructions/build-raw' | '/instructions/build-ccip';
-  data: IntentFlowData | IntentSimpleFlowData | BuildFlowData;
+  data: IntentFlowData | IntentSimpleFlowData | BuildFlowData | CcipBridgeFlowData;
   batch?: boolean;
 }
 

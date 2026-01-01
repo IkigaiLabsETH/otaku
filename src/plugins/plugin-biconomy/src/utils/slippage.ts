@@ -194,9 +194,20 @@ export async function validateSlippage(
 
   // Validate: high slippage (>5%) requires confirmation
   if (slippage > MAX_SLIPPAGE_WITHOUT_CONFIRMATION) {
-    // Check for explicit confirmation parameter OR user consent via LLM analysis
-    let hasConsent = confirmHighSlippage;
-    let confirmationSource = "explicit parameter";
+    // Validate confirmHighSlippage type - must be strictly boolean
+    // This prevents string values like "false" from being treated as truthy
+    let hasConsent = false;
+    let confirmationSource = "";
+    
+    if (typeof confirmHighSlippage === "boolean" && confirmHighSlippage === true) {
+      hasConsent = true;
+      confirmationSource = "explicit parameter";
+    } else if (typeof confirmHighSlippage !== "boolean" && confirmHighSlippage !== undefined && confirmHighSlippage !== null) {
+      // Log warning if non-boolean value was passed
+      logger.warn(
+        `[${actionName}] Invalid confirmHighSlippage type: ${typeof confirmHighSlippage}. Expected boolean, treating as false for safety.`
+      );
+    }
     
     if (!hasConsent) {
       // Try to detect consent via LLM
