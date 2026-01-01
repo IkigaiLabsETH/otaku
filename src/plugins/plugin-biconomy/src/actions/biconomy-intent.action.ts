@@ -177,13 +177,15 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
         confirmHighSlippage,
       };
 
-      // Validate slippage - max 5% unless explicitly confirmed
-      const slippageValidation = validateSlippage(
+      // Validate slippage - max 5% unless explicitly confirmed or detected via LLM in messages
+      const slippageValidation = await validateSlippage(
+        runtime,
         slippage,
         confirmHighSlippage,
         inputParams,
         "MEE_SUPERTX_REBALANCE",
-        callback
+        callback,
+        state
       );
       if (!slippageValidation.valid) {
         return slippageValidation.errorResult!;

@@ -192,13 +192,15 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         confirmHighSlippage,
       };
 
-      // Validate slippage - max 5% unless explicitly confirmed
-      const slippageValidation = validateSlippage(
+      // Validate slippage - max 5% unless explicitly confirmed or detected via LLM in messages
+      const slippageValidation = await validateSlippage(
+        runtime,
         slippage,
         confirmHighSlippage,
         inputParams,
         "MEE_FUSION_SWAP",
-        callback
+        callback,
+        state
       );
       if (!slippageValidation.valid) {
         return slippageValidation.errorResult!;
