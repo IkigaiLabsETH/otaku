@@ -485,7 +485,8 @@ export class BiconomyService extends Service {
   buildWithdrawalInstruction(
     tokenAddress: string,
     chainId: number,
-    recipientAddress: string
+    recipientAddress: string,
+    upperBoundTimestamp?: number
   ): ComposeFlow {
     return {
       type: "/instructions/build",
@@ -502,6 +503,7 @@ export class BiconomyService extends Service {
         to: tokenAddress,
         chainId: chainId,
         gasLimit: "100000", // Standard ERC20 transfer gas
+        ...(upperBoundTimestamp && { upperBoundTimestamp }),
       },
     };
   }
@@ -532,6 +534,40 @@ export class BiconomyService extends Service {
           },
           weight: p.weight,
         })),
+      },
+    };
+  }
+
+  /**
+   * Build a CCIP bridge flow using Chainlink's Cross-Chain Interoperability Protocol
+   * 
+   * Bridges tokens from source chain to destination chain via CCIP.
+   * 
+   * **IMPORTANT**: Only supports CCIP-compatible tokens on the specific lane.
+   * Common CCIP tokens: USDC, LINK, WETH, WBTC, DAI
+   * Not all tokens are supported on all chain pairs.
+   * 
+   * CCIP fees are always paid in the native token of the source chain.
+   * Bridge finality typically takes 15-22 minutes.
+   * 
+   * @see https://docs.biconomy.io/supertransaction-api/endpoints/build-ccip
+   * @see https://docs.chain.link/ccip/supported-networks
+   */
+  buildCcipBridgeFlow(
+    srcChainId: number,
+    dstChainId: number,
+    srcToken: string,
+    dstToken: string,
+    amount: string
+  ): ComposeFlow {
+    return {
+      type: "/instructions/build-ccip",
+      data: {
+        srcChainId,
+        dstChainId,
+        srcToken,
+        dstToken,
+        amount,
       },
     };
   }

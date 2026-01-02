@@ -18,6 +18,11 @@ import {
 import { BiconomyService } from "../services/biconomy.service";
 import { type QuoteRequest } from "../types";
 import { tryGetBaseUsdcFeeToken } from "../utils/fee-token";
+import {
+  DEFAULT_SLIPPAGE,
+  validateSlippage,
+  slippageToDecimal,
+} from "../utils/slippage";
 
 // CDP network mapping
 const CDP_NETWORK_MAP: Record<string, CdpNetwork> = {
@@ -95,7 +100,12 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
     },
     slippage: {
       type: "number",
-      description: "Slippage tolerance (0-1, e.g., 0.01 for 1%). Default: 0.01",
+      description: "Slippage tolerance as percentage (e.g., 1 for 1%, 5 for 5%). Default: 1. Max: 5% unless confirmed.",
+      required: false,
+    },
+    confirmHighSlippage: {
+      type: "boolean",
+      description: "Set to true to confirm slippage above 5%. Required if slippage > 5.",
       required: false,
     },
   },
@@ -152,7 +162,11 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
       const targetTokens = params?.targetTokens?.toLowerCase().trim();
       const targetChains = params?.targetChains?.toLowerCase().trim();
       const targetWeights = params?.targetWeights?.trim();
-      const slippage = params?.slippage ?? 0.01;
+      const slippage = params?.slippage ?? DEFAULT_SLIPPAGE;
+      // Ensure confirmHighSlippage is strictly boolean for safety
+      const confirmHighSlippage = typeof params?.confirmHighSlippage === "boolean" 
+        ? params.confirmHighSlippage 
+        : false;
 
       // Input parameters object for response
       const inputParams = {
@@ -163,7 +177,22 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
         targetChains,
         targetWeights,
         slippage,
+        confirmHighSlippage,
       };
+
+      // Validate slippage - max 5% unless explicitly confirmed or detected via LLM in messages
+      const slippageValidation = await validateSlippage(
+        runtime,
+        slippage,
+        confirmHighSlippage,
+        inputParams,
+        "MEE_SUPERTX_REBALANCE",
+        callback,
+        state
+      );
+      if (!slippageValidation.valid) {
+        return slippageValidation.errorResult!;
+      }
 
       // Validation
       if (!inputToken || !inputChain || !inputAmount) {
@@ -316,7 +345,7 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
           tokenAddress: targetTokenAddresses[i],
           weight: weights[i],
         })),
-        slippage
+        slippageToDecimal(slippage)
       );
 
       // Build withdrawal instructions for each target token to transfer back to EOA
@@ -379,7 +408,7 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, and 
 
 **Input:** ${inputAmount} ${inputToken.toUpperCase()} on ${inputChain}
 **Output:** ${targetDesc}
-**Slippage:** ${(slippage * 100).toFixed(1)}%
+**Slippage:** ${slippage}%
 **Gas:** Paid in ${gasTokenDescription}
 
 **Supertx Hash:** \`${result.supertxHash}\`
