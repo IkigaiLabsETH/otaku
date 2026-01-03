@@ -210,6 +210,7 @@ async function main() {
     }
 
     // Schedule daily analytics (03:00 UTC)
+    // NOTE: SQL must match migrations/001_pg_cron_setup.sql for idempotency
     if (verbose) console.log('📈 Scheduling daily-analytics-aggregate...');
     const dailyResult = await scheduleJob(
       'daily-analytics-aggregate',
@@ -226,18 +227,22 @@ async function main() {
         
         INSERT INTO gamification.daily_stats (stat_date, total_events, unique_users, total_points_awarded, events_by_type)
         SELECT 
-          (CURRENT_DATE - INTERVAL '1 day')::date,
-          COUNT(*),
-          COUNT(DISTINCT user_id),
-          COALESCE(SUM(points), 0),
-          (SELECT jsonb_object_agg(action_type, cnt) FROM (
-            SELECT action_type, COUNT(*) as cnt 
-            FROM gamification.gamification_events 
-            WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE
-            GROUP BY action_type
-          ) t)
-        FROM gamification.gamification_events
-        WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE
+          (CURRENT_DATE - INTERVAL '1 day')::date AS stat_date,
+          COUNT(*) AS total_events,
+          COUNT(DISTINCT user_id) AS unique_users,
+          SUM(points) AS total_points_awarded,
+          jsonb_object_agg(action_type, type_count) AS events_by_type
+        FROM (
+          SELECT 
+            action_type,
+            user_id,
+            points,
+            COUNT(*) OVER (PARTITION BY action_type) AS type_count
+          FROM gamification.gamification_events
+          WHERE created_at >= CURRENT_DATE - INTERVAL '1 day'
+            AND created_at < CURRENT_DATE
+        ) daily_events
+        GROUP BY 1
         ON CONFLICT (stat_date) DO UPDATE SET
           total_events = EXCLUDED.total_events,
           unique_users = EXCLUDED.unique_users,
@@ -263,13 +268,16 @@ async function main() {
     const results = [leaderboardResult, weeklyResult, dailyResult];
     const outdatedCount = results.filter(r => r === 'outdated').length;
     const createdCount = results.filter(r => r === 'created').length;
+    const replacedCount = results.filter(r => r === 'replaced').length;
     const errorCount = results.filter(r => r === 'error').length;
     
-    // Always show if there are issues or new jobs created
+    // Always show if there are issues, changes, or new jobs
     if (errorCount > 0) {
       console.log(`❌ pg_cron: ${errorCount} job(s) failed - check errors above`);
     } else if (outdatedCount > 0) {
       console.log(`⚠️  pg_cron: ${outdatedCount} job(s) need update - run with --force`);
+    } else if (replacedCount > 0) {
+      console.log(`✅ pg_cron: ${replacedCount} job(s) updated`);
     } else if (createdCount > 0) {
       console.log(`✅ pg_cron: ${createdCount} job(s) created`);
     } else if (verbose) {
