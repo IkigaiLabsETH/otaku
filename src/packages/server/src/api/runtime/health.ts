@@ -50,7 +50,7 @@ export function createHealthRouter(elizaOS: ElizaOS, serverInstance: AgentServer
       const data = await response.json();
       res.status(response.status).json(data);
     } catch (error) {
-      logger.error('[Health] Failed to proxy to /api/agents:', error);
+      logger.error('[Health] Failed to proxy to /api/agents:', error instanceof Error ? error.message : String(error));
       res.status(503).json({ 
         success: false, 
         error: { code: 'PROXY_ERROR', message: 'Health check failed' }
