@@ -35,20 +35,49 @@ export function createHealthRouter(elizaOS: ElizaOS, serverInstance: AgentServer
     );
   });
 
-  // Comprehensive health check
-  router.get('/health', (_req, res) => {
+  // Comprehensive health check - verifies server and database connectivity
+  // Returns agent list similar to /api/agents for Railway healthcheck
+  router.get('/health', async (_req, res) => {
     logger.log({ apiRoute: '/health' }, 'Health check route hit');
-    const healthcheck = {
-      status: 'OK',
-      version: process.env.APP_VERSION || 'unknown',
-      timestamp: new Date().toISOString(),
-      dependencies: {
-        agents: elizaOS.getAgents().length > 0 ? 'healthy' : 'no_agents',
-      },
-    };
+    const db = serverInstance?.database;
+    
+    // Prevent 304 responses - always return fresh data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
+    try {
+      if (!db) {
+        return res.status(503).json({
+          success: false,
+          error: { code: 'DB_ERROR', message: 'Database not available' },
+        });
+      }
+      
+      // Query agents to verify database connectivity (same as /api/agents)
+      const allAgents = await db.getAgents();
+      const runtimes = elizaOS.getAgents().map((a) => a.agentId);
 
-    const statusCode = healthcheck.dependencies.agents === 'healthy' ? 200 : 503;
-    res.status(statusCode).json(healthcheck);
+      const agents = allAgents
+        .map((agent: any) => ({
+          id: agent.id,
+          name: agent.name || '',
+          status: agent.id && runtimes.includes(agent.id) ? 'active' : 'inactive',
+        }))
+        .filter((agent: any) => agent.id);
+
+      res.status(200).json({ success: true, data: { agents } });
+    } catch (error) {
+      logger.error('[Health] Database connectivity check failed:', error);
+      res.status(503).json({
+        success: false,
+        error: {
+          code: 'DB_ERROR',
+          message: 'Database connection failed',
+          details: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   });
 
   // Server stop endpoint (admin only)
