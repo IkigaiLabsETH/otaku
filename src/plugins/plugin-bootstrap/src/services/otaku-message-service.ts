@@ -134,6 +134,66 @@ interface StrategyResult {
 const latestResponseIds = new Map<string, Map<string, string>>();
 
 /**
+ * Default retry configuration
+ */
+const RETRY_CONFIG = {
+  baseDelayMs: 1000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+};
+
+/**
+ * Calculate exponential backoff delay
+ */
+function getRetryDelay(attempt: number): number {
+  const delay = RETRY_CONFIG.baseDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt - 1);
+  return Math.min(delay, RETRY_CONFIG.maxDelayMs);
+}
+
+/**
+ * Safely access the runtime's stateCache for action results
+ * This is an internal ElizaOS API that may change - use with caution
+ */
+function getActionResultsFromCache(
+  runtime: IAgentRuntime,
+  messageId: string
+): unknown[] {
+  try {
+    // Access stateCache through the runtime - this is an internal API
+    const runtimeWithCache = runtime as unknown as { 
+      stateCache?: Map<string, { values?: { actionResults?: unknown[] } }> 
+    };
+    
+    if (!runtimeWithCache.stateCache) {
+      logger.debug('[OtakuMessageService] stateCache not available on runtime');
+      return [];
+    }
+    
+    const cachedState = runtimeWithCache.stateCache.get(`${messageId}_action_results`);
+    return cachedState?.values?.actionResults || [];
+  } catch (error) {
+    logger.warn(
+      { error },
+      '[OtakuMessageService] Failed to access stateCache - this may indicate an ElizaOS version incompatibility'
+    );
+    return [];
+  }
+}
+
+/**
+ * Clean up race tracking entry for an agent/room
+ */
+function cleanupRaceTracking(agentId: string, roomId: string): void {
+  const agentResponses = latestResponseIds.get(agentId);
+  if (agentResponses) {
+    agentResponses.delete(roomId);
+    if (agentResponses.size === 0) {
+      latestResponseIds.delete(agentId);
+    }
+  }
+}
+
+/**
  * OtakuMessageService implements the IMessageService interface with custom
  * multi-step workflow execution and x402 job request handling.
  */
@@ -235,6 +295,10 @@ export class OtakuMessageService implements IMessageService {
 
       clearTimeout(timeoutId);
       return result;
+    } catch (error) {
+      // Clean up race tracking on error to prevent memory leak
+      cleanupRaceTracking(runtime.agentId, message.roomId);
+      throw error;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -506,11 +570,8 @@ export class OtakuMessageService implements IMessageService {
         }
       }
 
-      // Clean up the response ID
-      agentResponses.delete(message.roomId);
-      if (agentResponses.size === 0) {
-        latestResponseIds.delete(runtime.agentId);
-      }
+      // Clean up the response ID tracking
+      cleanupRaceTracking(runtime.agentId, message.roomId);
 
       // Run evaluators
       await runtime.evaluate(
@@ -700,7 +761,9 @@ export class OtakuMessageService implements IMessageService {
               `[MultiStep] Failed to parse XML on attempt ${parseAttempt}/${maxParseRetries}`
             );
             if (parseAttempt < maxParseRetries) {
-              await new Promise((resolve) => setTimeout(resolve, 1000));
+              const delay = getRetryDelay(parseAttempt);
+              runtime.logger.debug(`[MultiStep] Retrying in ${delay}ms...`);
+              await new Promise((resolve) => setTimeout(resolve, delay));
             }
           }
         } catch (error) {
@@ -708,7 +771,9 @@ export class OtakuMessageService implements IMessageService {
           if (parseAttempt >= maxParseRetries) {
             throw error;
           }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          const delay = getRetryDelay(parseAttempt);
+          runtime.logger.debug(`[MultiStep] Retrying in ${delay}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
@@ -820,10 +885,8 @@ export class OtakuMessageService implements IMessageService {
             }
           );
 
-          const cachedState = (runtime as unknown as { stateCache: Map<string, { values?: { actionResults?: unknown[] } }> }).stateCache.get(
-            `${message.id}_action_results`
-          );
-          const actionResults = cachedState?.values?.actionResults || [];
+          // Safely access action results from cache
+          const actionResults = getActionResultsFromCache(runtime, message.id as string);
           const result = actionResults.length > 0 ? actionResults[0] as Record<string, unknown> : null;
           const success = (result?.success as boolean) ?? false;
 
@@ -898,7 +961,9 @@ export class OtakuMessageService implements IMessageService {
             `[MultiStep] Failed to parse summary XML on attempt ${summaryAttempt}/${maxSummaryRetries}`
           );
           if (summaryAttempt < maxSummaryRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const delay = getRetryDelay(summaryAttempt);
+            runtime.logger.debug(`[MultiStep] Retrying summary in ${delay}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
         }
       } catch (error) {
@@ -907,7 +972,9 @@ export class OtakuMessageService implements IMessageService {
           runtime.logger.warn('[MultiStep] Failed to generate summary after all retries');
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const delay = getRetryDelay(summaryAttempt);
+        runtime.logger.debug(`[MultiStep] Retrying summary in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
@@ -961,8 +1028,11 @@ export class OtakuMessageService implements IMessageService {
     callback?: HandlerCallback,
     options?: MessageProcessingOptions
   ): Promise<StrategyResult> {
-    // Compose state with actions for the prompt
-    let currentState = await runtime.composeState(message, ['ACTIONS']);
+    // Use the passed-in state which already has rich context from providers:
+    // ['ANXIETY', 'SHOULD_RESPOND', 'ENTITIES', 'CHARACTER', 'RECENT_MESSAGES', 'ACTIONS']
+    // This ensures single-shot mode has access to conversation history, character personality,
+    // and entity information for generating high-quality responses.
+    let currentState = state;
     
     if (!currentState.values?.actionNames) {
       runtime.logger.warn('[OtakuMessageService] actionNames missing from state');
@@ -1158,7 +1228,8 @@ export class OtakuMessageService implements IMessageService {
           
           try {
             // Try to use vision model to describe the image
-            const result = await runtime.useModel('IMAGE_DESCRIPTION', {
+            // Note: IMAGE_DESCRIPTION may not be available in all configurations
+            const result = await runtime.useModel(ModelType.IMAGE_DESCRIPTION, {
               imageUrl: attachment.url,
               prompt: 'Describe this image in detail.',
             });
@@ -1166,8 +1237,13 @@ export class OtakuMessageService implements IMessageService {
             attachment.description = typeof result === 'string' 
               ? result 
               : (result as { description?: string })?.description || 'Image attachment';
-          } catch {
-            // If vision model fails, use a generic description
+          } catch (visionError) {
+            // Log the vision model error so users know why image descriptions are generic
+            runtime.logger.warn(
+              { error: visionError instanceof Error ? visionError.message : String(visionError), url: attachment.url },
+              '[OtakuMessageService] Vision model failed for image - using generic description. ' +
+              'This may indicate IMAGE_DESCRIPTION model is not configured.'
+            );
             attachment.description = `Image: ${attachment.title || attachment.url}`;
           }
         } else if (

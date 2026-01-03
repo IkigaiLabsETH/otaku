@@ -508,19 +508,19 @@ export class MessageBusService extends Service {
     );
 
     try {
-      console.log(' [MessageBusService] Starting validation checks...');
+      logger.debug(`[${this.runtime.character.name}] MessageBusService: Starting validation checks...`);
       
       if (!(await this.validateServerSubscription(message))) {
-        console.log(' [MessageBusService] validateServerSubscription failed');
+        logger.debug(`[${this.runtime.character.name}] MessageBusService: validateServerSubscription failed`);
         return;
       }
-      console.log(' [MessageBusService] validateServerSubscription passed');
+      logger.debug(`[${this.runtime.character.name}] MessageBusService: validateServerSubscription passed`);
       
       if (!(await this.validateNotSelfMessage(message))) {
-        console.log(' [MessageBusService] validateNotSelfMessage failed');
+        logger.debug(`[${this.runtime.character.name}] MessageBusService: validateNotSelfMessage failed`);
         return;
       }
-      console.log(' [MessageBusService] validateNotSelfMessage passed');
+      logger.debug(`[${this.runtime.character.name}] MessageBusService: validateNotSelfMessage passed`);
 
       logger.info(
         `[${this.runtime.character.name}] MessageBusService: All checks passed, proceeding to create agent memory and emit MESSAGE_RECEIVED event`
@@ -574,13 +574,13 @@ export class MessageBusService extends Service {
         return [];
       };
 
-      console.log(' [MessageBusService] About to call messageService.handleMessage:', {
+      logger.debug({
         messageId: agentMemory.id,
         roomId: agentRoomId,
         worldId: agentWorldId,
         senderId: agentMemory.entityId,
         content: agentMemory.content.text?.substring(0, 50),
-      });
+      }, `[${this.runtime.character.name}] MessageBusService: About to call messageService.handleMessage`);
 
       // Use the message service directly instead of emitting events
       // This is the new pattern in ElizaOS 1.7.0+
@@ -621,7 +621,7 @@ export class MessageBusService extends Service {
           }
         });
 
-      console.log(' [MessageBusService] messageService.handleMessage called successfully');
+      logger.debug(`[${this.runtime.character.name}] MessageBusService: messageService.handleMessage called successfully`);
     } catch (error) {
       logger.error(
         `[${this.runtime.character.name}] MessageBusService: Error processing incoming message:`,

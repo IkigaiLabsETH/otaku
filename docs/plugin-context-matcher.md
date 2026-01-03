@@ -115,57 +115,84 @@ validate: async (_runtime: IAgentRuntime, message: Memory, state?: State) => {
 
 ## Status
 
-### Completed
+### ✅ All Plugins Implemented
 
+The plugin context matcher is fully implemented across all plugins.
+
+**Core Infrastructure:**
 - ✅ Core utility (`src/utils/plugin-context-matcher.ts`)
-- ✅ CDP plugin matcher (`src/plugins/plugin-cdp/matcher.ts`)
-- ✅ 3 CDP actions updated:
-  - `cdp-wallet-check-balance.ts`
-  - `cdp-wallet-info.ts`
-  - `cdp-wallet-token-transfer.ts`
 
-### Remaining Work
+**CDP Plugin** (9/9 actions via `validateCdpService` helper):
+- ✅ `cdp-check-tx-confirmation.ts`
+- ✅ `cdp-resolve-ens.ts`
+- ✅ `cdp-tx-explorer-link.ts`
+- ✅ `cdp-wallet-check-balance.ts`
+- ✅ `cdp-wallet-fetch-with-payment.ts`
+- ✅ `cdp-wallet-info.ts`
+- ✅ `cdp-wallet-nft-transfer.ts`
+- ✅ `cdp-wallet-swap.ts`
+- ✅ `cdp-wallet-token-transfer.ts`
 
-**CDP Plugin** (6 actions remaining):
-- `cdp-check-tx-confirmation.ts`
-- `cdp-resolve-ens.ts`
-- `cdp-tx-explorer-link.ts`
-- `cdp-wallet-fetch-with-payment.ts`
-- `cdp-wallet-nft-transfer.ts`
-- `cdp-wallet-swap.ts`
+**Other Plugins** (all have matchers):
+- ✅ Biconomy (`src/plugins/plugin-biconomy/src/matcher.ts`)
+- ✅ Polymarket (`src/plugins/plugin-polymarket-discovery/matcher.ts`)
+- ✅ Morpho (`src/plugins/plugin-morpho/matcher.ts`)
+- ✅ Relay (`src/plugins/plugin-relay/matcher.ts`)
+- ✅ CoinGecko (`src/plugins/plugin-coingecko/matcher.ts`)
+- ✅ DefiLlama (`src/plugins/plugin-defillama/matcher.ts`)
+- ✅ Etherscan (`src/plugins/plugin-etherscan/matcher.ts`)
+- ✅ Clanker (`src/plugins/plugin-clanker/matcher.ts`)
 
-**Other Plugins** (apply same pattern):
-- Biconomy (swap/bridge keywords)
-- Polymarket (market/prediction keywords)
-- Morpho (lending/borrow keywords)
-- Relay (bridge keywords)
-- Others as needed
-
-**Always-Active Plugins** (skip matcher):
+**Always-Active Plugins** (skip matcher by design):
 - Bootstrap (orchestration - always needed)
 - Web Search (general utility - always needed)
 
-## How to Apply to Remaining Actions
+## Implementation Pattern
 
-For each action file:
+Most plugins use a helper function pattern for cleaner code:
 
-1. **Add import**:
-   ```typescript
-   import { shouldCdpPluginBeActive } from "../matcher";
-   ```
+### Option 1: Action Helper (Recommended)
 
-2. **Update validate signature** (add `state?: State`):
-   ```typescript
-   validate: async (_runtime: IAgentRuntime, message: Memory, state?: State) => {
-   ```
+```typescript
+// src/plugins/plugin-cdp/utils/actionHelpers.ts
+import { shouldCdpPluginBeInContext } from "../matcher";
 
-3. **Add context check at start**:
-   ```typescript
-   // Check plugin context first
-   if (!shouldCdpPluginBeActive(state)) {
-     return false;
-   }
-   ```
+export function validateCdpService(
+  runtime: IAgentRuntime,
+  actionName: string,
+  state?: State,
+  message?: Memory
+): boolean {
+  // Check plugin context first
+  if (!shouldCdpPluginBeInContext(state, message)) {
+    return false;
+  }
+  // Then check service availability
+  const service = runtime.getService(CdpService.serviceType);
+  return !!service;
+}
+
+// In action file:
+validate: async (runtime, message, state) => {
+  return validateCdpService(runtime, 'ACTION_NAME', state, message);
+}
+```
+
+### Option 2: Direct Import
+
+```typescript
+import { shouldCdpPluginBeActive } from "../matcher";
+
+validate: async (_runtime: IAgentRuntime, message: Memory, state?: State) => {
+  // Check plugin context first
+  if (!shouldCdpPluginBeActive(state)) {
+    return false;
+  }
+  // Then check service
+  const service = _runtime.getService(ServiceType);
+  return !!service;
+}
+```
 
 ## How to Apply to New Plugins
 
