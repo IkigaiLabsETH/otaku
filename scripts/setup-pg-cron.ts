@@ -120,13 +120,15 @@ async function main() {
         DELETE FROM gamification.leaderboard_snapshots WHERE scope = 'all_time';
         INSERT INTO gamification.leaderboard_snapshots (scope, rank, user_id, points, snapshot_at)
         SELECT 'all_time', ROW_NUMBER() OVER (ORDER BY all_time_points DESC), user_id, all_time_points, NOW()
-        FROM gamification.point_balances WHERE all_time_points > 0
+        FROM gamification.point_balances 
+        WHERE all_time_points > 0 AND (is_agent = FALSE OR is_agent IS NULL)
         ORDER BY all_time_points DESC LIMIT 100;
         
         DELETE FROM gamification.leaderboard_snapshots WHERE scope = 'weekly';
         INSERT INTO gamification.leaderboard_snapshots (scope, rank, user_id, points, snapshot_at)
         SELECT 'weekly', ROW_NUMBER() OVER (ORDER BY weekly_points DESC), user_id, weekly_points, NOW()
-        FROM gamification.point_balances WHERE weekly_points > 0
+        FROM gamification.point_balances 
+        WHERE weekly_points > 0 AND (is_agent = FALSE OR is_agent IS NULL)
         ORDER BY weekly_points DESC LIMIT 100;
         COMMIT;
       `

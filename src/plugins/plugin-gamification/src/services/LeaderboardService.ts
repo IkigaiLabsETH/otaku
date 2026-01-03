@@ -4,7 +4,7 @@ import {
   type IAgentRuntime,
   type UUID,
 } from '@elizaos/core';
-import { desc, eq, sql } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import { leaderboardSnapshotsTable, pointBalancesTable } from '../schema';
 
@@ -86,6 +86,7 @@ export class LeaderboardService extends Service {
       .select({ snapshotAt: leaderboardSnapshotsTable.snapshotAt })
       .from(leaderboardSnapshotsTable)
       .where(eq(leaderboardSnapshotsTable.scope, scope))
+      .orderBy(desc(leaderboardSnapshotsTable.snapshotAt))
       .limit(1);
 
     return result?.snapshotAt || null;
@@ -167,6 +168,7 @@ export class LeaderboardService extends Service {
   /**
    * Manual weekly reset - useful for testing
    * In production, pg_cron handles this every Monday at 00:00 UTC
+   * Note: Mirrors the cron job behavior (updates updatedAt)
    */
   async resetWeeklyPoints(): Promise<void> {
     const db = this.getDb();
@@ -177,8 +179,10 @@ export class LeaderboardService extends Service {
 
     await db
       .update(pointBalancesTable)
-      .set({ weeklyPoints: 0 })
-      .where(sql`1=1`);
+      .set({ 
+        weeklyPoints: 0,
+        updatedAt: new Date(),
+      });
 
     logger.info('[LeaderboardService] Manual weekly points reset completed');
   }

@@ -28,7 +28,7 @@ SELECT cron.schedule(
   -- Use transaction for atomicity
   BEGIN;
   
-  -- Clear and rebuild all_time snapshots
+  -- Clear and rebuild all_time snapshots (exclude agents/bots)
   DELETE FROM gamification.leaderboard_snapshots WHERE scope = 'all_time';
   INSERT INTO gamification.leaderboard_snapshots (scope, rank, user_id, points, snapshot_at)
   SELECT 
@@ -38,11 +38,12 @@ SELECT cron.schedule(
     all_time_points,
     NOW()
   FROM gamification.point_balances
-  WHERE all_time_points > 0
+  WHERE all_time_points > 0 
+    AND (is_agent = FALSE OR is_agent IS NULL)
   ORDER BY all_time_points DESC
   LIMIT 100;
   
-  -- Clear and rebuild weekly snapshots  
+  -- Clear and rebuild weekly snapshots (exclude agents/bots)
   DELETE FROM gamification.leaderboard_snapshots WHERE scope = 'weekly';
   INSERT INTO gamification.leaderboard_snapshots (scope, rank, user_id, points, snapshot_at)
   SELECT 
@@ -52,7 +53,8 @@ SELECT cron.schedule(
     weekly_points,
     NOW()
   FROM gamification.point_balances
-  WHERE weekly_points > 0
+  WHERE weekly_points > 0 
+    AND (is_agent = FALSE OR is_agent IS NULL)
   ORDER BY weekly_points DESC
   LIMIT 100;
   
