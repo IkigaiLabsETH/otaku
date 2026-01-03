@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { Client } from 'pg';
 import { logger } from '@elizaos/core';
 import type { AgentServer } from '../../index';
 import { sendError, sendSuccess } from '../shared/response-utils';
@@ -74,6 +75,28 @@ let lastSuccessfulQuery = 0;
 let poolHealthy = true;
 
 /**
+ * Execute SQL with a FRESH direct connection (bypasses pool entirely)
+ * This is the nuclear option when pool is completely dead
+ */
+async function executeWithFreshConnection(sql: string): Promise<{ rows: any[] }> {
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error('No database connection string available');
+  }
+  
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    const result = await client.query(sql);
+    lastSuccessfulQuery = Date.now();
+    poolHealthy = true;
+    return result;
+  } finally {
+    await client.end().catch(() => {}); // Always cleanup
+  }
+}
+
+/**
  * Ensure database connection is healthy before executing query
  * Railway's proxy silently kills idle connections - this detects and recovers
  */
@@ -97,7 +120,7 @@ async function ensureConnection(db: any): Promise<void> {
 
 /**
  * Execute SQL with retry on connection errors
- * Handles "Client was closed" errors from stale pool connections
+ * Falls back to fresh direct connection when pool is completely dead
  */
 async function executeWithRetry(
   db: any,
@@ -126,6 +149,20 @@ async function executeWithRetry(
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
+      
+      // Pool completely dead - try fresh connection as last resort
+      if (isRetryableError(error)) {
+        logger.warn('[Auth] Pool dead after retries, attempting fresh direct connection...');
+        try {
+          const result = await executeWithFreshConnection(sql);
+          logger.info('[Auth] Fresh connection succeeded');
+          return result;
+        } catch (freshError: any) {
+          logger.error('[Auth] Fresh connection also failed:', freshError?.message);
+          throw freshError;
+        }
+      }
+      
       throw error;
     }
   }
@@ -140,10 +177,14 @@ async function executeWithRetry(
 async function initUserRegistry(db: any): Promise<void> {
   // Warmup: Run a simple query to establish connection pool
   // This helps prevent "Client was closed" errors on first auth attempt
+  let warmupSuccess = false;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       await db.execute('SELECT 1 as warmup');
-      logger.info('[Auth] Database connection warmed up');
+      logger.info('[Auth] Database connection warmed up via pool');
+      warmupSuccess = true;
+      lastSuccessfulQuery = Date.now();
+      poolHealthy = true;
       break;
     } catch (error: any) {
       const delay = 500 * Math.pow(2, attempt);
@@ -151,6 +192,17 @@ async function initUserRegistry(db: any): Promise<void> {
       if (attempt < 2) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
+    }
+  }
+  
+  // If pool warmup failed, try fresh connection to verify DB is reachable
+  if (!warmupSuccess) {
+    logger.warn('[Auth] Pool warmup failed, trying fresh connection...');
+    try {
+      await executeWithFreshConnection('SELECT 1 as warmup');
+      logger.info('[Auth] Database reachable via fresh connection (pool may need time)');
+    } catch (freshError: any) {
+      logger.error('[Auth] Fresh connection also failed - database may be unreachable:', freshError?.message);
     }
   }
   

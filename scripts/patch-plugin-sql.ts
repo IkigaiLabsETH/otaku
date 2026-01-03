@@ -25,6 +25,17 @@ const PATCHES = [
     replace: "await tx.execute(sql.raw(`SET LOCAL app.entity_id = '${entityId}'`));",
   },
   {
+    name: 'Exclude user_registry from RLS (auth lookup table)',
+    // Fix: user_registry is queried during auth to LOOK UP the entity_id.
+    // RLS requires entity context to be set, but auth doesn't have it yet - chicken and egg.
+    // user_registry stores auth mappings, not user data, so no entity isolation needed.
+    search: `'__drizzle_migrations'  -- Migration tracking
+          )`,
+    replace: `'__drizzle_migrations', -- Migration tracking
+            'user_registry'         -- Auth lookup table (queried before entity context exists)
+          )`,
+  },
+  {
     name: 'PostgreSQL pool configuration (Railway-optimized)',
     // Fix: Railway Postgres proxy silently closes idle connections.
     // - Short idle timeout (10s) to evict stale connections quickly
