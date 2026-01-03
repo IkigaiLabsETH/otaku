@@ -9,8 +9,8 @@ import { validateChannelId } from '../api/shared/validation';
  */
 export const createAuthRateLimit = () => {
   return rateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes (shorter window, resets faster)
-    max: 30, // 30 attempts per 5 minutes (allows for retries on errors)
+    windowMs: 60 * 1000, // 1 minute
+    max: 30, // 30 attempts per minute (allows for retries on errors)
     message: {
       success: false,
       error: {
