@@ -3,23 +3,24 @@ import { logger } from '@elizaos/core';
 import { validateChannelId } from '../api/shared/validation';
 
 /**
- * Strict rate limiting for authentication endpoints
- * Prevents credential stuffing and brute force attacks
+ * Rate limiting for authentication endpoints
+ * Prevents credential stuffing and brute force attacks while allowing
+ * legitimate users to retry on transient errors (DB connection issues, etc.)
  */
 export const createAuthRateLimit = () => {
   return rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit each IP to 10 login attempts per 15 minutes
+    windowMs: 5 * 60 * 1000, // 5 minutes (shorter window, resets faster)
+    max: 30, // 30 attempts per 5 minutes (allows for retries on errors)
     message: {
       success: false,
       error: {
         code: 'AUTH_RATE_LIMIT_EXCEEDED',
-        message: 'Too many authentication attempts. Please try again later.',
+        message: 'Too many authentication attempts. Please try again in a few minutes.',
       },
     },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: false, // Count all requests, not just failures
+    skipSuccessfulRequests: true, // Only count failed attempts
     handler: (req, res) => {
       const clientIp = req.ip || 'unknown';
       logger.warn(`[SECURITY] Auth rate limit exceeded for IP: ${clientIp}`);
@@ -27,7 +28,7 @@ export const createAuthRateLimit = () => {
         success: false,
         error: {
           code: 'AUTH_RATE_LIMIT_EXCEEDED',
-          message: 'Too many authentication attempts. Please try again later.',
+          message: 'Too many authentication attempts. Please try again in a few minutes.',
         },
       });
     },
