@@ -39,8 +39,55 @@ export class LeaderboardService extends Service {
 
   static async start(runtime: IAgentRuntime): Promise<LeaderboardService> {
     const service = new LeaderboardService(runtime);
+    
+    // Mark agent user IDs in the database so pg_cron jobs can filter them
+    await service.markAgentUserIds();
+    
     logger.info('[LeaderboardService] Initialized (pg_cron handles scheduling)');
     return service;
+  }
+
+  /**
+   * Mark agent user IDs in point_balances table with is_agent=TRUE
+   * This ensures pg_cron jobs correctly filter out agent accounts from leaderboards
+   */
+  private async markAgentUserIds(): Promise<void> {
+    const db = this.getDb();
+    if (!db) return;
+
+    const agentIds = [
+      this.runtime.agentId,
+      this.runtime.character.id,
+    ].filter((id): id is UUID => !!id);
+
+    // Remove duplicates
+    const uniqueAgentIds = [...new Set(agentIds)];
+    
+    for (const agentId of uniqueAgentIds) {
+      try {
+        // Upsert: create with is_agent=TRUE or update existing to is_agent=TRUE
+        await db
+          .insert(pointBalancesTable)
+          .values({
+            userId: agentId,
+            allTimePoints: 0,
+            weeklyPoints: 0,
+            streakDays: 0,
+            level: 0,
+            isAgent: true,
+          })
+          .onConflictDoUpdate({
+            target: pointBalancesTable.userId,
+            set: {
+              isAgent: true,
+              updatedAt: new Date(),
+            },
+          });
+        logger.debug(`[LeaderboardService] Marked agent ${agentId} as is_agent=TRUE`);
+      } catch (err) {
+        logger.warn(`[LeaderboardService] Failed to mark agent ${agentId}: ${err}`);
+      }
+    }
   }
 
   /**
