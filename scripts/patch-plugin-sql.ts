@@ -38,6 +38,18 @@ const PATCHES = [
       keepAliveInitialDelayMillis: 10000,
     };`,
   },
+  {
+    name: 'Pool error handler (prevent crashes on connection errors)',
+    // Fix: pg Pool emits 'error' when a connection dies. Without handler, pool can get into bad state.
+    search: `this.pool = new Pool2(poolConfig);
+    this.db = drizzle2(this.pool, { casing: "snake_case" });`,
+    replace: `this.pool = new Pool2(poolConfig);
+    // Handle pool errors to prevent crashes and log connection issues
+    this.pool.on('error', (err) => {
+      logger13.warn({ src: "plugin:sql", error: err?.message || String(err) }, "Pool client error (connection will be replaced)");
+    });
+    this.db = drizzle2(this.pool, { casing: "snake_case" });`,
+  },
 ];
 
 function applyPatches() {

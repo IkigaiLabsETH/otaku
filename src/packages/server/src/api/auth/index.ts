@@ -38,13 +38,45 @@ function escapeSql(str: string): string {
 }
 
 /**
+ * Check if error is a retryable connection error
+ * Handles both direct pg errors and DrizzleQueryError wrappers
+ */
+function isRetryableError(error: any): boolean {
+  const patterns = ['Client was closed', 'connection', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'];
+  
+  // Check error message
+  const message = error?.message || '';
+  if (patterns.some(p => message.toLowerCase().includes(p.toLowerCase()))) {
+    return true;
+  }
+  
+  // Check nested cause (DrizzleQueryError wraps original)
+  const cause = error?.cause;
+  if (cause?.message && patterns.some(p => cause.message.toLowerCase().includes(p.toLowerCase()))) {
+    return true;
+  }
+  
+  // Check stringified error (catches nested errors)
+  try {
+    const str = JSON.stringify(error);
+    if (patterns.some(p => str.toLowerCase().includes(p.toLowerCase()))) {
+      return true;
+    }
+  } catch {
+    // JSON.stringify can fail on circular refs
+  }
+  
+  return false;
+}
+
+/**
  * Execute SQL with retry on connection errors
  * Handles "Client was closed" errors from stale pool connections
  */
 async function executeWithRetry(
   db: any,
   sql: string,
-  maxRetries = 2
+  maxRetries = 3
 ): Promise<{ rows: any[] }> {
   let lastError: Error | null = null;
   
@@ -53,15 +85,11 @@ async function executeWithRetry(
       return await db.execute(sql);
     } catch (error: any) {
       lastError = error;
-      const isConnectionError = 
-        error?.message?.includes('Client was closed') ||
-        error?.message?.includes('connection') ||
-        error?.message?.includes('ECONNRESET');
       
-      if (isConnectionError && attempt < maxRetries) {
-        logger.warn(`[Auth] DB connection error, retrying (attempt ${attempt + 1}/${maxRetries})...`);
-        // Small delay before retry
-        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+      if (isRetryableError(error) && attempt < maxRetries) {
+        const delay = 200 * Math.pow(2, attempt); // 200ms, 400ms, 800ms
+        logger.warn(`[Auth] DB connection error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
       throw error;
@@ -73,19 +101,36 @@ async function executeWithRetry(
 
 /**
  * Initialize user_registry table (PostgreSQL)
+ * Also warms up the connection pool to prevent cold-start failures
  */
 async function initUserRegistry(db: any): Promise<void> {
+  // Warmup: Run a simple query to establish connection pool
+  // This helps prevent "Client was closed" errors on first auth attempt
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await db.execute('SELECT 1 as warmup');
+      logger.info('[Auth] Database connection warmed up');
+      break;
+    } catch (error: any) {
+      const delay = 500 * Math.pow(2, attempt);
+      logger.warn(`[Auth] DB warmup failed (attempt ${attempt + 1}/3), retrying in ${delay}ms...`);
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
   try {
     // Check if table exists - raw SQL string
-    const tableCheck = await db.execute(`
+    const tableCheck = await executeWithRetry(db, `
       SELECT EXISTS (
-        SELECT FROM information_schema.tables 
+        SELECT FROM information_schema.tables
         WHERE table_schema = 'public' AND table_name = 'user_registry'
       ) as exists
     `);
-    
+
     const tableExists = tableCheck.rows?.[0]?.exists === true || tableCheck.rows?.[0]?.exists === 't';
-    
+
     if (!tableExists) {
       logger.warn('[Auth] user_registry table does not exist - run migration script first');
       logger.warn('[Auth] Run: psql $DATABASE_URL -f scripts/migrate-entity-ids.sql');
