@@ -38,6 +38,40 @@ function escapeSql(str: string): string {
 }
 
 /**
+ * Execute SQL with retry on connection errors
+ * Handles "Client was closed" errors from stale pool connections
+ */
+async function executeWithRetry(
+  db: any,
+  sql: string,
+  maxRetries = 2
+): Promise<{ rows: any[] }> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await db.execute(sql);
+    } catch (error: any) {
+      lastError = error;
+      const isConnectionError = 
+        error?.message?.includes('Client was closed') ||
+        error?.message?.includes('connection') ||
+        error?.message?.includes('ECONNRESET');
+      
+      if (isConnectionError && attempt < maxRetries) {
+        logger.warn(`[Auth] DB connection error, retrying (attempt ${attempt + 1}/${maxRetries})...`);
+        // Small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+        continue;
+      }
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Initialize user_registry table (PostgreSQL)
  */
 async function initUserRegistry(db: any): Promise<void> {
@@ -101,7 +135,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
       // - username: string validated
       
       // Check if this (cdpUserId, email) pair exists
-      const existingResult = await db.execute(`
+      const existingResult = await executeWithRetry(db, `
         SELECT entity_id, email, username FROM user_registry 
         WHERE cdp_user_id = '${escapeSql(cdpUserId)}'::uuid AND email = '${escapeSql(normalizedEmail)}'
         LIMIT 1
@@ -114,7 +148,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
         const entityId = existingUser.entity_id as string;
         
         // Update last login and username
-        await db.execute(`
+        await executeWithRetry(db, `
           UPDATE user_registry SET last_login_at = NOW(), username = '${escapeSql(username)}' 
           WHERE entity_id = '${escapeSql(entityId)}'::uuid
         `);
@@ -124,7 +158,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
       }
       
       // Check if cdpUserId exists with DIFFERENT email (potential attack or user error)
-      const cdpResult = await db.execute(`
+      const cdpResult = await executeWithRetry(db, `
         SELECT entity_id, email FROM user_registry 
         WHERE cdp_user_id = '${escapeSql(cdpUserId)}'::uuid
         LIMIT 1
@@ -139,7 +173,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
         
         if (isPlaceholderEmail) {
           // Update placeholder email to real email
-          await db.execute(`
+          await executeWithRetry(db, `
             UPDATE user_registry SET email = '${escapeSql(normalizedEmail)}', username = '${escapeSql(username)}', last_login_at = NOW()
             WHERE entity_id = '${escapeSql(entityId)}'::uuid
           `);
@@ -166,8 +200,8 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
       // Check if email already exists with a DIFFERENT cdpUserId
       // This handles: same user, different CDP auth method (email vs Google login)
       // Return existing account instead of creating duplicate
-      const emailResult = await db.execute(`
-        SELECT entity_id, cdp_user_id, username FROM user_registry 
+      const emailResult = await executeWithRetry(db, `
+        SELECT entity_id, cdp_user_id, username FROM user_registry
         WHERE email = '${escapeSql(normalizedEmail)}'
         ORDER BY registered_at ASC
         LIMIT 1
@@ -179,7 +213,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
         
         // Return existing account, keep original cdp_user_id (auth method)
         // Only update last login and username
-        await db.execute(`
+        await executeWithRetry(db, `
           UPDATE user_registry SET last_login_at = NOW(), username = '${escapeSql(username)}'
           WHERE entity_id = '${escapeSql(entityId)}'::uuid
         `);
@@ -193,7 +227,7 @@ export function createAuthRouter(serverInstance: AgentServer): express.Router {
       // Truly new user - generate server-side entityId and register
       const entityId = generateEntityId();
       
-      await db.execute(`
+      await executeWithRetry(db, `
         INSERT INTO user_registry (entity_id, cdp_user_id, email, username, registered_at, last_login_at)
         VALUES ('${escapeSql(entityId)}'::uuid, '${escapeSql(cdpUserId)}'::uuid, '${escapeSql(normalizedEmail)}', '${escapeSql(username)}', NOW(), NOW())
       `);

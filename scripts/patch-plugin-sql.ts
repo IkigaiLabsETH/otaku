@@ -24,6 +24,20 @@ const PATCHES = [
     // SQL injection risk is mitigated by this type validation before reaching this code
     replace: "await tx.execute(sql.raw(`SET LOCAL app.entity_id = '${entityId}'`));",
   },
+  {
+    name: 'PostgreSQL pool configuration (idle timeout, keepalive)',
+    // Fix: Railway Postgres proxy closes idle connections. Default pg Pool doesn't handle this.
+    // Add idle timeout and keepalive to prevent "Client was closed" errors.
+    search: 'const poolConfig = { connectionString };',
+    replace: `const poolConfig = {
+      connectionString,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      max: 20,
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000,
+    };`,
+  },
 ];
 
 function applyPatches() {

@@ -44,7 +44,10 @@ async function resolveWalletAccountName(
 
 export function cdpRouter(serverInstance: AgentServer): express.Router {
   const router = express.Router();
-  const db = serverInstance?.database;
+  // dbAdapter for ORM methods like getEntitiesByIds
+  const dbAdapter = serverInstance?.database;
+  // Raw Drizzle db for execute() queries
+  const rawDb = (dbAdapter as any)?.db;
 
   // Get the singleton instance of CdpTransactionManager
   const cdpTransactionManager = CdpTransactionManager.getInstance();
@@ -53,13 +56,13 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
   router.use(requireAuth);
 
   // Database executor for resolveWalletAccountName
-  const dbExecute = db ? ((sql: string) => (db as any).execute(sql)) : null;
+  const dbExecute = rawDb ? ((sql: string) => rawDb.execute(sql)) : null;
 
   /**
    * Helper: Get wallet address from entity metadata for GET requests
    */
   async function getWalletAddressFromEntity(userId: string): Promise<string | null> {
-    if (!db) {
+    if (!dbAdapter) {
       logger.warn('[CDP API] Database not available, cannot fetch entity metadata');
       return null;
     }
@@ -71,7 +74,7 @@ export function cdpRouter(serverInstance: AgentServer): express.Router {
         return null;
       }
       
-      const entities = await db.getEntitiesByIds([validatedUserId]);
+      const entities = await dbAdapter.getEntitiesByIds([validatedUserId]);
       if (!entities || entities.length === 0) {
         return null;
       }
