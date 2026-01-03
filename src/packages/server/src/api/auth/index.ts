@@ -42,7 +42,7 @@ function escapeSql(str: string): string {
  * Handles both direct pg errors and DrizzleQueryError wrappers
  */
 function isRetryableError(error: any): boolean {
-  const patterns = ['Client was closed', 'connection', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'];
+  const patterns = ['Client was closed', 'connection', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'terminating'];
   
   // Check error message
   const message = error?.message || '';
@@ -69,6 +69,32 @@ function isRetryableError(error: any): boolean {
   return false;
 }
 
+// Track pool health - reset on successful query
+let lastSuccessfulQuery = 0;
+let poolHealthy = true;
+
+/**
+ * Ensure database connection is healthy before executing query
+ * Railway's proxy silently kills idle connections - this detects and recovers
+ */
+async function ensureConnection(db: any): Promise<void> {
+  const now = Date.now();
+  // If last successful query was recent (< 30s), skip health check
+  if (poolHealthy && now - lastSuccessfulQuery < 30000) {
+    return;
+  }
+  
+  try {
+    await db.execute('SELECT 1');
+    lastSuccessfulQuery = now;
+    poolHealthy = true;
+  } catch (error: any) {
+    logger.warn('[Auth] Connection health check failed, pool may be stale');
+    poolHealthy = false;
+    // Don't throw - let the actual query handle the retry
+  }
+}
+
 /**
  * Execute SQL with retry on connection errors
  * Handles "Client was closed" errors from stale pool connections
@@ -80,14 +106,22 @@ async function executeWithRetry(
 ): Promise<{ rows: any[] }> {
   let lastError: Error | null = null;
   
+  // Pre-flight connection check
+  await ensureConnection(db);
+  
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await db.execute(sql);
+      const result = await db.execute(sql);
+      // Mark pool as healthy on success
+      lastSuccessfulQuery = Date.now();
+      poolHealthy = true;
+      return result;
     } catch (error: any) {
       lastError = error;
+      poolHealthy = false;
       
       if (isRetryableError(error) && attempt < maxRetries) {
-        const delay = 200 * Math.pow(2, attempt); // 200ms, 400ms, 800ms
+        const delay = 500 * Math.pow(2, attempt); // 500ms, 1000ms, 2000ms (longer delays)
         logger.warn(`[Auth] DB connection error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;

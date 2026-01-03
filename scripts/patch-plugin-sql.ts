@@ -25,17 +25,21 @@ const PATCHES = [
     replace: "await tx.execute(sql.raw(`SET LOCAL app.entity_id = '${entityId}'`));",
   },
   {
-    name: 'PostgreSQL pool configuration (idle timeout, keepalive)',
-    // Fix: Railway Postgres proxy closes idle connections. Default pg Pool doesn't handle this.
-    // Add idle timeout and keepalive to prevent "Client was closed" errors.
+    name: 'PostgreSQL pool configuration (Railway-optimized)',
+    // Fix: Railway Postgres proxy silently closes idle connections.
+    // - Short idle timeout (10s) to evict stale connections quickly
+    // - allowExitOnIdle: true - don't hold process open for idle connections
+    // - keepAlive with short delay to detect dead connections
     search: 'const poolConfig = { connectionString };',
     replace: `const poolConfig = {
       connectionString,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-      max: 20,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 5000,
+      max: 10,
+      min: 0,
       keepAlive: true,
-      keepAliveInitialDelayMillis: 10000,
+      keepAliveInitialDelayMillis: 5000,
+      allowExitOnIdle: true,
     };`,
   },
   {
