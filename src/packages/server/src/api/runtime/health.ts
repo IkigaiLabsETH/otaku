@@ -35,47 +35,25 @@ export function createHealthRouter(elizaOS: ElizaOS, serverInstance: AgentServer
     );
   });
 
-  // Comprehensive health check - verifies server and database connectivity
-  // Returns agent list similar to /api/agents for Railway healthcheck
+  // Health check - proxies to /api/agents for Railway healthcheck
+  // Prevents 304 responses with no-cache headers
   router.get('/health', async (_req, res) => {
-    logger.log({ apiRoute: '/health' }, 'Health check route hit');
-    const db = serverInstance?.database;
-    
     // Prevent 304 responses - always return fresh data
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     
     try {
-      if (!db) {
-        return res.status(503).json({
-          success: false,
-          error: { code: 'DB_ERROR', message: 'Database not available' },
-        });
-      }
-      
-      // Query agents to verify database connectivity (same as /api/agents)
-      const allAgents = await db.getAgents();
-      const runtimes = elizaOS.getAgents().map((a) => a.agentId);
-
-      const agents = allAgents
-        .map((agent: any) => ({
-          id: agent.id,
-          name: agent.name || '',
-          status: agent.id && runtimes.includes(agent.id) ? 'active' : 'inactive',
-        }))
-        .filter((agent: any) => agent.id);
-
-      res.status(200).json({ success: true, data: { agents } });
+      // Internal proxy to /api/agents
+      const port = process.env.PORT || 3000;
+      const response = await fetch(`http://localhost:${port}/api/agents`);
+      const data = await response.json();
+      res.status(response.status).json(data);
     } catch (error) {
-      logger.error('[Health] Database connectivity check failed:', error);
-      res.status(503).json({
-        success: false,
-        error: {
-          code: 'DB_ERROR',
-          message: 'Database connection failed',
-          details: error instanceof Error ? error.message : String(error),
-        },
+      logger.error('[Health] Failed to proxy to /api/agents:', error);
+      res.status(503).json({ 
+        success: false, 
+        error: { code: 'PROXY_ERROR', message: 'Health check failed' }
       });
     }
   });
@@ -83,7 +61,7 @@ export function createHealthRouter(elizaOS: ElizaOS, serverInstance: AgentServer
   // Server stop endpoint (admin only)
   router.post('/stop', requireAuth as any, requireAdmin as any, (_req: AuthenticatedRequest, res) => {
     logger.log({ apiRoute: '/stop' }, 'Server stopping...');
-    serverInstance?.stop(); // Use optional chaining in case server is undefined
+    serverInstance?.stop();
     res.json({ message: 'Server stopping...' });
   });
 
