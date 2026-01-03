@@ -12,14 +12,19 @@ interface RuntimeWithDb {
   db?: PgDatabase<PgQueryResultHKT>;
 }
 
+/**
+ * LeaderboardService - Read-only service for leaderboard queries
+ * 
+ * SCHEDULING: Aggregation and weekly resets are handled by pg_cron jobs.
+ * See: migrations/001_pg_cron_setup.sql
+ * 
+ * This service provides:
+ * - Reading from pre-aggregated leaderboard snapshots (fast)
+ * - Manual aggregation methods for testing/one-off runs
+ */
 export class LeaderboardService extends Service {
   static serviceType = 'leaderboard-sync';
-  capabilityDescription = 'Aggregates leaderboard snapshots and handles weekly resets';
-
-  private snapshotTimeout: NodeJS.Timeout | null = null;
-  private weeklyResetTimeout: NodeJS.Timeout | null = null;
-  private isStopped = false;
-  private readonly SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+  capabilityDescription = 'Reads leaderboard snapshots aggregated by pg_cron';
 
   private getDb(): PgDatabase<PgQueryResultHKT> | undefined {
     return (this.runtime as unknown as RuntimeWithDb).db;
@@ -29,49 +34,68 @@ export class LeaderboardService extends Service {
    * Check if a userId belongs to an agent (not a human user)
    */
   private isAgent(userId: UUID): boolean {
-    // Check if userId matches the agent's ID or character ID
     return userId === this.runtime.agentId || userId === this.runtime.character.id;
   }
 
   static async start(runtime: IAgentRuntime): Promise<LeaderboardService> {
     const service = new LeaderboardService(runtime);
-    service.startSnapshotWorker();
-    service.scheduleWeeklyReset();
-    logger.info('[LeaderboardService] Initialized');
+    logger.info('[LeaderboardService] Initialized (pg_cron handles scheduling)');
     return service;
   }
 
   /**
-   * Start snapshot aggregation worker using recursive setTimeout
-   * This prevents queue buildup if aggregation takes longer than the interval
+   * Get cached leaderboard from snapshots (fast - reads from pre-aggregated table)
    */
-  private startSnapshotWorker(): void {
-    this.runSnapshotLoop();
+  async getCachedLeaderboard(scope: 'weekly' | 'all_time', limit = 100): Promise<Array<{
+    rank: number;
+    userId: string;
+    points: number;
+  }>> {
+    const db = this.getDb();
+    if (!db) {
+      logger.error('[LeaderboardService] Database not available');
+      return [];
+    }
+
+    const snapshots = await db
+      .select({
+        rank: leaderboardSnapshotsTable.rank,
+        userId: leaderboardSnapshotsTable.userId,
+        points: leaderboardSnapshotsTable.points,
+      })
+      .from(leaderboardSnapshotsTable)
+      .where(eq(leaderboardSnapshotsTable.scope, scope))
+      .orderBy(leaderboardSnapshotsTable.rank)
+      .limit(limit);
+
+    return snapshots.map(s => ({
+      rank: s.rank,
+      userId: s.userId,
+      points: s.points,
+    }));
   }
 
   /**
-   * Run snapshot aggregation loop with recursive setTimeout
-   * Prevents memory leak from setInterval queue buildup
+   * Get last snapshot timestamp
    */
-  private async runSnapshotLoop(): Promise<void> {
-    if (this.isStopped) return;
+  async getLastSnapshotTime(scope: 'weekly' | 'all_time'): Promise<Date | null> {
+    const db = this.getDb();
+    if (!db) return null;
 
-    try {
-      await this.aggregateSnapshots();
-    } catch (error) {
-      logger.error({ error }, '[LeaderboardService] Error aggregating snapshots');
-    }
+    const [result] = await db
+      .select({ snapshotAt: leaderboardSnapshotsTable.snapshotAt })
+      .from(leaderboardSnapshotsTable)
+      .where(eq(leaderboardSnapshotsTable.scope, scope))
+      .limit(1);
 
-    // Schedule next run only after current one completes
-    if (!this.isStopped) {
-      this.snapshotTimeout = setTimeout(() => this.runSnapshotLoop(), this.SNAPSHOT_INTERVAL_MS);
-    }
+    return result?.snapshotAt || null;
   }
 
   /**
-   * Aggregate leaderboard snapshots
+   * Manual aggregation - useful for testing or one-off runs
+   * In production, pg_cron handles this every 5 minutes
    */
-  private async aggregateSnapshots(): Promise<void> {
+  async aggregateSnapshots(): Promise<void> {
     const db = this.getDb();
     if (!db) {
       logger.error('[LeaderboardService] Database not available');
@@ -88,7 +112,6 @@ export class LeaderboardService extends Service {
         .from(pointBalancesTable)
         .orderBy(desc(pointBalancesTable.allTimePoints));
 
-      // Filter out agents and limit to top 100
       const allTimeBalances = allTimeBalancesRaw
         .filter((balance) => !this.isAgent(balance.userId as UUID))
         .slice(0, 100);
@@ -102,7 +125,6 @@ export class LeaderboardService extends Service {
         .from(pointBalancesTable)
         .orderBy(desc(pointBalancesTable.weeklyPoints));
 
-      // Filter out agents and limit to top 100
       const weeklyBalances = weeklyBalancesRaw
         .filter((balance) => !this.isAgent(balance.userId as UUID))
         .slice(0, 100);
@@ -122,13 +144,11 @@ export class LeaderboardService extends Service {
         points: balance.points,
       }));
 
-      // Use transaction to ensure atomicity and prevent connection issues
+      // Use transaction for atomicity
       await db.transaction(async (tx) => {
-        // Clear old snapshots
         await tx.delete(leaderboardSnapshotsTable).where(eq(leaderboardSnapshotsTable.scope, 'all_time'));
         await tx.delete(leaderboardSnapshotsTable).where(eq(leaderboardSnapshotsTable.scope, 'weekly'));
 
-        // Batch insert all records at once (more efficient and prevents connection timeouts)
         if (allTimeSnapshots.length > 0) {
           await tx.insert(leaderboardSnapshotsTable).values(allTimeSnapshots);
         }
@@ -137,46 +157,18 @@ export class LeaderboardService extends Service {
         }
       });
 
-      logger.debug('[LeaderboardService] Snapshots aggregated');
+      logger.debug('[LeaderboardService] Manual snapshot aggregation completed');
     } catch (error) {
       logger.error({ error }, '[LeaderboardService] Error in aggregateSnapshots');
-      throw error; // Re-throw to be caught by runSnapshotLoop error handler
+      throw error;
     }
   }
 
   /**
-   * Schedule weekly reset using recursive setTimeout
-   * Prevents memory leak from setInterval queue buildup
+   * Manual weekly reset - useful for testing
+   * In production, pg_cron handles this every Monday at 00:00 UTC
    */
-  private scheduleWeeklyReset(): void {
-    const now = new Date();
-    const nextMonday = this.getNextMonday(now);
-    const msUntilReset = nextMonday.getTime() - now.getTime();
-
-    this.weeklyResetTimeout = setTimeout(() => this.runWeeklyResetLoop(), msUntilReset);
-
-    logger.info(`[LeaderboardService] Weekly reset scheduled for ${nextMonday.toISOString()}`);
-  }
-
-  /**
-   * Run weekly reset loop with recursive setTimeout
-   */
-  private async runWeeklyResetLoop(): Promise<void> {
-    if (this.isStopped) return;
-
-    await this.resetWeeklyPoints();
-
-    // Schedule next weekly reset only after current one completes
-    if (!this.isStopped) {
-      const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-      this.weeklyResetTimeout = setTimeout(() => this.runWeeklyResetLoop(), WEEK_MS);
-    }
-  }
-
-  /**
-   * Reset weekly points
-   */
-  private async resetWeeklyPoints(): Promise<void> {
+  async resetWeeklyPoints(): Promise<void> {
     const db = this.getDb();
     if (!db) {
       logger.error('[LeaderboardService] Database not available');
@@ -186,37 +178,12 @@ export class LeaderboardService extends Service {
     await db
       .update(pointBalancesTable)
       .set({ weeklyPoints: 0 })
-      .where(sql`1=1`); // Update all rows
+      .where(sql`1=1`);
 
-    logger.info('[LeaderboardService] Weekly points reset completed');
+    logger.info('[LeaderboardService] Manual weekly points reset completed');
   }
 
-  /**
-   * Get next Monday at 00:00 UTC
-   */
-  private getNextMonday(date: Date): Date {
-    const monday = new Date(date);
-    monday.setUTCHours(0, 0, 0, 0);
-    const dayOfWeek = monday.getUTCDay();
-    const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
-    monday.setUTCDate(monday.getUTCDate() + daysUntilMonday);
-    return monday;
-  }
-
-  /**
-   * Stop service
-   */
   async stop(): Promise<void> {
-    this.isStopped = true;
-    if (this.snapshotTimeout) {
-      clearTimeout(this.snapshotTimeout);
-      this.snapshotTimeout = null;
-    }
-    if (this.weeklyResetTimeout) {
-      clearTimeout(this.weeklyResetTimeout);
-      this.weeklyResetTimeout = null;
-    }
     logger.info('[LeaderboardService] Stopped');
   }
 }
-

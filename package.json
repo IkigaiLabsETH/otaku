@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "turbo run build && bun run start-server.ts",
     "dev:watch": "turbo run dev --parallel",
+    "prestart": "bun run scripts/setup-pg-cron.ts || true",
     "start": "bun run start-server.ts",
     "build": "turbo run build && bun run build:backend && bun run build:frontend",
     "build:all": "turbo run build",
@@ -75,6 +76,7 @@
     "lucide-react": "0.454.0",
     "next-themes": "^0.4.6",
     "pg": "^8.16.3",
+    "postgres": "^3.4.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-router-dom": "6.30.2",
