@@ -126,6 +126,10 @@ async function resolveWalletAccountName(
 
 export function cdpRouter(serverInstance: AgentServer): express.Router {
   const router = express.Router();
+  
+  // Version marker for deployment verification
+  logger.info('[CDP API] Initializing CDP router (v2 - with connection retry)');
+  
   // dbAdapter for ORM methods like getEntitiesByIds
   const dbAdapter = serverInstance?.database;
   // Raw Drizzle db for execute() queries
