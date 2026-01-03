@@ -6,16 +6,17 @@
 
 import { type IAgentRuntime, type Memory, type State, logger } from "@elizaos/core";
 import { BiconomyService } from "../services/biconomy.service";
+import { CdpService } from "../../../plugin-cdp/services/cdp.service";
 import { shouldBiconomyPluginBeInContext } from "../matcher";
 
 /**
- * Validate that Biconomy service is available and plugin context is active
+ * Validate that Biconomy service and CDP service are available and plugin context is active
  *
  * @param runtime - Agent runtime
  * @param actionName - Name of action for logging
  * @param state - Optional state for plugin context check
  * @param message - Optional message for plugin context check
- * @returns True if service is available and plugin context is active
+ * @returns True if services are available and plugin context is active
  */
 export function validateBiconomyService(
   runtime: IAgentRuntime,
@@ -35,6 +36,15 @@ export function validateBiconomyService(
 
     if (!service) {
       logger.warn(`[${actionName}] Biconomy service not available`);
+      return false;
+    }
+
+    const cdpService = runtime.getService(
+      CdpService.serviceType
+    ) as CdpService;
+
+    if (!cdpService) {
+      logger.warn(`[${actionName}] CDP service not available`);
       return false;
     }
 

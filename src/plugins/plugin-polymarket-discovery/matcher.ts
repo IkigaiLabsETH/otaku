@@ -1,5 +1,5 @@
 import type { Memory, State } from "@elizaos/core";
-import { matchesPluginContext, type PluginKeywordPatterns } from "../../utils/plugin-context-matcher";
+import { matchesPluginContext, type PluginKeywordPatterns } from "@/utils/plugin-context-matcher";
 
 /**
  * Keyword patterns for Polymarket plugin context activation
