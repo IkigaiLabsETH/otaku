@@ -1,10 +1,89 @@
 import express from 'express';
+import { Client } from 'pg';
 import { logger, validateUuid } from '@elizaos/core';
 import type { AgentServer } from '../../index';
 import { sendError, sendSuccess } from '../shared/response-utils';
 import { requireAuth, type AuthenticatedRequest } from '../../middleware';
 import { CdpTransactionManager } from '@/managers/cdp-transaction-manager';
 import { MAINNET_NETWORKS, NATIVE_TOKEN_ADDRESS } from '@/constants/chains';
+
+/**
+ * Execute a query with a fresh direct connection (bypasses pool).
+ * Used as fallback when the connection pool is dead.
+ */
+async function executeWithFreshConnection(sql: string): Promise<{ rows: any[] }> {
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error('No database connection string available');
+  }
+
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    const result = await client.query(sql);
+    return result;
+  } finally {
+    await client.end().catch(() => {}); // Always cleanup
+  }
+}
+
+/**
+ * Check if error is retryable (connection pool issues)
+ */
+function isRetryableError(error: any): boolean {
+  const message = error?.message || '';
+  return (
+    message.includes('Client was closed') ||
+    message.includes('Connection terminated') ||
+    message.includes('connection is closed') ||
+    message.includes('ECONNRESET') ||
+    message.includes('timeout')
+  );
+}
+
+/**
+ * Execute a query with retry logic and fresh connection fallback.
+ * Handles Railway's aggressive connection proxy that closes idle connections.
+ */
+async function executeWithRetry(
+  dbExecute: (sql: string) => Promise<{ rows: any[] }>,
+  sql: string,
+  maxRetries = 2
+): Promise<{ rows: any[] }> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await dbExecute(sql);
+    } catch (error: any) {
+      lastError = error;
+      
+      if (isRetryableError(error) && attempt < maxRetries) {
+        const delay = 200 * Math.pow(2, attempt);
+        logger.warn(`[CDP API] DB connection error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      // Pool dead - try fresh connection as last resort
+      if (isRetryableError(error)) {
+        logger.warn('[CDP API] Pool dead after retries, attempting fresh direct connection...');
+        try {
+          const result = await executeWithFreshConnection(sql);
+          logger.info('[CDP API] Fresh connection succeeded');
+          return result;
+        } catch (freshError: any) {
+          logger.error('[CDP API] Fresh connection also failed:', freshError?.message);
+          throw freshError;
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
 
 /**
  * Resolve entity_id to cdp_user_id from user_registry.
@@ -22,11 +101,14 @@ async function resolveWalletAccountName(
 
   try {
     const escapedId = entityId.replace(/'/g, "''");
-    const result = await dbExecute(`
+    const sql = `
       SELECT cdp_user_id FROM user_registry 
       WHERE entity_id = '${escapedId}'::uuid 
       LIMIT 1
-    `);
+    `;
+    
+    // Use executeWithRetry for resilience against pool failures
+    const result = await executeWithRetry(dbExecute, sql);
 
     if (result.rows?.[0]?.cdp_user_id) {
       const cdpUserId = result.rows[0].cdp_user_id as string;
