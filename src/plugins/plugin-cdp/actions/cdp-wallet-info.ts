@@ -5,6 +5,7 @@ import {
   type State,
   type HandlerCallback,
   type ActionResult,
+  type UUID,
   logger
 } from "@elizaos/core";
 import { getEntityWallet } from "../../../utils/entity";
@@ -104,7 +105,7 @@ export const cdpWalletInfo: Action = {
         const entity = await runtime.getEntityById(entityId);
         if (entity) {
           logger.debug(`[USER_WALLET_INFO] Agent entity metadata:`, JSON.stringify(entity.metadata, null, 2));
-          logger.debug(`[USER_WALLET_INFO] Agent entity names:`, entity.names);
+          logger.debug(`[USER_WALLET_INFO] Agent entity names:`, JSON.stringify(entity.names));
           
           // Try to get displayName from agent entity first
           entityName = (entity.metadata?.displayName as string);
@@ -112,13 +113,13 @@ export const cdpWalletInfo: Action = {
           // If not found, try to get the actual user entity (via author_id) which has the displayName
           if (!entityName && entity.metadata?.author_id) {
             try {
-              const userEntityId = entity.metadata.author_id as string;
+              const userEntityId = entity.metadata.author_id as UUID;
               logger.debug(`[USER_WALLET_INFO] Fetching user entity: ${userEntityId}`);
               const userEntity = await runtime.getEntityById(userEntityId);
               if (userEntity) {
                 logger.debug(`[USER_WALLET_INFO] User entity metadata:`, JSON.stringify(userEntity.metadata, null, 2));
                 entityName = (userEntity.metadata?.displayName as string) || 
-                             (userEntity.names && userEntity.names.length > 0 ? userEntity.names[0] : undefined);
+                             (userEntity.names && userEntity.names.length > 0 ? String(userEntity.names[0]) : "");
                 // Use user entity ID for consistency
                 entityId = userEntityId;
               }
@@ -129,7 +130,7 @@ export const cdpWalletInfo: Action = {
           
           // Final fallback to agent entity names
           if (!entityName) {
-            entityName = entity.names && entity.names.length > 0 ? entity.names[0] : entityId;
+            entityName = entity.names && entity.names.length > 0 ? String(entity.names[0]) : entityId;
           }
           
           logger.debug(`[USER_WALLET_INFO] Resolved entityName: ${entityName} (entityId: ${entityId})`);

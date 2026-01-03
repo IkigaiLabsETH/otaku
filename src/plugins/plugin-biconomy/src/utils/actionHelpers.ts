@@ -41,7 +41,7 @@ export function validateBiconomyService(
 
     const cdpService = runtime.getService(
       CdpService.serviceType
-    ) as CdpService;
+    ) as unknown as CdpService;
 
     if (!cdpService) {
       logger.warn(`[${actionName}] CDP service not available`);

@@ -1533,11 +1533,11 @@ export class AgentServer {
   async getServersForAgent(agentId: UUID): Promise<UUID[]> {
     // This method isn't directly supported in the adapter, so we need to implement it differently
     const servers = await (this.database as any).getMessageServers();
-    const serverIds = [];
+    const serverIds: UUID[] = [];
     for (const server of servers) {
       const agents = await (this.database as any).getAgentsForServer(server.id);
       if (agents.includes(agentId)) {
-        serverIds.push(server.id as never);
+        serverIds.push(server.id as UUID);
       }
     }
     return serverIds;
