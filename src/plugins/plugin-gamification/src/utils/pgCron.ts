@@ -231,9 +231,25 @@ export const pgCron = {
       }
 
       // Need to unschedule and reschedule (pg_cron doesn't support direct update of command)
-      await pgCron.unschedule(db, name);
-      const jobId = await pgCron.schedule(db, name, schedule, command);
-      return jobId ? 'updated' : 'error';
+      // Use atomic replacement: if schedule fails, restore the old job
+      try {
+        await pgCron.unschedule(db, name);
+        const jobId = await pgCron.schedule(db, name, schedule, command);
+        if (jobId) {
+          return 'updated';
+        }
+        // Schedule returned null - try to restore old job
+        await pgCron.schedule(db, name, existing.schedule, existing.command);
+        return 'error';
+      } catch {
+        // Schedule failed - try to restore old job to prevent job loss
+        try {
+          await pgCron.schedule(db, name, existing.schedule, existing.command);
+        } catch {
+          // Restore also failed - job is lost
+        }
+        return 'error';
+      }
     } catch {
       return 'error';
     }
