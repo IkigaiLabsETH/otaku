@@ -1,0 +1,940 @@
+/**
+ * OtakuMessageService - Custom message service for Otaku
+ *
+ * Extends the default ElizaOS message service with:
+ * - x402 job request bypass (paid API jobs bypass race tracking)
+ * - Multi-step workflow execution with custom templates
+ * - Custom race tracking logic
+ * - Rich logging and telemetry
+ */
+
+import { v4 } from 'uuid';
+import {
+  type IAgentRuntime,
+  type Memory,
+  type Content,
+  type UUID,
+  type State,
+  type HandlerCallback,
+  type IMessageService,
+  type MessageProcessingOptions,
+  type MessageProcessingResult,
+  type ResponseDecision,
+  type Room,
+  type MentionContext,
+  type Action,
+  ChannelType,
+  EventType,
+  ModelType,
+  asUUID,
+  createUniqueUuid,
+  composePromptFromState,
+  parseKeyValueXml,
+  parseBooleanFromText,
+  truncateToCompleteSentence,
+  logger,
+} from '@elizaos/core';
+
+import { multiStepDecisionTemplate, multiStepSummaryTemplate } from '../templates/index.js';
+import { refreshStateAfterAction } from '../utils/index.js';
+
+/**
+ * Multi-step workflow execution result
+ */
+interface MultiStepActionResult {
+  data: { actionName: string };
+  success: boolean;
+  text?: string;
+  error?: string | Error;
+  values?: Record<string, unknown>;
+}
+
+/**
+ * Strategy mode for response generation
+ */
+type StrategyMode = 'simple' | 'actions' | 'none';
+
+/**
+ * Strategy result from core processing
+ */
+interface StrategyResult {
+  responseContent: Content | null;
+  responseMessages: Memory[];
+  state: State;
+  mode: StrategyMode;
+}
+
+/**
+ * Tracks the latest response ID per agent+room to handle message superseding
+ */
+const latestResponseIds = new Map<string, Map<string, string>>();
+
+/**
+ * OtakuMessageService implements the IMessageService interface with custom
+ * multi-step workflow execution and x402 job request handling.
+ */
+export class OtakuMessageService implements IMessageService {
+  /**
+   * Main message handling entry point
+   */
+  async handleMessage(
+    runtime: IAgentRuntime,
+    message: Memory,
+    callback?: HandlerCallback,
+    options?: MessageProcessingOptions
+  ): Promise<MessageProcessingResult> {
+    const timeoutDuration = options?.timeoutDuration ?? 60 * 60 * 1000; // 1 hour
+    let timeoutId: NodeJS.Timeout | undefined = undefined;
+
+    try {
+      runtime.logger.info(
+        `[OtakuMessageService] Message received from ${message.entityId} in room ${message.roomId}`
+      );
+
+      // Generate a new response ID
+      const responseId = v4();
+
+      // Check if this is a job request (x402 paid API)
+      // Job requests are isolated one-off operations that don't need race tracking
+      const isJobRequest =
+        (message.content.metadata as Record<string, unknown>)?.isJobMessage === true;
+
+      // Get or create the agent-specific map
+      if (!latestResponseIds.has(runtime.agentId)) {
+        latestResponseIds.set(runtime.agentId, new Map<string, string>());
+      }
+      const agentResponses = latestResponseIds.get(runtime.agentId);
+      if (!agentResponses) throw new Error('Agent responses map not found');
+
+      // Only track response IDs for non-job messages
+      // Job requests bypass race tracking since they're isolated operations
+      if (!isJobRequest) {
+        const previousResponseId = agentResponses.get(message.roomId);
+        if (previousResponseId) {
+          logger.warn(
+            `[OtakuMessageService] Updating response ID for room ${message.roomId} from ${previousResponseId} to ${responseId}`
+          );
+        }
+        agentResponses.set(message.roomId, responseId);
+      } else {
+        runtime.logger.info(
+          `[OtakuMessageService] Job request detected for room ${message.roomId} - bypassing race tracking`
+        );
+      }
+
+      // Use runtime's run tracking for this message processing
+      const runId = runtime.startRun(message.roomId) as UUID;
+      const startTime = Date.now();
+
+      // Emit run started event
+      await runtime.emitEvent(EventType.RUN_STARTED, {
+        runtime,
+        runId: runId!,
+        messageId: message.id!,
+        roomId: message.roomId,
+        entityId: message.entityId,
+        startTime,
+        status: 'started',
+        source: 'OtakuMessageService',
+      } as Parameters<typeof runtime.emitEvent>[1] & { runId: UUID; messageId: UUID; source: string });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(async () => {
+          await runtime.emitEvent(EventType.RUN_TIMEOUT, {
+            runtime,
+            runId: runId!,
+            messageId: message.id!,
+            roomId: message.roomId,
+            entityId: message.entityId,
+            startTime,
+            status: 'timeout',
+            endTime: Date.now(),
+            duration: Date.now() - startTime,
+            error: 'Run exceeded timeout',
+            source: 'OtakuMessageService',
+          } as Parameters<typeof runtime.emitEvent>[1] & { runId: UUID; messageId: UUID; source: string });
+          reject(new Error('Run exceeded timeout'));
+        }, timeoutDuration);
+      });
+
+      const processingPromise = this.processMessage(
+        runtime,
+        message,
+        callback,
+        responseId,
+        runId as UUID,
+        startTime,
+        options
+      );
+
+      const result = await Promise.race([processingPromise, timeoutPromise]);
+
+      clearTimeout(timeoutId);
+      return result;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Internal message processing implementation
+   */
+  private async processMessage(
+    runtime: IAgentRuntime,
+    message: Memory,
+    callback: HandlerCallback | undefined,
+    responseId: string,
+    runId: UUID,
+    startTime: number,
+    options?: MessageProcessingOptions
+  ): Promise<MessageProcessingResult> {
+    const agentResponses = latestResponseIds.get(runtime.agentId);
+    if (!agentResponses) throw new Error('Agent responses map not found');
+
+    try {
+      // Skip messages from self
+      if (message.entityId === runtime.agentId) {
+        runtime.logger.debug(`[OtakuMessageService] Skipping message from self`);
+        await this.emitRunEnded(runtime, runId, message, startTime, 'self');
+        return {
+          didRespond: false,
+          responseContent: null,
+          responseMessages: [],
+          state: { values: {}, data: {}, text: '' } as State,
+          mode: 'none',
+        };
+      }
+
+      runtime.logger.debug(
+        `[OtakuMessageService] Processing message: ${truncateToCompleteSentence(message.content.text || '', 50)}...`
+      );
+
+      // Save the incoming message to memory
+      runtime.logger.debug('[OtakuMessageService] Saving message to memory');
+      let memoryToQueue: Memory;
+
+      if (message.id) {
+        const existingMemory = await runtime.getMemoryById(message.id);
+        if (existingMemory) {
+          runtime.logger.debug('[OtakuMessageService] Memory already exists, skipping creation');
+          memoryToQueue = existingMemory;
+        } else {
+          const createdMemoryId = await runtime.createMemory(message, 'messages');
+          memoryToQueue = { ...message, id: createdMemoryId };
+        }
+        await runtime.queueEmbeddingGeneration(memoryToQueue, 'high');
+      } else {
+        const memoryId = await runtime.createMemory(message, 'messages');
+        message.id = memoryId;
+        memoryToQueue = { ...message, id: memoryId };
+        await runtime.queueEmbeddingGeneration(memoryToQueue, 'normal');
+      }
+
+      // Check LLM off by default setting
+      const agentUserState = await runtime.getParticipantUserState(message.roomId, runtime.agentId);
+      const defLllmOff = parseBooleanFromText(String(runtime.getSetting('BOOTSTRAP_DEFLLMOFF') ?? ''));
+
+      if (defLllmOff && agentUserState === null) {
+        runtime.logger.debug('[OtakuMessageService] LLM is off by default');
+        await this.emitRunEnded(runtime, runId, message, startTime, 'off');
+        return {
+          didRespond: false,
+          responseContent: null,
+          responseMessages: [],
+          state: { values: {}, data: {}, text: '' } as State,
+          mode: 'none',
+        };
+      }
+
+      // Check if room is muted
+      if (
+        agentUserState === 'MUTED' &&
+        !message.content.text?.toLowerCase().includes(runtime.character.name.toLowerCase())
+      ) {
+        runtime.logger.debug(`[OtakuMessageService] Ignoring muted room ${message.roomId}`);
+        await this.emitRunEnded(runtime, runId, message, startTime, 'muted');
+        return {
+          didRespond: false,
+          responseContent: null,
+          responseMessages: [],
+          state: { values: {}, data: {}, text: '' } as State,
+          mode: 'none',
+        };
+      }
+
+      // Compose initial state
+      let state = await runtime.composeState(
+        message,
+        ['ANXIETY', 'SHOULD_RESPOND', 'ENTITIES', 'CHARACTER', 'RECENT_MESSAGES', 'ACTIONS'],
+        true
+      );
+
+      // Run multi-step core processing
+      const result = await this.runMultiStepCore(runtime, message, state, callback);
+
+      let responseContent = result.responseContent;
+      const responseMessages = result.responseMessages;
+      state = result.state;
+
+      // Race check before we send anything
+      // IMPORTANT: Bypass race check for job requests (x402 paid API)
+      const isJobRequest =
+        (message.content.metadata as Record<string, unknown>)?.isJobMessage === true;
+
+      if (!isJobRequest) {
+        const currentResponseId = agentResponses.get(message.roomId);
+        if (currentResponseId !== responseId) {
+          runtime.logger.info(
+            `[OtakuMessageService] Response discarded - newer message being processed`
+          );
+          return {
+            didRespond: false,
+            responseContent: null,
+            responseMessages: [],
+            state,
+            mode: 'none',
+          };
+        }
+      }
+
+      if (responseContent && message.id) {
+        responseContent.inReplyTo = createUniqueUuid(runtime, message.id);
+      }
+
+      if (responseContent?.providers?.length && responseContent.providers.length > 0) {
+        state = await runtime.composeState(message, responseContent.providers || []);
+      }
+
+      if (responseContent) {
+        const mode = result.mode ?? ('actions' as StrategyMode);
+
+        if (mode === 'simple') {
+          if (responseContent.providers && responseContent.providers.length > 0) {
+            runtime.logger.debug(
+              { providers: responseContent.providers },
+              '[OtakuMessageService] Simple response used providers'
+            );
+          }
+          if (callback) {
+            await callback(responseContent);
+          }
+        } else if (mode === 'actions') {
+          await runtime.processActions(message, responseMessages, state, async (content) => {
+            runtime.logger.debug({ content }, '[OtakuMessageService] action callback');
+            responseContent!.actionCallbacks = content;
+            if (callback) {
+              return callback(content);
+            }
+            return [];
+          });
+        }
+      }
+
+      // Clean up the response ID
+      agentResponses.delete(message.roomId);
+      if (agentResponses.size === 0) {
+        latestResponseIds.delete(runtime.agentId);
+      }
+
+      // Run evaluators
+      await runtime.evaluate(
+        message,
+        state,
+        true,
+        async (content) => {
+          runtime.logger.debug({ content }, '[OtakuMessageService] evaluate callback');
+          if (responseContent) {
+            responseContent.evalCallbacks = content;
+          }
+          if (callback) {
+            return callback(content);
+          }
+          return [];
+        },
+        responseMessages
+      );
+
+      // Collect metadata for logging
+      let entityName = 'noname';
+      if (message.metadata && 'entityName' in message.metadata) {
+        entityName = (message.metadata as Record<string, unknown>).entityName as string;
+      }
+
+      const isDM = message.content?.channelType === ChannelType.DM;
+      let roomName = entityName;
+      if (!isDM) {
+        const roomDatas = await runtime.getRoomsByIds([message.roomId]);
+        if (roomDatas?.length) {
+          const roomData = roomDatas[0];
+          if (roomData.name) {
+            roomName = roomData.name;
+          }
+          if (roomData.worldId) {
+            const worldData = await runtime.getWorld(roomData.worldId);
+            if (worldData) {
+              roomName = worldData.name + '-' + roomName;
+            }
+          }
+        }
+      }
+
+      const date = new Date();
+      // Use safe property access for action data
+      const actionsData = (state.data?.providers as Record<string, unknown>)?.ACTIONS as Record<string, unknown> | undefined;
+      const actionsDataContent = (actionsData?.data as Record<string, unknown>)?.actionsData as Action[] | undefined;
+      const availableActions = actionsDataContent?.map((a: Action) => a.name) || [-1];
+
+      const logData = {
+        at: date.toString(),
+        timestamp: parseInt('' + date.getTime() / 1000),
+        messageId: message.id,
+        userEntityId: message.entityId,
+        input: message.content.text,
+        thought: responseContent?.thought,
+        simple: responseContent?.simple,
+        availableActions,
+        actions: responseContent?.actions,
+        providers: responseContent?.providers,
+        irt: responseContent?.inReplyTo,
+        output: responseContent?.text,
+        entityName,
+        source: message.content.source,
+        channelType: message.content.channelType,
+        roomName,
+      };
+
+      // Emit run ended event - use type assertion for extended payload
+      await runtime.emitEvent(EventType.RUN_ENDED, {
+        runtime,
+        runId: runId!,
+        messageId: message.id!,
+        roomId: message.roomId,
+        entityId: message.entityId,
+        startTime,
+        status: 'completed',
+        endTime: Date.now(),
+        duration: Date.now() - startTime,
+        source: 'OtakuMessageService',
+      } as Parameters<typeof runtime.emitEvent>[1] & { runId: UUID; messageId: UUID; source: string });
+
+      // Log extended metadata separately for telemetry
+      runtime.logger.debug({ logData }, '[OtakuMessageService] Run completed');
+
+      return {
+        didRespond: true,
+        responseContent,
+        responseMessages,
+        state,
+        mode: result.mode,
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[OtakuMessageService] Error:', error);
+
+      await runtime.emitEvent(EventType.RUN_ENDED, {
+        runtime,
+        runId: runId!,
+        messageId: message.id!,
+        roomId: message.roomId,
+        entityId: message.entityId,
+        startTime,
+        status: 'error',
+        endTime: Date.now(),
+        duration: Date.now() - startTime,
+        error: errorMessage,
+        source: 'OtakuMessageService',
+      } as Parameters<typeof runtime.emitEvent>[1] & { runId: UUID; messageId: UUID; source: string });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Multi-step workflow core execution
+   */
+  private async runMultiStepCore(
+    runtime: IAgentRuntime,
+    message: Memory,
+    state: State,
+    callback?: HandlerCallback
+  ): Promise<StrategyResult> {
+    const traceActionResult: MultiStepActionResult[] = [];
+    let accumulatedState: State = state;
+    const maxIterations = parseInt(String(runtime.getSetting('MAX_MULTISTEP_ITERATIONS') ?? '6'));
+    let iterationCount = 0;
+
+    // Compose initial state including wallet data
+    accumulatedState = await runtime.composeState(message, [
+      'RECENT_MESSAGES',
+      'ACTION_STATE',
+      'ACTIONS',
+      'PROVIDERS',
+      'WALLET_STATE',
+    ]);
+    accumulatedState.data.actionResults = traceActionResult;
+
+    // Standard multi-step loop
+    while (iterationCount < maxIterations) {
+      iterationCount++;
+      runtime.logger.debug(`[MultiStep] Starting iteration ${iterationCount}/${maxIterations}`);
+
+      accumulatedState = await runtime.composeState(message, [
+        'RECENT_MESSAGES',
+        'ACTION_STATE',
+        'WALLET_STATE',
+      ]);
+      accumulatedState.data.actionResults = traceActionResult;
+
+      // Add iteration context to state for template
+      const stateWithIterationContext = {
+        ...accumulatedState,
+        iterationCount,
+        maxIterations,
+        traceActionResult,
+      };
+
+      const prompt = composePromptFromState({
+        state: stateWithIterationContext,
+        template:
+          runtime.character.templates?.multiStepDecisionTemplate || multiStepDecisionTemplate,
+      });
+
+      // Retry logic for parsing failures
+      const maxParseRetries = parseInt(String(runtime.getSetting('MULTISTEP_PARSE_RETRIES') ?? '5'));
+      let stepResultRaw: string = '';
+      let parsedStep: Record<string, unknown> | null = null;
+
+      for (let parseAttempt = 1; parseAttempt <= maxParseRetries; parseAttempt++) {
+        try {
+          runtime.logger.debug(
+            `[MultiStep] Decision step model call attempt ${parseAttempt}/${maxParseRetries}`
+          );
+          stepResultRaw = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
+          parsedStep = parseKeyValueXml(stepResultRaw);
+
+          if (parsedStep) {
+            runtime.logger.debug(`[MultiStep] Successfully parsed on attempt ${parseAttempt}`);
+            break;
+          } else {
+            runtime.logger.warn(
+              `[MultiStep] Failed to parse XML on attempt ${parseAttempt}/${maxParseRetries}`
+            );
+            if (parseAttempt < maxParseRetries) {
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+          }
+        } catch (error) {
+          runtime.logger.error(`[MultiStep] Error during model call attempt ${parseAttempt}`);
+          if (parseAttempt >= maxParseRetries) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!parsedStep) {
+        runtime.logger.warn(`[MultiStep] Failed to parse step result after ${maxParseRetries} attempts`);
+        traceActionResult.push({
+          data: { actionName: 'parse_error' },
+          success: false,
+          error: `Failed to parse step result after ${maxParseRetries} attempts`,
+        });
+        break;
+      }
+
+      const { thought, action, isFinish, parameters } = parsedStep as {
+        thought?: string;
+        action?: string;
+        isFinish?: string | boolean;
+        parameters?: string | Record<string, unknown>;
+      };
+
+      // If no action to execute, check if we should finish
+      if (!action) {
+        if (isFinish === 'true' || isFinish === true) {
+          runtime.logger.info(`[MultiStep] Task marked as complete at iteration ${iterationCount}`);
+          if (callback) {
+            await callback({
+              text: '',
+              thought: thought ?? '',
+            });
+          }
+          break;
+        } else {
+          runtime.logger.warn(
+            `[MultiStep] No action specified at iteration ${iterationCount}, forcing completion`
+          );
+          break;
+        }
+      }
+
+      try {
+        // Ensure workingMemory exists on accumulatedState
+        if (!accumulatedState.data) accumulatedState.data = {} as Record<string, unknown>;
+        if (!accumulatedState.data.workingMemory)
+          accumulatedState.data.workingMemory = {} as Record<string, unknown>;
+
+        // Parse and store parameters if provided
+        let actionParams: Record<string, unknown> = {};
+        if (parameters) {
+          if (typeof parameters === 'string') {
+            try {
+              actionParams = JSON.parse(parameters);
+              runtime.logger.debug(`[MultiStep] Parsed parameters: ${JSON.stringify(actionParams)}`);
+            } catch {
+              runtime.logger.warn(`[MultiStep] Failed to parse parameters JSON: ${parameters}`);
+            }
+          } else if (typeof parameters === 'object') {
+            actionParams = parameters;
+            runtime.logger.debug(`[MultiStep] Using parameters object: ${JSON.stringify(actionParams)}`);
+          }
+        }
+
+        const hasActionParams = Object.keys(actionParams).length > 0;
+
+        if (action && hasActionParams) {
+          accumulatedState.data.actionParams = actionParams;
+
+          // Also support action-specific namespaces for backwards compatibility
+          const actionKey = action.toLowerCase().replace(/_/g, '');
+          accumulatedState.data[actionKey] = {
+            ...actionParams,
+            source: 'multiStepDecisionTemplate',
+            timestamp: Date.now(),
+          };
+
+          runtime.logger.info(
+            `[MultiStep] Stored parameters for ${action}: ${JSON.stringify(actionParams)}`
+          );
+        }
+
+        if (action) {
+          const actionContent: Content & {
+            actionParams?: Record<string, unknown>;
+            actionInput?: Record<string, unknown>;
+          } = {
+            text: ` Executing action: ${action}`,
+            actions: [action],
+            thought: thought ?? '',
+          };
+
+          if (hasActionParams) {
+            actionContent.actionParams = actionParams;
+            actionContent.actionInput = actionParams;
+          }
+
+          await runtime.processActions(
+            message,
+            [
+              {
+                id: v4() as UUID,
+                entityId: runtime.agentId,
+                roomId: message.roomId,
+                createdAt: Date.now(),
+                content: actionContent,
+              },
+            ],
+            accumulatedState,
+            async () => {
+              return [];
+            }
+          );
+
+          const cachedState = (runtime as unknown as { stateCache: Map<string, { values?: { actionResults?: unknown[] } }> }).stateCache.get(
+            `${message.id}_action_results`
+          );
+          const actionResults = cachedState?.values?.actionResults || [];
+          const result = actionResults.length > 0 ? actionResults[0] as Record<string, unknown> : null;
+          const success = (result?.success as boolean) ?? false;
+
+          traceActionResult.push({
+            data: { actionName: action },
+            success,
+            text: result?.text as string | undefined,
+            values: result?.values as Record<string, unknown> | undefined,
+            error: success ? undefined : (result?.text as string | undefined),
+          });
+
+          // Refresh state after action execution
+          runtime.logger.debug(`[MultiStep] Refreshing state after action ${action}`);
+          accumulatedState = await refreshStateAfterAction(
+            runtime,
+            message,
+            accumulatedState,
+            traceActionResult
+          );
+        }
+      } catch (err) {
+        runtime.logger.error({ err }, '[MultiStep] Error executing step');
+        traceActionResult.push({
+          data: { actionName: action || 'unknown' },
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      // After executing actions, check if we should finish
+      if (isFinish === 'true' || isFinish === true) {
+        runtime.logger.info(
+          `[MultiStep] Task marked as complete at iteration ${iterationCount} after action`
+        );
+        if (callback) {
+          await callback({
+            text: '',
+            thought: thought ?? '',
+          });
+        }
+        break;
+      }
+    }
+
+    if (iterationCount >= maxIterations) {
+      runtime.logger.warn(`[MultiStep] Reached maximum iterations (${maxIterations})`);
+    }
+
+    // Generate summary
+    accumulatedState = await runtime.composeState(message, ['RECENT_MESSAGES', 'ACTION_STATE']);
+    const summaryPrompt = composePromptFromState({
+      state: accumulatedState,
+      template: runtime.character.templates?.multiStepSummaryTemplate || multiStepSummaryTemplate,
+    });
+
+    // Retry logic for summary parsing failures
+    const maxSummaryRetries = parseInt(String(runtime.getSetting('MULTISTEP_SUMMARY_PARSE_RETRIES') ?? '5'));
+    let finalOutput: string = '';
+    let summary: Record<string, unknown> | null = null;
+
+    for (let summaryAttempt = 1; summaryAttempt <= maxSummaryRetries; summaryAttempt++) {
+      try {
+        runtime.logger.debug(`[MultiStep] Summary generation attempt ${summaryAttempt}`);
+        finalOutput = await runtime.useModel(ModelType.TEXT_LARGE, { prompt: summaryPrompt });
+        summary = parseKeyValueXml(finalOutput);
+
+        if (summary?.text) {
+          runtime.logger.debug(`[MultiStep] Successfully parsed summary on attempt ${summaryAttempt}`);
+          break;
+        } else {
+          runtime.logger.warn(
+            `[MultiStep] Failed to parse summary XML on attempt ${summaryAttempt}/${maxSummaryRetries}`
+          );
+          if (summaryAttempt < maxSummaryRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+      } catch (error) {
+        runtime.logger.error(`[MultiStep] Error during summary generation attempt ${summaryAttempt}`);
+        if (summaryAttempt >= maxSummaryRetries) {
+          runtime.logger.warn('[MultiStep] Failed to generate summary after all retries');
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    let responseContent: Content | null = null;
+    if (summary?.text) {
+      responseContent = {
+        actions: ['MULTI_STEP_SUMMARY'],
+        text: summary.text as string,
+        thought: (summary.thought as string) || 'Final user-facing message after task completion.',
+        simple: true,
+      };
+    } else {
+      runtime.logger.warn(`[MultiStep] No valid summary generated, using fallback`);
+      responseContent = {
+        actions: ['MULTI_STEP_SUMMARY'],
+        text: 'I completed the requested actions, but encountered an issue generating the summary.',
+        thought: 'Summary generation failed after retries.',
+        simple: true,
+      };
+    }
+
+    const responseMessages: Memory[] = responseContent
+      ? [
+          {
+            id: asUUID(v4()),
+            entityId: runtime.agentId,
+            agentId: runtime.agentId,
+            content: responseContent,
+            roomId: message.roomId,
+            createdAt: Date.now(),
+          },
+        ]
+      : [];
+
+    return {
+      responseContent,
+      responseMessages,
+      state: accumulatedState,
+      mode: responseContent ? 'simple' : 'none',
+    };
+  }
+
+  /**
+   * Determines whether the agent should respond to a message.
+   */
+  shouldRespond(
+    runtime: IAgentRuntime,
+    message: Memory,
+    room?: Room,
+    mentionContext?: MentionContext
+  ): ResponseDecision {
+    if (!room) {
+      return { shouldRespond: false, skipEvaluation: true, reason: 'no room context' };
+    }
+
+    function normalizeEnvList(value: unknown): string[] {
+      if (!value || typeof value !== 'string') return [];
+      const cleaned = value.trim().replace(/^\[|\]$/g, '');
+      return cleaned
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+    }
+
+    const alwaysRespondChannels = [
+      ChannelType.DM,
+      ChannelType.VOICE_DM,
+      ChannelType.SELF,
+      ChannelType.API,
+    ];
+
+    const alwaysRespondSources = ['client_chat'];
+
+    const customChannels = normalizeEnvList(
+      runtime.getSetting('ALWAYS_RESPOND_CHANNELS') ||
+        runtime.getSetting('SHOULD_RESPOND_BYPASS_TYPES')
+    );
+    const customSources = normalizeEnvList(
+      runtime.getSetting('ALWAYS_RESPOND_SOURCES') ||
+        runtime.getSetting('SHOULD_RESPOND_BYPASS_SOURCES')
+    );
+
+    const respondChannels = new Set(
+      [...alwaysRespondChannels.map((t) => t.toString()), ...customChannels].map((s: string) =>
+        s.trim().toLowerCase()
+      )
+    );
+
+    const respondSources = [...alwaysRespondSources, ...customSources].map((s: string) =>
+      s.trim().toLowerCase()
+    );
+
+    const roomType = room.type?.toString().toLowerCase();
+    const sourceStr = message.content.source?.toLowerCase() || '';
+
+    // 1. DM/VOICE_DM/API channels: always respond
+    if (respondChannels.has(roomType)) {
+      return { shouldRespond: true, skipEvaluation: true, reason: `private channel: ${roomType}` };
+    }
+
+    // 2. Specific sources (e.g., client_chat): always respond
+    if (respondSources.some((pattern) => sourceStr.includes(pattern))) {
+      return {
+        shouldRespond: true,
+        skipEvaluation: true,
+        reason: `whitelisted source: ${sourceStr}`,
+      };
+    }
+
+    // 3. Platform mentions and replies: always respond
+    const hasPlatformMention = !!(mentionContext?.isMention || mentionContext?.isReply);
+    if (hasPlatformMention) {
+      const mentionType = mentionContext?.isMention ? 'mention' : 'reply';
+      return { shouldRespond: true, skipEvaluation: true, reason: `platform ${mentionType}` };
+    }
+
+    // 4. All other cases: let the LLM decide
+    return { shouldRespond: false, skipEvaluation: false, reason: 'needs LLM evaluation' };
+  }
+
+  /**
+   * Deletes a message from the agent's memory.
+   */
+  async deleteMessage(runtime: IAgentRuntime, message: Memory): Promise<void> {
+    try {
+      if (!message.id) {
+        runtime.logger.error('[OtakuMessageService] Cannot delete memory: message ID is missing');
+        return;
+      }
+
+      runtime.logger.info(
+        `[OtakuMessageService] Deleting memory for message ${message.id} from room ${message.roomId}`
+      );
+      await runtime.deleteMemory(message.id);
+      runtime.logger.debug(
+        { messageId: message.id },
+        '[OtakuMessageService] Successfully deleted memory'
+      );
+    } catch (error: unknown) {
+      runtime.logger.error({ error }, '[OtakuMessageService] Error in deleteMessage');
+      throw error;
+    }
+  }
+
+  /**
+   * Clears all messages from a channel/room.
+   */
+  async clearChannel(runtime: IAgentRuntime, roomId: UUID, channelId: string): Promise<void> {
+    try {
+      runtime.logger.info(
+        `[OtakuMessageService] Clearing message memories from channel ${channelId} -> room ${roomId}`
+      );
+
+      const memories = await runtime.getMemoriesByRoomIds({
+        tableName: 'messages',
+        roomIds: [roomId],
+      });
+
+      runtime.logger.debug(
+        `[OtakuMessageService] Found ${memories.length} memories to delete`
+      );
+
+      let deletedCount = 0;
+      for (const memory of memories) {
+        if (memory.id) {
+          try {
+            await runtime.deleteMemory(memory.id);
+            deletedCount++;
+          } catch (error) {
+            runtime.logger.warn(
+              { error, memoryId: memory.id },
+              '[OtakuMessageService] Failed to delete message memory'
+            );
+          }
+        }
+      }
+
+      runtime.logger.info(
+        `[OtakuMessageService] Cleared ${deletedCount}/${memories.length} memories from channel ${channelId}`
+      );
+    } catch (error: unknown) {
+      runtime.logger.error({ error }, '[OtakuMessageService] Error in clearChannel');
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to emit run ended events
+   */
+  private async emitRunEnded(
+    runtime: IAgentRuntime,
+    runId: UUID,
+    message: Memory,
+    startTime: number,
+    status: string
+  ): Promise<void> {
+    await runtime.emitEvent(EventType.RUN_ENDED, {
+      runtime,
+      runId,
+      messageId: message.id!,
+      roomId: message.roomId,
+      entityId: message.entityId,
+      startTime,
+      status,
+      endTime: Date.now(),
+      duration: Date.now() - startTime,
+      source: 'OtakuMessageService',
+    } as Parameters<typeof runtime.emitEvent>[1] & { runId: UUID; messageId: UUID; source: string });
+  }
+}

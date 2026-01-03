@@ -574,7 +574,7 @@ export class MessageBusService extends Service {
         return [];
       };
 
-      console.log(' [MessageBusService] About to emit MESSAGE_RECEIVED event:', {
+      console.log(' [MessageBusService] About to call messageService.handleMessage:', {
         messageId: agentMemory.id,
         roomId: agentRoomId,
         worldId: agentWorldId,
@@ -582,21 +582,31 @@ export class MessageBusService extends Service {
         content: agentMemory.content.text?.substring(0, 50),
       });
 
-      await this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
-        runtime: this.runtime,
-        message: agentMemory,
-        callback: callbackForCentralBus,
-        onComplete: async () => {
+      // Use the message service directly instead of emitting events
+      // This is the new pattern in ElizaOS 1.7.0+
+      if (!this.runtime.messageService) {
+        throw new Error('messageService is not initialized on runtime');
+      }
+
+      // Call handleMessage and handle completion
+      this.runtime.messageService
+        .handleMessage(this.runtime, agentMemory, callbackForCentralBus)
+        .then(async () => {
           const room = await this.runtime.getRoom(agentRoomId);
           const world = await this.runtime.getWorld(agentWorldId);
 
           const channelId = room?.channelId as UUID;
           const serverId = this.resolveServerId(world, room, message);
           await this.notifyMessageComplete(channelId, serverId);
-        },
-      });
-      
-      console.log(' [MessageBusService] MESSAGE_RECEIVED event emitted successfully');
+        })
+        .catch((error: Error) => {
+          logger.error(
+            `[${this.runtime.character.name}] MessageBusService: Error in messageService.handleMessage:`,
+            error.message
+          );
+        });
+
+      console.log(' [MessageBusService] messageService.handleMessage called successfully');
     } catch (error) {
       logger.error(
         `[${this.runtime.character.name}] MessageBusService: Error processing incoming message:`,
@@ -621,16 +631,17 @@ export class MessageBusService extends Service {
       // Convert the central message ID to the agent's unique memory ID
       const agentMemoryId = createUniqueUuid(this.runtime, data.messageId);
 
-      // Try to find and delete the existing memory
+      // Try to find and delete the existing memory using the message service
       const existingMemory = await this.runtime.getMemoryById(agentMemoryId);
 
       if (existingMemory) {
-        // Emit MESSAGE_DELETED event with the existing memory
-        await this.runtime.emitEvent(EventType.MESSAGE_DELETED, {
-          runtime: this.runtime,
-          message: existingMemory,
-          source: 'message-bus-service',
-        });
+        // Use the message service directly instead of emitting events
+        if (this.runtime.messageService) {
+          await this.runtime.messageService.deleteMessage(this.runtime, existingMemory);
+        } else {
+          // Fallback to direct deletion if messageService not available
+          await this.runtime.deleteMemory(agentMemoryId);
+        }
 
         logger.debug(
           `[${this.runtime.character.name}] MessageBusService: Successfully processed message deletion for ${data.messageId}`
@@ -657,24 +668,33 @@ export class MessageBusService extends Service {
       // Convert the central channel ID to the agent's unique room ID
       const agentRoomId = createUniqueUuid(this.runtime, data.channelId);
 
-      // Get all memories for this room and emit deletion events for each
-      const memories = await this.runtime.getMemoriesByRoomIds({
-        tableName: 'messages',
-        roomIds: [agentRoomId],
-      });
+      // Use the message service directly instead of emitting events
+      if (this.runtime.messageService) {
+        await this.runtime.messageService.clearChannel(this.runtime, agentRoomId, data.channelId);
+      } else {
+        // Fallback to manual deletion if messageService not available
+        const memories = await this.runtime.getMemoriesByRoomIds({
+          tableName: 'messages',
+          roomIds: [agentRoomId],
+        });
 
-      logger.info(
-        `[${this.runtime.character.name}] MessageBusService: Found ${memories.length} memories to delete for channel ${data.channelId}`
-      );
+        logger.info(
+          `[${this.runtime.character.name}] MessageBusService: Fallback - Found ${memories.length} memories to delete for channel ${data.channelId}`
+        );
 
-      // Emit CHANNEL_CLEARED event to bootstrap which will handle bulk deletion
-      await this.runtime.emitEvent(EventType.CHANNEL_CLEARED, {
-        runtime: this.runtime,
-        source: 'message-bus-service',
-        roomId: agentRoomId,
-        channelId: data.channelId,
-        memoryCount: memories.length,
-      });
+        for (const memory of memories) {
+          if (memory.id) {
+            try {
+              await this.runtime.deleteMemory(memory.id);
+            } catch (error) {
+              logger.warn(
+                `[${this.runtime.character.name}] MessageBusService: Failed to delete memory ${memory.id}:`,
+                error instanceof Error ? error.message : String(error)
+              );
+            }
+          }
+        }
+      }
 
       logger.info(
         `[${this.runtime.character.name}] MessageBusService: Successfully processed channel clear for ${data.channelId} -> room ${agentRoomId}`
