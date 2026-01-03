@@ -29,15 +29,26 @@ async function executeWithFreshConnection(sql: string): Promise<{ rows: any[] }>
 
 /**
  * Check if error is retryable (connection pool issues)
+ * Handles both direct errors and DrizzleQueryError wrappers
  */
 function isRetryableError(error: any): boolean {
+  const patterns = [
+    'Client was closed',
+    'Connection terminated', 
+    'connection is closed',
+    'ECONNRESET',
+    'timeout',
+  ];
+  
+  // Check error message
   const message = error?.message || '';
-  return (
-    message.includes('Client was closed') ||
-    message.includes('Connection terminated') ||
-    message.includes('connection is closed') ||
-    message.includes('ECONNRESET') ||
-    message.includes('timeout')
+  // Check cause/original error (DrizzleQueryError wraps original error)
+  const causeMessage = error?.cause?.message || error?.originalError?.message || '';
+  // Check stringified error for nested messages
+  const fullError = String(error);
+  
+  return patterns.some(p => 
+    message.includes(p) || causeMessage.includes(p) || fullError.includes(p)
   );
 }
 
