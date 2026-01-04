@@ -5,6 +5,7 @@ import {
   Memory,
   logger,
 } from "@elizaos/core";
+import { Client } from "pg";
 
 export interface EntityWalletResult {
   success: true;
@@ -22,16 +23,31 @@ export type EntityWalletResponse = EntityWalletResult | EntityWalletError;
 // Type for database executor function
 type DbExecutor = (sql: string) => Promise<{ rows: any[] }>;
 
-// Type for accessing database from runtime
-interface RuntimeWithDb {
-  db?: { execute: DbExecutor };
-}
-
 /**
  * Escape string for SQL to prevent injection
  */
 export function escapeSql(str: string): string {
   return str.replace(/'/g, "''");
+}
+
+/**
+ * Execute a query with a fresh direct connection.
+ * Used to reliably query user_registry for CDP account resolution.
+ */
+async function executeWithDirectConnection(sql: string): Promise<{ rows: any[] }> {
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (!connectionString) {
+    throw new Error('No database connection string available');
+  }
+
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    const result = await client.query(sql);
+    return result;
+  } finally {
+    await client.end().catch(() => {}); // Always cleanup
+  }
 }
 
 /**
@@ -41,7 +57,7 @@ export function escapeSql(str: string): string {
  * Background: During migration, old entity_ids became cdp_user_ids.
  * Server wallets are keyed by the OLD entity_id (now stored as cdp_user_id).
  * 
- * @param dbExecute - Function to execute SQL queries
+ * @param dbExecute - Function to execute SQL queries (optional, will use direct connection if not provided)
  * @param entityId - The entity_id to resolve
  * @param logPrefix - Optional prefix for log messages (default: 'resolveWalletAccountName')
  */
@@ -50,13 +66,11 @@ export async function resolveWalletAccountName(
   entityId: string,
   logPrefix = 'resolveWalletAccountName'
 ): Promise<string> {
-  if (!dbExecute) {
-    logger.warn(`[${logPrefix}] Database not available, falling back to entityId`);
-    return entityId;
-  }
+  // Use provided executor or fall back to direct connection
+  const executor = dbExecute ?? executeWithDirectConnection;
 
   try {
-    const result = await dbExecute(`
+    const result = await executor(`
       SELECT cdp_user_id FROM user_registry 
       WHERE entity_id = '${escapeSql(entityId)}'::uuid 
       LIMIT 1
@@ -77,11 +91,24 @@ export async function resolveWalletAccountName(
 }
 
 /**
- * Helper to get db executor from runtime
+ * Helper to get db executor from runtime (may return null if not available)
  */
 function getDbExecutorFromRuntime(runtime: IAgentRuntime): DbExecutor | null {
-  const db = (runtime as unknown as RuntimeWithDb).db;
-  return db?.execute?.bind(db) ?? null;
+  // Try multiple paths to access database executor
+  const runtimeAny = runtime as any;
+  
+  // Path 1: runtime.db.execute (Drizzle style)
+  if (runtimeAny.db?.execute) {
+    return runtimeAny.db.execute.bind(runtimeAny.db);
+  }
+  
+  // Path 2: runtime.databaseAdapter.db.execute
+  if (runtimeAny.databaseAdapter?.db?.execute) {
+    return runtimeAny.databaseAdapter.db.execute.bind(runtimeAny.databaseAdapter.db);
+  }
+  
+  // Not available - resolveWalletAccountName will use direct connection
+  return null;
 }
 
 /**
