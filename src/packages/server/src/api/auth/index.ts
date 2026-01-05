@@ -203,30 +203,9 @@ async function executeWithRetry(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Try pool first if healthy, otherwise use fresh connection
-      if (poolHealthy && attempt === 0) {
-        try {
-          // Use pool with parameterized query via fresh pg client within pool context
-          // Note: drizzle's db.execute doesn't support parameterized raw SQL directly,
-          // so we use executeWithFreshConnection for parameterized queries
-          const result = await executeWithFreshConnection(sql, params);
-          lastSuccessfulQuery = Date.now();
-          poolHealthy = true;
-          return result;
-        } catch (poolError: any) {
-          if (isRetryableError(poolError)) {
-            logger.warn(
-              "[Auth] Pool query failed, will retry with fresh connection",
-            );
-            poolHealthy = false;
-            // Fall through to fresh connection attempt
-          } else {
-            throw poolError;
-          }
-        }
-      }
-
       // Use fresh connection with parameterized query for security
+      // Note: drizzle's db.execute doesn't support parameterized raw SQL directly,
+      // so we use executeWithFreshConnection for parameterized queries
       const result = await executeWithFreshConnection(sql, params);
       // Mark pool as healthy on success
       lastSuccessfulQuery = Date.now();
