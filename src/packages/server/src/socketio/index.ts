@@ -12,6 +12,7 @@ import type { Socket, Server as SocketIOServer } from "socket.io";
 import type { AgentServer } from "../index";
 import { attachmentsToApiUrls } from "../utils/media-transformer";
 import jwt from "jsonwebtoken";
+import { isTokenRevoked } from "../api/auth";
 
 const DEFAULT_SERVER_ID = "00000000-0000-0000-0000-000000000000" as UUID; // Single default server
 
@@ -30,6 +31,7 @@ interface AuthenticatedSocket extends Socket {
 
 /**
  * Verify JWT token for Socket.IO authentication
+ * Also checks if token has been revoked
  */
 function verifySocketToken(token: string): {
   userId: string;
@@ -45,6 +47,15 @@ function verifySocketToken(token: string): {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    // SECURITY: Check if token has been revoked
+    if (decoded.jti && isTokenRevoked(decoded.jti)) {
+      logger.warn(
+        `[SocketIO] Revoked token used: ${decoded.jti.substring(0, 8)}... (user: ${decoded.username})`,
+      );
+      return null;
+    }
+
     return {
       userId: decoded.userId,
       email: decoded.email,
