@@ -20,10 +20,15 @@ import {
 import { CdpNetwork } from "../../../plugin-cdp/types";
 import { getEntityWallet } from "../../../../utils/entity";
 import {
-  resolveTokenToAddress,
-  getTokenDecimals,
-} from "../../../plugin-relay/src/utils/token-resolver";
-import { validateBiconomyService, getValidatedViemClients } from "../utils/actionHelpers";
+  resolveTokenForBiconomy,
+  getTokenDecimalsForBiconomy,
+  isNativeToken,
+  NATIVE_TOKEN_ADDRESS,
+} from "../utils/token-resolver";
+import {
+  validateBiconomyService,
+  getValidatedViemClients,
+} from "../utils/actionHelpers";
 
 // CDP network mapping
 const CDP_NETWORK_MAP: Record<string, CdpNetwork> = {
@@ -38,7 +43,9 @@ const CDP_NETWORK_MAP: Record<string, CdpNetwork> = {
 const resolveCdpNetwork = (chainName: string): CdpNetwork => {
   const network = CDP_NETWORK_MAP[chainName.toLowerCase().trim()];
   if (!network) {
-    throw new Error(`CDP wallet does not support signing transactions on ${chainName}`);
+    throw new Error(
+      `CDP wallet does not support signing transactions on ${chainName}`,
+    );
   }
   return network;
 };
@@ -56,7 +63,7 @@ export const meeFusionSwapAction: Action = {
 - Swapping tokens from one chain to another (e.g., "Swap 100 USDC on Base to ETH on Arbitrum")
 - Cross-chain bridges with automatic token conversion
 - Gasless swaps - gas is paid from the input token, no native gas needed
-Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat 'ETH' on Polygon as 'WETH'.`,
+Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Polygon only, 'ETH' means bridged WETH (no native ETH exists on Polygon).`,
   similes: [
     "MEE_SWAP",
     "FUSION_SWAP",
@@ -70,7 +77,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
     srcToken: {
       type: "string",
       description:
-        "Source token symbol or address (e.g., 'usdc', 'eth', '0x...'). On Polygon, the native gas token is POL.",
+        "Source token symbol or address (e.g., 'usdc', 'eth', '0x...'). Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Polygon, 'eth' means bridged WETH.",
       required: true,
     },
     srcChain: {
@@ -82,7 +89,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
     dstToken: {
       type: "string",
       description:
-        "Destination token symbol or address (e.g., 'weth', 'usdt', '0x...')",
+        "Destination token symbol or address (e.g., 'eth', 'usdc', '0x...'). Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Polygon, 'eth' means bridged WETH.",
       required: true,
     },
     dstChain: {
@@ -99,12 +106,14 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
     },
     slippage: {
       type: "number",
-      description: "Slippage tolerance as percentage (e.g., 1 for 1%, 5 for 5%). Default: 1. Max: 5% unless confirmed.",
+      description:
+        "Slippage tolerance as percentage (e.g., 1 for 1%, 5 for 5%). Default: 1. Max: 5% unless confirmed.",
       required: false,
     },
     confirmHighSlippage: {
       type: "boolean",
-      description: "Set to true to confirm slippage above 5%. Required if slippage > 5.",
+      description:
+        "Set to true to confirm slippage above 5%. Required if slippage > 5.",
       required: false,
     },
   },
@@ -118,14 +127,14 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
     message: Memory,
     state?: State,
     options?: { [key: string]: unknown },
-    callback?: HandlerCallback
+    callback?: HandlerCallback,
   ): Promise<ActionResult> => {
     logger.info("[MEE_FUSION_SWAP] Handler invoked");
 
     try {
       // Get services
       const biconomyService = runtime.getService<BiconomyService>(
-        BiconomyService.serviceType
+        BiconomyService.serviceType,
       );
       if (!biconomyService) {
         const errorMsg = "MEE service not initialized";
@@ -138,7 +147,9 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         };
       }
 
-      const cdpService = runtime.getService?.("CDP_SERVICE") as unknown as CdpService;
+      const cdpService = runtime.getService?.(
+        "CDP_SERVICE",
+      ) as unknown as CdpService;
       if (
         !cdpService ||
         typeof cdpService.getViemClientsForAccount !== "function"
@@ -157,7 +168,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
       const composedState = await runtime.composeState(
         message,
         ["ACTION_STATE"],
-        true
+        true,
       );
       const params = composedState?.data?.actionParams || {};
 
@@ -169,9 +180,10 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
       const amount = params?.amount?.trim();
       const slippage = params?.slippage ?? DEFAULT_SLIPPAGE;
       // Ensure confirmHighSlippage is strictly boolean for safety
-      const confirmHighSlippage = typeof params?.confirmHighSlippage === "boolean" 
-        ? params.confirmHighSlippage 
-        : false;
+      const confirmHighSlippage =
+        typeof params?.confirmHighSlippage === "boolean"
+          ? params.confirmHighSlippage
+          : false;
 
       // Input parameters object for response
       const inputParams = {
@@ -192,7 +204,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         inputParams,
         "MEE_FUSION_SWAP",
         callback,
-        state
+        state,
       );
       if (!slippageValidation.valid) {
         return slippageValidation.errorResult!;
@@ -310,11 +322,13 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         runtime as any,
         message,
         "MEE_FUSION_SWAP",
-        callback
+        callback,
       );
       if (wallet.success === false) {
         logger.warn("[MEE_FUSION_SWAP] Entity wallet verification failed");
-        return { ...wallet.result, input: inputParams } as ActionResult & { input: typeof inputParams };
+        return { ...wallet.result, input: inputParams } as ActionResult & {
+          input: typeof inputParams;
+        };
       }
 
       const accountName = wallet.metadata?.accountName as string;
@@ -338,20 +352,28 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         wallet,
         "MEE_FUSION_SWAP",
         inputParams,
-        callback
+        callback,
       );
       if (!viemResult.success) {
         return viemResult.error;
       }
-      const { userAddress, cdpAccount, walletClient, publicClient } = viemResult;
+      const { userAddress, cdpAccount, walletClient, publicClient } =
+        viemResult;
 
-      const preferredFeeTokenResult = await tryGetBaseUsdcFeeToken(cdpService, accountName);
+      const preferredFeeTokenResult = await tryGetBaseUsdcFeeToken(
+        cdpService,
+        accountName,
+      );
       if (preferredFeeTokenResult?.usedBaseUsdc) {
-        callback?.({ text: "🪙 Using Base USDC to pay Biconomy orchestration fees" });
+        callback?.({
+          text: "🪙 Using Base USDC to pay Biconomy orchestration fees",
+        });
       }
 
-      // Resolve token addresses using CoinGecko (same as CDP/Relay)
-      const srcTokenAddress = await resolveTokenToAddress(srcToken, srcChain);
+      // Resolve token addresses using Biconomy-specific resolver
+      // This handles native ETH as zero address on ETH-native chains,
+      // and only maps ETH→WETH on Polygon (which has no native ETH)
+      const srcTokenAddress = await resolveTokenForBiconomy(srcToken, srcChain);
       if (!srcTokenAddress) {
         const errorMsg = `Cannot resolve source token: ${srcToken} on ${srcChain}`;
         callback?.({ text: `❌ ${errorMsg}` });
@@ -363,7 +385,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         } as ActionResult;
       }
 
-      const dstTokenAddress = await resolveTokenToAddress(dstToken, dstChain);
+      const dstTokenAddress = await resolveTokenForBiconomy(dstToken, dstChain);
       if (!dstTokenAddress) {
         const errorMsg = `Cannot resolve destination token: ${dstToken} on ${dstChain}`;
         callback?.({ text: `❌ ${errorMsg}` });
@@ -375,8 +397,11 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         } as ActionResult;
       }
 
-      // Get token decimals from CoinGecko
-      const decimals = await getTokenDecimals(srcTokenAddress, srcChain);
+      // Get token decimals (native tokens are 18, others from CoinGecko)
+      const decimals = await getTokenDecimalsForBiconomy(
+        srcTokenAddress,
+        srcChain,
+      );
 
       const amountInWei = parseUnits(amount, decimals);
 
@@ -414,7 +439,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         srcTokenAddress,
         dstTokenAddress,
         swapAmountInWei.toString(),
-        slippageToDecimal(slippage)
+        slippageToDecimal(slippage),
       );
 
       // Build withdrawal instruction to transfer output tokens back to EOA
@@ -422,7 +447,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
       const withdrawalFlow = biconomyService.buildWithdrawalInstruction(
         dstTokenAddress,
         dstChainId,
-        userAddress
+        userAddress,
       );
 
       // Build quote request - use classic EOA mode with funding token provided
@@ -455,7 +480,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         walletClient,
         { address: userAddress },
         publicClient,
-        (status) => callback?.({ text: status })
+        (status) => callback?.({ text: status }),
       );
 
       if (result.success && result.supertxHash) {
@@ -521,7 +546,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
         const composedState = await runtime.composeState(
           message,
           ["ACTION_STATE"],
-          true
+          true,
         );
         const params = composedState?.data?.actionParams || {};
         failureInputParams = {
@@ -597,4 +622,3 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. Treat
 };
 
 export default meeFusionSwapAction;
-
