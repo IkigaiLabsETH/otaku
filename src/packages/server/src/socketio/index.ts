@@ -95,19 +95,20 @@ export class SocketIORouter {
    * Security model:
    * - Admins can access any channel
    * - Users can access channels where:
-   *   1. The serverId matches their userId (their own server/DMs)
-   *   2. They are a participant in the channel
-   *   3. The channel doesn't exist yet (will be created for them)
+   *   1. They are a participant in the channel
+   *   2. The channel's server belongs to them (verified from DB, not client input)
+   *
+   * SECURITY: We do NOT trust client-provided serverId for authorization.
+   * All authorization checks use server-side data from the database.
    *
    * @param userId - The authenticated user's ID
    * @param channelId - The channel being accessed
-   * @param serverId - The server the channel belongs to
    * @param isAdmin - Whether the user is an admin
    */
   private async verifyChannelAccess(
     userId: string | undefined,
     channelId: UUID,
-    serverId: string | undefined,
+    _serverId: string | undefined, // Kept for API compatibility but NOT used for auth
     isAdmin?: boolean,
   ): Promise<boolean> {
     // Must have a userId to access any channel
@@ -124,13 +125,8 @@ export class SocketIORouter {
       return true;
     }
 
-    // Users can always access their own server (serverId === userId for DM servers)
-    if (serverId && serverId === userId) {
-      logger.debug(
-        `[SocketIO] User ${userId.substring(0, 8)}... accessing own server channel`,
-      );
-      return true;
-    }
+    // SECURITY: Do NOT use client-provided serverId for authorization
+    // All checks must use server-side data from database
 
     // Check if the channel exists
     try {
@@ -156,13 +152,13 @@ export class SocketIORouter {
         return true;
       }
 
-      // Check if the channel belongs to the user's server
-      // (messageServerId might be stored in channel metadata or as a direct field)
+      // Check if the channel belongs to the user's server (using DB data, not client input)
+      // messageServerId is the authoritative server ID from the database
       const channelServerId =
         (channel as any).messageServerId || (channel as any).serverId;
       if (channelServerId === userId) {
         logger.debug(
-          `[SocketIO] Channel ${channelId} belongs to user's server`,
+          `[SocketIO] Channel ${channelId} belongs to user's server (verified from DB)`,
         );
         return true;
       }
