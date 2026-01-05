@@ -22,8 +22,7 @@ import { BiconomyService } from "./services/biconomy.service";
  * - BICONOMY_WITHDRAW_ALL: Withdraw all tokens from Nexus companion wallet to user address
  * 
  * Supported Chains:
- * Ethereum, Base, Arbitrum, Polygon, Optimism, BSC, Scroll, Gnosis, Sonic,
- * Linea, Blast, Sei, Unichain, Worldchain, Lisk, and more.
+ * Ethereum, Base, Arbitrum, Polygon, Optimism, Scroll.
  * 
  * @see https://docs.biconomy.io
  */

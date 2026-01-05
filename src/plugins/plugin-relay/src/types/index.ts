@@ -22,7 +22,6 @@ export const RelaySupportedChains = {
   ZORA: 7777777,
   BLAST: 81457,
   SCROLL: 534352,
-  LINEA: 59144,
 } as const;
 
 export type RelayChainId = (typeof RelaySupportedChains)[keyof typeof RelaySupportedChains];

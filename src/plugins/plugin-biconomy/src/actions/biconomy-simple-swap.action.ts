@@ -83,7 +83,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
     srcChain: {
       type: "string",
       description:
-        "Source chain name (ethereum, base, arbitrum, polygon, optimism, bsc)",
+        "Source chain name (ethereum, base, arbitrum, polygon, optimism)",
       required: true,
     },
     dstToken: {
@@ -95,7 +95,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
     dstChain: {
       type: "string",
       description:
-        "Destination chain name (ethereum, base, arbitrum, polygon, optimism, bsc)",
+        "Destination chain name (ethereum, base, arbitrum, polygon, optimism)",
       required: true,
     },
     amount: {
@@ -294,7 +294,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
       const dstChainId = biconomyService.resolveChainId(dstChain);
 
       if (!srcChainId) {
-        const errorMsg = `Unsupported source chain: ${srcChain}. Supported: ethereum, base, arbitrum, polygon, optimism, bsc, scroll, gnosis, linea`;
+        const errorMsg = `Unsupported source chain: ${srcChain}. Supported: ethereum, base, arbitrum, polygon, optimism`;
         logger.error(`[MEE_FUSION_SWAP] ${errorMsg}`);
         callback?.({ text: `❌ ${errorMsg}` });
         return {
@@ -306,7 +306,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
       }
 
       if (!dstChainId) {
-        const errorMsg = `Unsupported destination chain: ${dstChain}. Supported: ethereum, base, arbitrum, polygon, optimism, bsc, scroll, gnosis, linea`;
+        const errorMsg = `Unsupported destination chain: ${dstChain}. Supported: ethereum, base, arbitrum, polygon, optimism`;
         logger.error(`[MEE_FUSION_SWAP] ${errorMsg}`);
         callback?.({ text: `❌ ${errorMsg}` });
         return {

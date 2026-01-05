@@ -1,14 +1,15 @@
-import { createWalletClient, http, type Address, type WalletClient } from "viem";
+import {
+  createWalletClient,
+  http,
+  type Address,
+  type WalletClient,
+} from "viem";
 import {
   arbitrum,
   base,
-  blast,
-  linea,
   mainnet,
   optimism,
   polygon,
-  scroll,
-  zora,
   type Chain,
 } from "viem/chains";
 import type { Account } from "viem/accounts";
@@ -20,10 +21,6 @@ const CHAIN_MAP: Record<number, Chain> = {
   [arbitrum.id]: arbitrum,
   [polygon.id]: polygon,
   [optimism.id]: optimism,
-  [zora.id]: zora,
-  [blast.id]: blast,
-  [scroll.id]: scroll,
-  [linea.id]: linea,
 };
 
 // Default RPC URLs for each chain
@@ -33,10 +30,6 @@ const DEFAULT_RPC_URLS: Record<number, string> = {
   [arbitrum.id]: "https://arb1.arbitrum.io/rpc",
   [polygon.id]: "https://polygon-rpc.com",
   [optimism.id]: "https://mainnet.optimism.io",
-  [zora.id]: "https://rpc.zora.energy",
-  [blast.id]: "https://rpc.blast.io",
-  [scroll.id]: "https://rpc.scroll.io",
-  [linea.id]: "https://rpc.linea.build",
 };
 
 /**
@@ -49,7 +42,11 @@ export class MultiChainWallet {
   private walletClients: Map<number, WalletClient> = new Map();
   private defaultRpcUrl?: string;
 
-  constructor(account: Account, defaultRpcUrl?: string, initialChainId: number = base.id) {
+  constructor(
+    account: Account,
+    defaultRpcUrl?: string,
+    initialChainId: number = base.id,
+  ) {
     this.account = account;
     this.currentChainId = initialChainId;
     this.defaultRpcUrl = defaultRpcUrl;
@@ -125,8 +122,7 @@ export class MultiChainWallet {
  */
 export function createMultiChainWallet(
   account: Account,
-  defaultRpcUrl?: string
+  defaultRpcUrl?: string,
 ): MultiChainWallet {
   return new MultiChainWallet(account, defaultRpcUrl);
 }
-

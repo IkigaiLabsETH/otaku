@@ -7,7 +7,10 @@ import {
   State,
   logger,
 } from "@elizaos/core";
-import { validateCoingeckoService, getCoingeckoService } from "../utils/actionHelpers";
+import {
+  validateCoingeckoService,
+  getCoingeckoService,
+} from "../utils/actionHelpers";
 
 export const getTrendingTokensAction: Action = {
   name: "GET_TRENDING_TOKENS",
@@ -19,24 +22,35 @@ export const getTrendingTokensAction: Action = {
     "POPULAR_TOKENS",
   ],
   description:
-    "Use this action when the user asks about trending or popular tokens on a specific blockchain network. Returns trending pools with token metadata including price, volume, market cap, and price changes. Supports networks like 'base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'bsc', 'solana', and more.",
+    "Use this action when the user asks about trending or popular tokens on a specific blockchain network. Returns trending pools with token metadata including price, volume, market cap, and price changes. Supports networks like 'base', 'ethereum', 'arbitrum', 'optimism', 'polygon', and more.",
 
   // Parameter schema for tool calling
   parameters: {
     network: {
       type: "string",
-      description: "The blockchain network to fetch trending tokens for (e.g., 'base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'bsc', 'solana'). Defaults to 'base'.",
+      description:
+        "The blockchain network to fetch trending tokens for (e.g., 'base', 'ethereum', 'arbitrum', 'optimism', 'polygon'). Defaults to 'base'.",
       required: true,
     },
     limit: {
       type: "number",
-      description: "Number of trending tokens to return (1-30). Defaults to 10.",
+      description:
+        "Number of trending tokens to return (1-30). Defaults to 10.",
       required: false,
     },
   },
 
-  validate: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<boolean> => {
-    return validateCoingeckoService(runtime, "GET_TRENDING_TOKENS", state, message);
+  validate: async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    state?: State,
+  ): Promise<boolean> => {
+    return validateCoingeckoService(
+      runtime,
+      "GET_TRENDING_TOKENS",
+      state,
+      message,
+    );
   },
 
   handler: async (
@@ -53,19 +67,26 @@ export const getTrendingTokensAction: Action = {
       }
 
       // Read parameters from state (extracted by multiStepDecisionTemplate)
-      const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
+      const composedState = await runtime.composeState(
+        message,
+        ["ACTION_STATE"],
+        true,
+      );
       const params = composedState?.data?.actionParams || {};
 
       // Extract parameters with defaults
       const network: string = (params?.network?.trim() || "base").toLowerCase();
       const limitRaw = params?.limit;
-      const limit = typeof limitRaw === "number" 
-        ? Math.max(1, Math.min(30, Math.floor(limitRaw)))
-        : typeof limitRaw === "string" 
-          ? Math.max(1, Math.min(30, Math.floor(Number(limitRaw) || 10)))
-          : 10;
+      const limit =
+        typeof limitRaw === "number"
+          ? Math.max(1, Math.min(30, Math.floor(limitRaw)))
+          : typeof limitRaw === "string"
+            ? Math.max(1, Math.min(30, Math.floor(Number(limitRaw) || 10)))
+            : 10;
 
-      logger.info(`[GET_TRENDING_TOKENS] Fetching trending tokens for network: ${network}, limit: ${limit}`);
+      logger.info(
+        `[GET_TRENDING_TOKENS] Fetching trending tokens for network: ${network}, limit: ${limit}`,
+      );
 
       // Store input parameters for return
       const inputParams = { network, limit };
@@ -94,15 +115,19 @@ export const getTrendingTokensAction: Action = {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       logger.error(`[GET_TRENDING_TOKENS] Action failed: ${msg}`);
-      
+
       // Try to capture input params even in failure
-      const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
+      const composedState = await runtime.composeState(
+        message,
+        ["ACTION_STATE"],
+        true,
+      );
       const params = composedState?.data?.actionParams || {};
       const failureInputParams = {
         network: params?.network || "base",
         limit: params?.limit || 10,
       };
-      
+
       // Provide helpful error message with correct chain parameters
       const errorText = `Failed to fetch trending tokens: ${msg}
 
@@ -114,17 +139,16 @@ Please provide the correct chain parameter:
 | **polygon**  | polygon_pos             |
 | **arbitrum** | arbitrum                |
 | **optimism** | optimism                |
-| **scroll**   | scroll                  |
 
 Example: "Get trending tokens on eth" or "Show me trending tokens on polygon_pos"`;
-      
+
       const errorResult: ActionResult = {
         text: errorText,
         success: false,
         error: msg,
         input: failureInputParams,
       } as ActionResult & { input: typeof failureInputParams };
-      
+
       if (callback) {
         await callback({
           text: errorResult.text,
@@ -164,4 +188,3 @@ Example: "Get trending tokens on eth" or "Show me trending tokens on polygon_pos
     ],
   ],
 };
-

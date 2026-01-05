@@ -127,7 +127,6 @@ export function getChainName(chainId: number): string {
     7777777: "Zora",
     81457: "Blast",
     534352: "Scroll",
-    59144: "Linea",
   };
   return chains[chainId] || `Chain ${chainId}`;
 }

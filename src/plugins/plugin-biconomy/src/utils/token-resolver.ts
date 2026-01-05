@@ -16,14 +16,7 @@ export const NATIVE_TOKEN_ADDRESS =
  * Chains that have native ETH as the gas token.
  * On these chains, "eth" should resolve to the zero address (native ETH).
  */
-const NATIVE_ETH_CHAINS = new Set([
-  "ethereum",
-  "base",
-  "arbitrum",
-  "optimism",
-  "scroll",
-  "linea",
-]);
+const NATIVE_ETH_CHAINS = new Set(["base", "ethereum", "arbitrum", "optimism"]);
 
 /**
  * Chains where ETH refers to WETH (bridged ETH), not native gas token.
@@ -38,11 +31,9 @@ const ETH_IS_WETH_CHAINS = new Set(["polygon"]);
 const WETH_ADDRESSES: Record<string, string> = {
   base: "0x4200000000000000000000000000000000000006",
   ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  polygon: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
   arbitrum: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
   optimism: "0x4200000000000000000000000000000000000006",
-  polygon: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
-  scroll: "0x5300000000000000000000000000000000000004",
-  linea: "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f",
 };
 
 /**

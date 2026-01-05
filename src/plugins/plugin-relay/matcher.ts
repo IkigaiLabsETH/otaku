@@ -1,5 +1,8 @@
 import type { Memory, State } from "@elizaos/core";
-import { matchesPluginContext, type PluginKeywordPatterns } from "@/utils/plugin-context-matcher";
+import {
+  matchesPluginContext,
+  type PluginKeywordPatterns,
+} from "@/utils/plugin-context-matcher";
 
 /**
  * Keyword patterns for Relay plugin context activation
@@ -7,13 +10,26 @@ import { matchesPluginContext, type PluginKeywordPatterns } from "@/utils/plugin
 export const relayKeywordPatterns: PluginKeywordPatterns = {
   keywords: [
     // Bridging operations
-    "bridge", "relay", "cross-chain", "crosschain",
+    "bridge",
+    "relay",
+    "cross-chain",
+    "crosschain",
     // Transfer operations
-    "transfer", "move", "send",
+    "transfer",
+    "move",
+    "send",
     // Chain names
-    "base", "polygon", "arbitrum", "optimism", "ethereum", "zora", "blast", "scroll", "linea",
+    "base",
+    "polygon",
+    "arbitrum",
+    "optimism",
+    "ethereum",
     // Bridge-specific terms
-    "liquidity", "route", "quote", "request", "status",
+    "liquidity",
+    "route",
+    "quote",
+    "request",
+    "status",
   ],
   regexPatterns: [
     /bridge.*to/i,
@@ -43,7 +59,10 @@ export const relayKeywordPatterns: PluginKeywordPatterns = {
  * }
  * ```
  */
-export function shouldRelayPluginBeInContext(state?: State, message?: Memory): boolean {
+export function shouldRelayPluginBeInContext(
+  state?: State,
+  message?: Memory,
+): boolean {
   if (!state) return true; // If no state, always active (fallback)
   return matchesPluginContext(state, relayKeywordPatterns, message);
 }

@@ -23,7 +23,10 @@ import {
   resolveTokenToAddress,
   getTokenDecimals,
 } from "../../../plugin-relay/src/utils/token-resolver";
-import { validateBiconomyService, getValidatedViemClients } from "../utils/actionHelpers";
+import {
+  validateBiconomyService,
+  getValidatedViemClients,
+} from "../utils/actionHelpers";
 
 // CDP network mapping
 const CDP_NETWORK_MAP: Record<string, CdpNetwork> = {
@@ -38,7 +41,9 @@ const CDP_NETWORK_MAP: Record<string, CdpNetwork> = {
 const resolveCdpNetwork = (chainName: string): CdpNetwork => {
   const network = CDP_NETWORK_MAP[chainName.toLowerCase().trim()];
   if (!network) {
-    throw new Error(`CDP wallet does not support signing transactions on ${chainName}`);
+    throw new Error(
+      `CDP wallet does not support signing transactions on ${chainName}`,
+    );
   }
   return network;
 };
@@ -46,15 +51,15 @@ const resolveCdpNetwork = (chainName: string): CdpNetwork => {
 /**
  * MEE CCIP Bridge Action
  *
- * Bridges tokens across different blockchain networks using Chainlink's 
+ * Bridges tokens across different blockchain networks using Chainlink's
  * Cross-Chain Interoperability Protocol (CCIP) via Biconomy MEE.
- * 
+ *
  * IMPORTANT LIMITATIONS:
  * - Only supports tokens that are CCIP-compatible on the specific lane
  * - Common CCIP tokens: USDC, LINK, WETH, WBTC, DAI
  * - Not all tokens are supported on all chain pairs
  * - Check CCIP supported tokens: https://docs.chain.link/ccip/supported-networks
- * 
+ *
  * CCIP provides secure, reliable cross-chain token transfers with:
  * - Direct chain-to-chain bridging (no intermediate swaps)
  * - 15-22 minute finality time
@@ -92,13 +97,13 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
     srcChain: {
       type: "string",
       description:
-        "Source chain name (ethereum, base, arbitrum, polygon, optimism, bsc)",
+        "Source chain name (ethereum, base, arbitrum, polygon, optimism)",
       required: true,
     },
     dstChain: {
       type: "string",
       description:
-        "Destination chain name (ethereum, base, arbitrum, polygon, optimism, bsc)",
+        "Destination chain name (ethereum, base, arbitrum, polygon, optimism)",
       required: true,
     },
     amount: {
@@ -118,14 +123,14 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
     message: Memory,
     state?: State,
     options?: { [key: string]: unknown },
-    callback?: HandlerCallback
+    callback?: HandlerCallback,
   ): Promise<ActionResult> => {
     logger.info("[MEE_CCIP_BRIDGE] Handler invoked");
 
     try {
       // Get services
       const biconomyService = runtime.getService<BiconomyService>(
-        BiconomyService.serviceType
+        BiconomyService.serviceType,
       );
       if (!biconomyService) {
         const errorMsg = "MEE service not initialized";
@@ -138,7 +143,9 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         };
       }
 
-      const cdpService = runtime.getService?.("CDP_SERVICE") as unknown as CdpService;
+      const cdpService = runtime.getService?.(
+        "CDP_SERVICE",
+      ) as unknown as CdpService;
       if (
         !cdpService ||
         typeof cdpService.getViemClientsForAccount !== "function"
@@ -157,7 +164,7 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
       const composedState = await runtime.composeState(
         message,
         ["ACTION_STATE"],
-        true
+        true,
       );
       const params = composedState?.data?.actionParams || {};
 
@@ -246,7 +253,7 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
       const dstChainId = biconomyService.resolveChainId(dstChain);
 
       if (!srcChainId) {
-        const errorMsg = `Unsupported source chain: ${srcChain}. Supported: ethereum, base, arbitrum, polygon, optimism, bsc, scroll, gnosis, linea`;
+        const errorMsg = `Unsupported source chain: ${srcChain}. Supported: ethereum, base, arbitrum, polygon, optimism`;
         logger.error(`[MEE_CCIP_BRIDGE] ${errorMsg}`);
         callback?.({ text: `❌ ${errorMsg}` });
         return {
@@ -258,7 +265,7 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
       }
 
       if (!dstChainId) {
-        const errorMsg = `Unsupported destination chain: ${dstChain}. Supported: ethereum, base, arbitrum, polygon, optimism, bsc, scroll, gnosis, linea`;
+        const errorMsg = `Unsupported destination chain: ${dstChain}. Supported: ethereum, base, arbitrum, polygon, optimism`;
         logger.error(`[MEE_CCIP_BRIDGE] ${errorMsg}`);
         callback?.({ text: `❌ ${errorMsg}` });
         return {
@@ -286,11 +293,13 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         runtime as any,
         message,
         "MEE_CCIP_BRIDGE",
-        callback
+        callback,
       );
       if (wallet.success === false) {
         logger.warn("[MEE_CCIP_BRIDGE] Entity wallet verification failed");
-        return { ...wallet.result, input: inputParams } as ActionResult & { input: typeof inputParams };
+        return { ...wallet.result, input: inputParams } as ActionResult & {
+          input: typeof inputParams;
+        };
       }
 
       const accountName = wallet.metadata?.accountName as string;
@@ -314,16 +323,22 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         wallet,
         "CCIP_BRIDGE",
         inputParams,
-        callback
+        callback,
       );
       if (!viemResult.success) {
         return viemResult.error;
       }
-      const { userAddress, cdpAccount, walletClient, publicClient } = viemResult;
+      const { userAddress, cdpAccount, walletClient, publicClient } =
+        viemResult;
 
-      const preferredFeeTokenResult = await tryGetBaseUsdcFeeToken(cdpService, accountName);
+      const preferredFeeTokenResult = await tryGetBaseUsdcFeeToken(
+        cdpService,
+        accountName,
+      );
       if (preferredFeeTokenResult?.usedBaseUsdc) {
-        callback?.({ text: "🪙 Using Base USDC to pay Biconomy orchestration fees" });
+        callback?.({
+          text: "🪙 Using Base USDC to pay Biconomy orchestration fees",
+        });
       }
 
       // Resolve token addresses using CoinGecko (same as CDP/Relay)
@@ -389,18 +404,19 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         dstChainId,
         srcTokenAddress,
         dstTokenAddress,
-        bridgeAmountInWei.toString()
+        bridgeAmountInWei.toString(),
       );
 
       // Build withdrawal instruction to transfer bridged tokens back to EOA on destination chain
       // Without this, tokens remain in the Biconomy Nexus/Smart Account
       // Note: CCIP bridging takes 15-22 minutes, so we extend the time window
-      const extendedUpperBoundTimestamp = Math.floor(Date.now() / 1000) + 22 * 60; // 22 minutes
+      const extendedUpperBoundTimestamp =
+        Math.floor(Date.now() / 1000) + 22 * 60; // 22 minutes
       const withdrawalFlow = biconomyService.buildWithdrawalInstruction(
         dstTokenAddress,
         dstChainId,
         userAddress,
-        extendedUpperBoundTimestamp
+        extendedUpperBoundTimestamp,
       );
 
       // Build quote request - use classic EOA mode with funding token provided
@@ -433,7 +449,7 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         walletClient,
         { address: userAddress },
         publicClient,
-        (status) => callback?.({ text: status })
+        (status) => callback?.({ text: status }),
       );
 
       if (result.success && result.supertxHash) {
@@ -498,7 +514,7 @@ CCIP fees are paid in the native token of the source chain (ETH, POL, etc.).`,
         const composedState = await runtime.composeState(
           message,
           ["ACTION_STATE"],
-          true
+          true,
         );
         const params = composedState?.data?.actionParams || {};
         failureInputParams = {

@@ -1,10 +1,25 @@
-import { base, mainnet, polygon, baseSepolia, sepolia, arbitrum, optimism, scroll } from 'viem/chains';
-import type { Chain } from 'viem/chains';
+import {
+  base,
+  mainnet,
+  polygon,
+  baseSepolia,
+  sepolia,
+  arbitrum,
+  optimism,
+} from "viem/chains";
+import type { Chain } from "viem/chains";
 
 /**
  * Supported blockchain networks
  */
-export type SupportedNetwork = 'base' | 'ethereum' | 'polygon' | 'arbitrum' | 'optimism' | 'scroll' | 'base-sepolia' | 'ethereum-sepolia';
+export type SupportedNetwork =
+  | "base"
+  | "ethereum"
+  | "polygon"
+  | "arbitrum"
+  | "optimism"
+  | "base-sepolia"
+  | "ethereum-sepolia";
 
 /**
  * Chain configuration interface
@@ -32,130 +47,121 @@ export interface ChainConfig {
  * Add new chains here to support them across the entire application
  */
 export const CHAIN_CONFIGS: Record<SupportedNetwork, ChainConfig> = {
-  'base': {
-    name: 'Base',
+  base: {
+    name: "Base",
     chain: base,
-    rpcUrl: (alchemyKey: string) => `https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://basescan.org',
+    rpcUrl: (alchemyKey: string) =>
+      `https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://basescan.org",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'base',
+    coingeckoPlatform: "base",
     swap: {
       cdpSupported: true, // CDP SDK supports Base swaps
     },
   },
-  'ethereum': {
-    name: 'Ethereum',
+  ethereum: {
+    name: "Ethereum",
     chain: mainnet,
-    rpcUrl: (alchemyKey: string) => `https://eth-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://etherscan.io',
+    rpcUrl: (alchemyKey: string) =>
+      `https://eth-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://etherscan.io",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'ethereum',
+    coingeckoPlatform: "ethereum",
     swap: {
       cdpSupported: true, // CDP SDK supports Ethereum swaps
     },
   },
-  'polygon': {
-    name: 'Polygon',
+  polygon: {
+    name: "Polygon",
     chain: polygon,
-    rpcUrl: (alchemyKey: string) => `https://polygon-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://polygonscan.com',
+    rpcUrl: (alchemyKey: string) =>
+      `https://polygon-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://polygonscan.com",
     nativeToken: {
-      symbol: 'POL',
-      name: 'Polygon',
-      coingeckoId: 'polygon-ecosystem-token',
+      symbol: "POL",
+      name: "Polygon",
+      coingeckoId: "polygon-ecosystem-token",
       decimals: 18,
     },
-    coingeckoPlatform: 'polygon-pos',
+    coingeckoPlatform: "polygon-pos",
     swap: {
       cdpSupported: false, // CDP SDK does NOT support Polygon swaps
     },
   },
-  'arbitrum': {
-    name: 'Arbitrum',
+  arbitrum: {
+    name: "Arbitrum",
     chain: arbitrum,
-    rpcUrl: (alchemyKey: string) => `https://arb-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://arbiscan.io',
+    rpcUrl: (alchemyKey: string) =>
+      `https://arb-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://arbiscan.io",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'arbitrum-one',
+    coingeckoPlatform: "arbitrum-one",
     swap: {
       cdpSupported: false, // CDP SDK does NOT support Arbitrum swaps
     },
   },
-  'optimism': {
-    name: 'Optimism',
+  optimism: {
+    name: "Optimism",
     chain: optimism,
-    rpcUrl: (alchemyKey: string) => `https://opt-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://optimistic.etherscan.io',
+    rpcUrl: (alchemyKey: string) =>
+      `https://opt-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://optimistic.etherscan.io",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'optimistic-ethereum',
+    coingeckoPlatform: "optimistic-ethereum",
     swap: {
       cdpSupported: false, // CDP SDK does NOT support Optimism swaps
     },
   },
-  'scroll': {
-    name: 'Scroll',
-    chain: scroll,
-    rpcUrl: (alchemyKey: string) => `https://scroll-mainnet.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://scrollscan.com',
-    nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
-      decimals: 18,
-    },
-    coingeckoPlatform: 'scroll',
-    swap: {
-      cdpSupported: false, // CDP SDK does NOT support Scroll swaps
-    },
-  },
-  'base-sepolia': {
-    name: 'Base Sepolia',
+  "base-sepolia": {
+    name: "Base Sepolia",
     chain: baseSepolia,
-    rpcUrl: (alchemyKey: string) => `https://base-sepolia.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://sepolia.basescan.org',
+    rpcUrl: (alchemyKey: string) =>
+      `https://base-sepolia.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://sepolia.basescan.org",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'base',
+    coingeckoPlatform: "base",
     swap: {
       cdpSupported: false, // Testnet - no CDP swap support
     },
   },
-  'ethereum-sepolia': {
-    name: 'Ethereum Sepolia',
+  "ethereum-sepolia": {
+    name: "Ethereum Sepolia",
     chain: sepolia,
-    rpcUrl: (alchemyKey: string) => `https://eth-sepolia.g.alchemy.com/v2/${alchemyKey}`,
-    explorerUrl: 'https://sepolia.etherscan.io',
+    rpcUrl: (alchemyKey: string) =>
+      `https://eth-sepolia.g.alchemy.com/v2/${alchemyKey}`,
+    explorerUrl: "https://sepolia.etherscan.io",
     nativeToken: {
-      symbol: 'ETH',
-      name: 'Ethereum',
-      coingeckoId: 'ethereum',
+      symbol: "ETH",
+      name: "Ethereum",
+      coingeckoId: "ethereum",
       decimals: 18,
     },
-    coingeckoPlatform: 'ethereum',
+    coingeckoPlatform: "ethereum",
     swap: {
       cdpSupported: false, // Testnet - no CDP swap support
     },
@@ -165,17 +171,28 @@ export const CHAIN_CONFIGS: Record<SupportedNetwork, ChainConfig> = {
 /**
  * Get mainnet networks only (excludes testnets)
  */
-export const MAINNET_NETWORKS: SupportedNetwork[] = ['base', 'ethereum', 'polygon', 'arbitrum', 'optimism', 'scroll'];
+export const MAINNET_NETWORKS: SupportedNetwork[] = [
+  "base",
+  "ethereum",
+  "polygon",
+  "arbitrum",
+  "optimism",
+];
 
 /**
  * Get testnet networks only
  */
-export const TESTNET_NETWORKS: SupportedNetwork[] = ['base-sepolia', 'ethereum-sepolia'];
+export const TESTNET_NETWORKS: SupportedNetwork[] = [
+  "base-sepolia",
+  "ethereum-sepolia",
+];
 
 /**
  * Get all supported networks
  */
-export const ALL_NETWORKS: SupportedNetwork[] = Object.keys(CHAIN_CONFIGS) as SupportedNetwork[];
+export const ALL_NETWORKS: SupportedNetwork[] = Object.keys(
+  CHAIN_CONFIGS,
+) as SupportedNetwork[];
 
 /**
  * Helper: Get chain config by network name
@@ -211,7 +228,10 @@ export function getExplorerUrl(network: string): string | null {
 /**
  * Helper: Get transaction explorer URL
  */
-export function getTxExplorerUrl(network: string, txHash: string): string | null {
+export function getTxExplorerUrl(
+  network: string,
+  txHash: string,
+): string | null {
   const explorerUrl = getExplorerUrl(network);
   return explorerUrl ? `${explorerUrl}/tx/${txHash}` : null;
 }
@@ -219,7 +239,10 @@ export function getTxExplorerUrl(network: string, txHash: string): string | null
 /**
  * Helper: Get address explorer URL
  */
-export function getAddressExplorerUrl(network: string, address: string): string | null {
+export function getAddressExplorerUrl(
+  network: string,
+  address: string,
+): string | null {
   const explorerUrl = getExplorerUrl(network);
   return explorerUrl ? `${explorerUrl}/address/${address}` : null;
 }
@@ -243,7 +266,9 @@ export function getCoingeckoPlatform(network: string): string | null {
 /**
  * Helper: Check if a network is supported
  */
-export function isSupportedNetwork(network: string): network is SupportedNetwork {
+export function isSupportedNetwork(
+  network: string,
+): network is SupportedNetwork {
   return network in CHAIN_CONFIGS;
 }
 
@@ -273,7 +298,7 @@ export function isCdpSwapSupported(network: string): boolean {
  * Helper: Get networks that support CDP swaps
  */
 export function getCdpSwapSupportedNetworks(): SupportedNetwork[] {
-  return ALL_NETWORKS.filter(network => isCdpSwapSupported(network));
+  return ALL_NETWORKS.filter((network) => isCdpSwapSupported(network));
 }
 
 // ============================================================================
@@ -284,7 +309,8 @@ export function getCdpSwapSupportedNetworks(): SupportedNetwork[] {
  * Native token address used by swap protocols (0x + Ee repeated)
  * This special address represents native tokens (ETH, MATIC, etc.) in swap protocols
  */
-export const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+export const NATIVE_TOKEN_ADDRESS =
+  "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 /**
  * Normalize token address for swap protocols
@@ -303,22 +329,22 @@ export function normalizeTokenAddress(token: string): string {
  * Uniswap V3 SwapRouter addresses per network
  */
 export const UNISWAP_V3_ROUTER: Record<string, string> = {
-  'ethereum': '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-  'polygon': '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-  'arbitrum': '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-  'optimism': '0xE592427A0AEce92De3Edee1F18E0157C05861564',
-  'base': '0x2626664c2603336E57B271c5C0b26F421741e481',
+  ethereum: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  polygon: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  arbitrum: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  optimism: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+  base: "0x2626664c2603336E57B271c5C0b26F421741e481",
 };
 
 /**
  * Uniswap V3 Quoter V2 addresses per network
  */
 export const UNISWAP_V3_QUOTER: Record<string, string> = {
-  'ethereum': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
-  'polygon': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
-  'arbitrum': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
-  'optimism': '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
-  'base': '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
+  ethereum: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  polygon: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  arbitrum: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  optimism: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
+  base: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
 };
 
 /**
@@ -326,18 +352,18 @@ export const UNISWAP_V3_QUOTER: Record<string, string> = {
  * Uniswap V3 requires wrapped tokens for native currency swaps
  */
 export const WRAPPED_NATIVE_TOKEN: Record<string, string> = {
-  'ethereum': '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
-  'polygon': '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',  // WMATIC
-  'arbitrum': '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', // WETH
-  'optimism': '0x4200000000000000000000000000000000000006', // WETH
-  'base': '0x4200000000000000000000000000000000000006',     // WETH
+  ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
+  polygon: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC
+  arbitrum: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH
+  optimism: "0x4200000000000000000000000000000000000006", // WETH
+  base: "0x4200000000000000000000000000000000000006", // WETH
 };
 
 /**
  * Uniswap V3 pool fee tiers (in hundredths of a bip, i.e. 1e-6)
  */
 export const UNISWAP_POOL_FEES = {
-  LOW: 500,      // 0.05%
-  MEDIUM: 3000,  // 0.3%
-  HIGH: 10000,   // 1%
+  LOW: 500, // 0.05%
+  MEDIUM: 3000, // 0.3%
+  HIGH: 10000, // 1%
 };
