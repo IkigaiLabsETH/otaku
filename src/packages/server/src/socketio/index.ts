@@ -126,12 +126,13 @@ export class SocketIORouter {
       const channel = await this.serverInstance.getChannelDetails(channelId);
 
       if (!channel) {
-        // Channel doesn't exist - allow access (will be created when message is sent)
-        // This supports the "new chat" flow where channel is created on first message
-        logger.debug(
-          `[SocketIO] Channel ${channelId} doesn't exist yet, allowing access for creation`,
+        // SECURITY FIX: Deny access to non-existent channels at join time
+        // Channels should be explicitly created through proper API with authorization
+        // The "new chat" flow should create the channel first via API, then join
+        logger.warn(
+          `[SocketIO] User ${userId.substring(0, 8)}... denied access to non-existent channel ${channelId}`,
         );
-        return true;
+        return false;
       }
 
       // Check if user is a participant in the channel

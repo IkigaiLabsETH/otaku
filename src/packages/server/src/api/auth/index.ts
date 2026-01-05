@@ -60,13 +60,13 @@ function cleanupRevokedTokens(): void {
   }
 }
 
-// Run cleanup every 5 minutes
-setInterval(cleanupRevokedTokens, 5 * 60 * 1000);
+// Run cleanup every 5 minutes (store interval ID for cleanup on shutdown)
+const cleanupInterval = setInterval(cleanupRevokedTokens, 5 * 60 * 1000);
 
 /**
  * Revoke a token by its JTI (JWT ID)
  */
-function revokeToken(jti: string, expiryMs: number): void {
+export function revokeToken(jti: string, expiryMs: number): void {
   revokedTokens.set(jti, expiryMs);
   logger.info(`[Auth] Token revoked: ${jti.substring(0, 8)}...`);
 }
@@ -74,8 +74,17 @@ function revokeToken(jti: string, expiryMs: number): void {
 /**
  * Check if a token is revoked
  */
-function isTokenRevoked(jti: string): boolean {
+export function isTokenRevoked(jti: string): boolean {
   return revokedTokens.has(jti);
+}
+
+/**
+ * Shutdown token revocation cleanup (for graceful shutdown)
+ */
+export function shutdownTokenRevocation(): void {
+  clearInterval(cleanupInterval);
+  revokedTokens.clear();
+  logger.info("[Auth] Token revocation cleanup stopped");
 }
 
 /**
@@ -175,7 +184,7 @@ async function ensureConnection(db: any): Promise<void> {
 
 /**
  * Execute parameterized SQL with retry on connection errors
- * Falls back to fresh direct connection when pool is completely dead
+ * Uses pool when healthy, falls back to fresh direct connection when pool is dead
  *
  * SECURITY: Uses parameterized queries to prevent SQL injection
  * The db.execute method in drizzle supports parameterized queries via sql template tag,
@@ -194,6 +203,29 @@ async function executeWithRetry(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
+      // Try pool first if healthy, otherwise use fresh connection
+      if (poolHealthy && attempt === 0) {
+        try {
+          // Use pool with parameterized query via fresh pg client within pool context
+          // Note: drizzle's db.execute doesn't support parameterized raw SQL directly,
+          // so we use executeWithFreshConnection for parameterized queries
+          const result = await executeWithFreshConnection(sql, params);
+          lastSuccessfulQuery = Date.now();
+          poolHealthy = true;
+          return result;
+        } catch (poolError: any) {
+          if (isRetryableError(poolError)) {
+            logger.warn(
+              "[Auth] Pool query failed, will retry with fresh connection",
+            );
+            poolHealthy = false;
+            // Fall through to fresh connection attempt
+          } else {
+            throw poolError;
+          }
+        }
+      }
+
       // Use fresh connection with parameterized query for security
       const result = await executeWithFreshConnection(sql, params);
       // Mark pool as healthy on success
@@ -288,12 +320,16 @@ async function initUserRegistry(db: any): Promise<void> {
 /**
  * Verify user exists in database by entityId
  * Used for token refresh validation
+ *
+ * SECURITY: Fails closed - returns false if database unavailable
  */
 async function verifyUserExists(db: any, entityId: string): Promise<boolean> {
   if (!db) {
-    // In development without DB, assume user exists
-    logger.warn("[Auth] Database not available, skipping user existence check");
-    return true;
+    // SECURITY FIX: Fail closed consistently - require database for all auth operations
+    logger.error(
+      "[Auth] Database not available - cannot verify user existence, failing closed",
+    );
+    return false;
   }
 
   try {

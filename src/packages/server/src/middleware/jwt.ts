@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "@elizaos/core";
+import { isTokenRevoked } from "../api/auth";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -134,6 +135,21 @@ export function requireAuth(
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
+
+    // SECURITY: Check if token has been revoked
+    if (decoded.jti && isTokenRevoked(decoded.jti)) {
+      logger.warn(
+        `[Auth] Revoked token used: ${decoded.jti.substring(0, 8)}... (user: ${decoded.username})`,
+      );
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: "TOKEN_REVOKED",
+          message: "Token has been revoked. Please sign in again.",
+        },
+      });
+    }
+
     req.userId = decoded.userId;
     req.userEmail = decoded.email;
     req.username = decoded.username;
@@ -189,6 +205,15 @@ export function optionalAuth(req: AuthenticatedRequest, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
+
+    // SECURITY: Check if token has been revoked (even for optional auth)
+    if (decoded.jti && isTokenRevoked(decoded.jti)) {
+      logger.debug(
+        `[Auth] Optional auth - revoked token ignored: ${decoded.jti.substring(0, 8)}...`,
+      );
+      return next(); // Continue without setting user info for revoked tokens
+    }
+
     req.userId = decoded.userId;
     req.userEmail = decoded.email;
     req.username = decoded.username;
@@ -233,15 +258,24 @@ export function requireAuthOrApiKey(
     const token = authHeader.substring(7);
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as AuthTokenPayload;
-      req.userId = decoded.userId;
-      req.userEmail = decoded.email;
-      req.username = decoded.username;
-      req.isAdmin = decoded.isAdmin || false;
-      req.tokenJti = decoded.jti;
-      logger.debug(
-        `[Auth] Authenticated via JWT: ${decoded.username} (${decoded.userId.substring(0, 8)}...)${req.isAdmin ? " [ADMIN]" : ""}`,
-      );
-      return next();
+
+      // SECURITY: Check if token has been revoked
+      if (decoded.jti && isTokenRevoked(decoded.jti)) {
+        logger.warn(
+          `[Auth] Revoked token used in requireAuthOrApiKey: ${decoded.jti.substring(0, 8)}...`,
+        );
+        // Fall through to API key check instead of returning 401
+      } else {
+        req.userId = decoded.userId;
+        req.userEmail = decoded.email;
+        req.username = decoded.username;
+        req.isAdmin = decoded.isAdmin || false;
+        req.tokenJti = decoded.jti;
+        logger.debug(
+          `[Auth] Authenticated via JWT: ${decoded.username} (${decoded.userId.substring(0, 8)}...)${req.isAdmin ? " [ADMIN]" : ""}`,
+        );
+        return next();
+      }
     } catch (error: any) {
       logger.warn(
         `[Auth] JWT verification failed in requireAuthOrApiKey: ${error.message}`,
