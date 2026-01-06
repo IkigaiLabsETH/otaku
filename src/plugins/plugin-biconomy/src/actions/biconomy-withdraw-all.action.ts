@@ -7,17 +7,33 @@ import {
   type Memory,
   type State,
 } from "@elizaos/core";
-import { parseUnits } from "viem";
+import { parseUnits, type PublicClient } from "viem";
 import { getEntityWallet } from "../../../../utils/entity";
 import { CdpService } from "../../../plugin-cdp/services/cdp.service";
 import { CdpNetwork } from "../../../plugin-cdp/types";
 import {
   resolveTokenToAddress,
   getTokenDecimals,
+  getHardcodedTokens,
 } from "../../../plugin-relay/src/utils/token-resolver";
 import { BiconomyService } from "../services/biconomy.service";
 import { type QuoteRequest } from "../types";
 import { validateBiconomyService } from "../utils/actionHelpers";
+import {
+  resolveTokenForBiconomy,
+  isNativeToken,
+} from "../utils/token-resolver";
+
+// ERC20 ABI for balanceOf
+const ERC20_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: "_owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "balance", type: "uint256" }],
+    type: "function",
+  },
+] as const;
 
 // CDP network mapping (chain ID -> CDP network name)
 const CDP_NETWORK_MAP: Record<number, CdpNetwork> = {
@@ -49,6 +65,92 @@ const getChainNameFromId = (chainId: number): string => {
 };
 
 /**
+ * Find a suitable funding token from user's EOA balance
+ * Checks hardcoded tokens (USDC, USDT, DAI, etc.) and returns the first one with balance
+ * 
+ * @param publicClient - Viem public client for balance checks
+ * @param userAddress - User's EOA address
+ * @param chainName - Chain name (e.g., "base", "ethereum")
+ * @param minAmount - Minimum amount in token decimals (default: 0.5 for common tokens)
+ * @returns Token symbol and address with sufficient balance, or null if none found
+ */
+async function findFundingTokenWithBalance(
+  publicClient: PublicClient,
+  userAddress: `0x${string}`,
+  chainName: string,
+): Promise<{ symbol: string; address: `0x${string}` } | null> {
+  // Get hardcoded tokens for the chain
+  const hardcodedTokens = getHardcodedTokens(chainName);
+  
+  // Priority order for funding tokens (prefer stablecoins)
+  const priorityOrder = ["usdc", "usdt", "dai", "usdce", "usdc.e"];
+  
+  // Check priority tokens first
+  for (const symbol of priorityOrder) {
+    const address = hardcodedTokens[symbol];
+    if (!address) continue;
+    
+    try {
+      logger.debug(`[BICONOMY_WITHDRAW] Checking ${symbol.toUpperCase()} balance at ${address}`);
+      
+      const balance = await publicClient.readContract({
+        address: address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [userAddress],
+      }) as bigint;
+      
+      // Get decimals to determine minimum amount
+      const decimals = await getTokenDecimals(address, chainName);
+      const minAmount = parseUnits("0.5", decimals); // Require at least 0.5 tokens
+      
+      if (balance >= minAmount) {
+        logger.info(`[BICONOMY_WITHDRAW] Found funding token: ${symbol.toUpperCase()} with balance ${balance.toString()}`);
+        return { symbol, address: address as `0x${string}` };
+      } else {
+        logger.debug(`[BICONOMY_WITHDRAW] ${symbol.toUpperCase()} balance too low: ${balance.toString()}`);
+      }
+    } catch (error) {
+      logger.debug(`[BICONOMY_WITHDRAW] Error checking ${symbol}: ${(error as Error).message}`);
+      continue;
+    }
+  }
+  
+  // Check other tokens if priority tokens not found
+  for (const [symbol, address] of Object.entries(hardcodedTokens)) {
+    if (priorityOrder.includes(symbol)) continue; // Already checked
+    
+    try {
+      logger.debug(`[BICONOMY_WITHDRAW] Checking ${symbol.toUpperCase()} balance at ${address}`);
+      
+      const balance = await publicClient.readContract({
+        address: address as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [userAddress],
+      }) as bigint;
+      
+      // Get decimals to determine minimum amount
+      const decimals = await getTokenDecimals(address, chainName);
+      const minAmount = parseUnits("0.5", decimals); // Require at least 0.5 tokens
+      
+      if (balance >= minAmount) {
+        logger.info(`[BICONOMY_WITHDRAW] Found funding token: ${symbol.toUpperCase()} with balance ${balance.toString()}`);
+        return { symbol, address: address as `0x${string}` };
+      } else {
+        logger.debug(`[BICONOMY_WITHDRAW] ${symbol.toUpperCase()} balance too low: ${balance.toString()}`);
+      }
+    } catch (error) {
+      logger.debug(`[BICONOMY_WITHDRAW] Error checking ${symbol}: ${(error as Error).message}`);
+      continue;
+    }
+  }
+  
+  logger.warn(`[BICONOMY_WITHDRAW] No suitable funding token found with balance on ${chainName}`);
+  return null;
+}
+
+/**
  * Biconomy Withdraw Action
  * 
  * Withdraws a specific token from the Nexus Smart Account to an address.
@@ -57,9 +159,11 @@ const getChainNameFromId = (chainId: number): string => {
 export const biconomyWithdrawAllAction: Action = {
   name: "BICONOMY_WITHDRAW",
   description: `Withdraw a specific token from Biconomy Nexus companion wallet (Smart Account) to a specified address.
-Uses runtimeErc20Balance to transfer the full token balance.
-Requires a funding token from your EOA to pay orchestration fees (default: 2 USDC).
-Parameters: chain (string), token (string), fundingToken (string, optional), withdrawAddress (string, optional).`,
+Supports both ERC20 tokens (USDC, WETH, etc.) and native gas tokens (ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon).
+- For ERC20 tokens: Withdraws full balance automatically (no amount needed)
+- For native tokens (ETH, POL): MUST specify the amount parameter (e.g., amount: "0.1")
+Automatically finds a suitable funding token (USDC, USDT, DAI, etc.) from your EOA balance on the same chain.
+Parameters: chain, token, amount (required for native tokens), fundingAmount (optional), withdrawAddress (optional).`,
   similes: [
     "WITHDRAW_FROM_BICONOMY",
     "WITHDRAW_NEXUS_TOKEN",
@@ -74,17 +178,17 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
     },
     token: {
       type: "string",
-      description: "Token symbol or contract address to withdraw from Smart Account (e.g., 'usdc', 'weth', '0x...')",
+      description: "Token symbol or contract address to withdraw from Smart Account (e.g., 'usdc', 'weth', 'eth', 'pol', '0x...'). Supports native tokens (ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon).",
       required: true,
     },
-    fundingToken: {
+    amount: {
       type: "string",
-      description: "Token in EOA to use for paying gas (e.g., 'usdc'). Must be in your EOA wallet. Default: usdc",
+      description: "Amount to withdraw (e.g., '0.5', '100'). REQUIRED for native tokens (ETH, POL). For ERC20 tokens, omit to withdraw full balance.",
       required: false,
     },
     fundingAmount: {
       type: "string",
-      description: "Amount of funding token for gas (e.g., '2'). Default: 2",
+      description: "Amount of funding token to use from EOA for orchestration fees (e.g., '1'). System will auto-find a suitable token (USDC, USDT, DAI, etc.). Default: 1",
       required: false,
     },
     withdrawAddress: {
@@ -123,12 +227,12 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
 
       // Extract parameters
       const composedState = await runtime.composeState(message, ["ACTION_STATE"], true);
-      const params = composedState?.data?.actionParams || {};
+      const params = (composedState?.data?.actionParams || {}) as any;
 
       const chainName = (params?.chain?.toLowerCase().trim() || "base") as string;
       const tokenParam = params?.token?.toLowerCase().trim() as string;
-      const fundingTokenParam = (params?.fundingToken?.toLowerCase().trim() || "usdc") as string;
-      const fundingAmount = (params?.fundingAmount?.trim() || "2") as string;
+      const amountParam = params?.amount?.trim() as string | undefined;
+      const fundingAmount = (params?.fundingAmount?.trim() || "1") as string;
       const withdrawAddressParam = params?.withdrawAddress?.trim() as string | undefined;
 
       // Validate required params
@@ -173,33 +277,75 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
       // Determine withdraw address (default to user's EOA)
       const withdrawAddress = (withdrawAddressParam || userAddress) as `0x${string}`;
 
-      // Resolve token addresses
-      const tokenAddress = await resolveTokenToAddress(tokenParam, chainName);
+      // Resolve token address - use Biconomy resolver (handles native tokens)
+      const tokenAddress = await resolveTokenForBiconomy(tokenParam, chainName);
       if (!tokenAddress) {
         callback?.({ text: `❌ Cannot resolve token: ${tokenParam} on ${chainName}` });
         return { text: `❌ Cannot resolve token: ${tokenParam} on ${chainName}`, success: false, error: "token_resolution_failed" };
       }
 
-      const fundingTokenAddress = await resolveTokenToAddress(fundingTokenParam, chainName);
-      if (!fundingTokenAddress) {
-        callback?.({ text: `❌ Cannot resolve funding token: ${fundingTokenParam} on ${chainName}` });
-        return { text: `❌ Cannot resolve funding token: ${fundingTokenParam}`, success: false, error: "token_resolution_failed" };
+      // Dynamically find a funding token from user's EOA balance
+      callback?.({ text: `🔍 Finding suitable funding token from your ${chainName} balance...` });
+      const fundingTokenInfo = await findFundingTokenWithBalance(publicClient, userAddress, chainName);
+      
+      if (!fundingTokenInfo) {
+        callback?.({ text: `❌ No suitable funding token found in your EOA on ${chainName}. Please have at least 0.5 USDC, USDT, or DAI available for orchestration fees.` });
+        return { text: `❌ No suitable funding token found in EOA`, success: false, error: "no_funding_token" };
       }
+      
+      const { symbol: fundingTokenSymbol, address: fundingTokenAddress } = fundingTokenInfo;
+      logger.info(`[BICONOMY_WITHDRAW] Using funding token: ${fundingTokenSymbol.toUpperCase()} at ${fundingTokenAddress}`);
 
-      callback?.({ text: `🔄 Creating withdrawal instruction for ${tokenParam.toUpperCase()} on ${chainName}...` });
+      const isNativeWithdrawal = isNativeToken(tokenAddress);
+      const tokenLabel = isNativeWithdrawal
+        ? (chainName === "polygon" ? "POL" : "ETH")
+        : tokenParam.toUpperCase();
 
-      // Build withdrawal instruction using runtimeErc20Balance
-      const withdrawalFlow = biconomyService.buildWithdrawalInstruction(
-        tokenAddress,
-        chainId,
-        withdrawAddress
-      );
+      callback?.({ text: `🔄 Creating ${isNativeWithdrawal ? "native token" : "ERC20"} withdrawal instruction for ${tokenLabel} on ${chainName}...` });
+
+      // Build withdrawal instruction - different method for native vs ERC20 tokens
+      let withdrawalFlow;
+      if (isNativeWithdrawal) {
+        // Native token (ETH, POL) withdrawal requires specifying the amount
+        // Cannot use runtimeErc20Balance with native tokens - Biconomy API rejects zero address
+        logger.info(`[BICONOMY_WITHDRAW] Using native token withdrawal for ${tokenLabel} on ${chainName}`);
+        
+        // Amount is REQUIRED for native tokens
+        if (!amountParam) {
+          callback?.({ text: `❌ Amount is required for native token (${tokenLabel}) withdrawals. Please specify the amount (e.g., amount: "0.1" for 0.1 ${tokenLabel})` });
+          return { text: `❌ Amount required for native token withdrawal`, success: false, error: "missing_amount" };
+        }
+        
+        // Parse amount to wei (18 decimals for native tokens)
+        const amountFloat = Number(amountParam);
+        if (!Number.isFinite(amountFloat) || amountFloat <= 0) {
+          callback?.({ text: `❌ Invalid amount: ${amountParam}. Please provide a positive number.` });
+          return { text: `❌ Invalid amount`, success: false, error: "invalid_amount" };
+        }
+        
+        const amountInWei = parseUnits(amountParam, 18);
+        callback?.({ text: `💰 Withdrawing ${amountParam} ${tokenLabel} from Nexus` });
+        
+        // Build native withdrawal with specified amount using ETH Forwarder contract
+        withdrawalFlow = biconomyService.buildNativeWithdrawalInstruction(
+          chainId,
+          withdrawAddress,
+          amountInWei.toString()
+        );
+      } else {
+        // ERC20 token withdrawal using runtimeErc20Balance (withdraws full balance)
+        withdrawalFlow = biconomyService.buildWithdrawalInstruction(
+          tokenAddress,
+          chainId,
+          withdrawAddress
+        );
+      }
 
       // Get funding token decimals and amount
       const fundingDecimals = await getTokenDecimals(fundingTokenAddress, chainName);
       const fundingAmountWei = parseUnits(fundingAmount, fundingDecimals);
 
-      // Build quote request with funding token from EOA
+      // Build quote request - include fundingTokens but omit feeToken (like swap action)
       const quoteRequest: QuoteRequest = {
         mode: "eoa",
         ownerAddress: userAddress,
@@ -211,13 +357,10 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
             amount: fundingAmountWei.toString(),
           },
         ],
-        feeToken: {
-          address: fundingTokenAddress,
-          chainId: chainId,
-        },
+        // feeToken omitted - uses Biconomy's default handling
       };
 
-      callback?.({ text: `🔄 Getting quote (funding: ${fundingAmount} ${fundingTokenParam.toUpperCase()} from EOA)...` });
+      callback?.({ text: `🔄 Getting quote (funding: ${fundingAmount} ${fundingTokenSymbol.toUpperCase()} from your EOA)...` });
 
       // Execute
       const result = await biconomyService.executeIntent(
@@ -231,13 +374,17 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
 
       if (result.success && result.supertxHash) {
         const explorerUrl = biconomyService.getExplorerUrl(result.supertxHash);
-        const chainName = biconomyService.getChainName(chainId);
+        const chainDisplayName = biconomyService.getChainName(chainId);
+
+        const tokenDisplay = isNativeWithdrawal
+          ? `${tokenLabel} (native)`
+          : `${tokenLabel} (\`${tokenAddress}\`)`;
 
         const responseText = `
 ✅ **Withdrawal Executed**
 
-**Chain:** ${chainName} (${chainId})
-**Token:** ${tokenParam.toUpperCase()} (\`${tokenAddress}\`)
+**Chain:** ${chainDisplayName} (${chainId})
+**Token:** ${tokenDisplay}
 **To:** \`${withdrawAddress}\`
 
 **Supertx Hash:** \`${result.supertxHash}\`
@@ -278,6 +425,26 @@ Parameters: chain (string), token (string), fundingToken (string, optional), wit
       {
         name: "{{agent}}",
         content: { text: "Withdrawing USDC from Nexus Smart Account...", action: "BICONOMY_WITHDRAW" },
+      },
+    ],
+    [
+      {
+        name: "{{user}}",
+        content: { text: "Withdraw 0.05 ETH from Biconomy Nexus on Arbitrum" },
+      },
+      {
+        name: "{{agent}}",
+        content: { text: "Withdrawing 0.05 native ETH from Nexus Smart Account on Arbitrum...", action: "BICONOMY_WITHDRAW" },
+      },
+    ],
+    [
+      {
+        name: "{{user}}",
+        content: { text: "Withdraw 10 POL from Biconomy on Polygon" },
+      },
+      {
+        name: "{{agent}}",
+        content: { text: "Withdrawing 10 native POL from Nexus Smart Account on Polygon...", action: "BICONOMY_WITHDRAW" },
       },
     ],
   ],

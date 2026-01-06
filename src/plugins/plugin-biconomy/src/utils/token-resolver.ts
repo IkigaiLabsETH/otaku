@@ -58,6 +58,15 @@ export async function resolveTokenForBiconomy(
     `[Biconomy] Resolving token: ${normalizedToken} on ${normalizedNetwork}`,
   );
 
+  // Handle zero address (native token) passed directly
+  // This allows passing the zero address as a token parameter
+  if (normalizedToken === NATIVE_TOKEN_ADDRESS) {
+    logger.info(
+      `[Biconomy] Token is already native token address (zero address) for ${normalizedNetwork}`,
+    );
+    return NATIVE_TOKEN_ADDRESS;
+  }
+
   // Handle native ETH on chains that have it
   if (normalizedToken === "eth") {
     if (NATIVE_ETH_CHAINS.has(normalizedNetwork)) {

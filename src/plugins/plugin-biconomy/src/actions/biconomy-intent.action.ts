@@ -18,6 +18,7 @@ import {
 import { BiconomyService } from "../services/biconomy.service";
 import { type QuoteRequest } from "../types";
 import { tryGetBaseUsdcFeeToken } from "../utils/fee-token";
+import { resolveTokenForBiconomy, isNativeToken } from "../utils/token-resolver";
 import {
   DEFAULT_SLIPPAGE,
   validateSlippage,
@@ -393,9 +394,10 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism.`,
         } as ActionResult & { input: typeof inputParams };
       }
 
+      // Resolve target token addresses - use Biconomy resolver to handle native tokens
       const targetTokenAddresses: string[] = [];
       for (let i = 0; i < tokens.length; i++) {
-        const address = await resolveTokenToAddress(tokens[i], chains[i]);
+        const address = await resolveTokenForBiconomy(tokens[i], chains[i]);
         if (!address) {
           const errorMsg = `Cannot resolve target token: ${tokens[i]} on ${chains[i]}`;
           callback?.({ text: `❌ ${errorMsg}` });
@@ -460,14 +462,49 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism.`,
 
       // Build withdrawal instructions for each target token to transfer back to EOA
       // Without these, tokens remain in the Biconomy Nexus/Smart Account
-      const withdrawalFlows = targetChainIds.map(
-        (chainId: number | undefined, i: number) =>
-          biconomyService.buildWithdrawalInstruction(
-            targetTokenAddresses[i],
-            chainId!,
-            userAddress,
-          ),
-      );
+      // Use different methods for native vs ERC20 tokens
+      const withdrawalFlows: any[] = [];
+      
+      for (let i = 0; i < targetChainIds.length; i++) {
+        const chainId = targetChainIds[i]!;
+        const tokenAddress = targetTokenAddresses[i];
+        const isNative = isNativeToken(tokenAddress);
+        
+        if (isNative) {
+          // Native token (ETH, POL) - need Nexus address for runtimeNativeBalanceOf
+          logger.info(
+            `[MEE_SUPERTX_REBALANCE] Adding native token withdrawal for target ${i} on chain ${chainId}`,
+          );
+          
+          const nexusAddress = await biconomyService.getNexusAddress(userAddress, chainId);
+          if (!nexusAddress) {
+            logger.warn(
+              `[MEE_SUPERTX_REBALANCE] Could not find Nexus address for chain ${chainId} - skipping withdrawal for target ${i}`,
+            );
+            callback?.({
+              text: `⚠️ Could not auto-withdraw native token on ${chains[i]}. You may need to withdraw manually.`,
+            });
+            continue; // Skip this withdrawal
+          }
+          
+          withdrawalFlows.push(
+            biconomyService.buildNativeWithdrawalInstructionWithRuntimeBalance(
+              chainId,
+              userAddress,
+              nexusAddress,
+            )
+          );
+        } else {
+          // ERC20 token - use standard runtimeErc20Balance
+          withdrawalFlows.push(
+            biconomyService.buildWithdrawalInstruction(
+              tokenAddress,
+              chainId,
+              userAddress,
+            )
+          );
+        }
+      }
 
       // Build quote request - use classic EOA mode with funding token provided
       const feeToken = preferredFeeTokenResult?.feeToken ?? {

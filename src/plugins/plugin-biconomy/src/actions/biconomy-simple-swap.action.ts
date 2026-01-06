@@ -444,44 +444,152 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
 
       // Build withdrawal instruction to transfer output tokens back to EOA
       // Without this, tokens remain in the Biconomy Nexus/Smart Account
-      const withdrawalFlow = biconomyService.buildWithdrawalInstruction(
-        dstTokenAddress,
-        dstChainId,
-        userAddress,
-      );
+      const composeFlows: (typeof swapFlow)[] = [swapFlow];
 
-      // Build quote request - use classic EOA mode with funding token provided
-      const feeToken = preferredFeeTokenResult?.feeToken ?? {
-        address: srcTokenAddress,
-        chainId: srcChainId,
-      };
+      // Track if output is native token and withdrawal details
+      const isNativeOutput = isNativeToken(dstTokenAddress);
+      let minOutputAmount: string | undefined;
+      let gasBufferWei: bigint | undefined;
 
-      const quoteRequest: QuoteRequest = {
-        mode: "eoa",
-        ownerAddress: userAddress,
-        composeFlows: [swapFlow, withdrawalFlow],
-        fundingTokens: [
-          {
-            tokenAddress: srcTokenAddress,
-            chainId: srcChainId,
-            amount: swapAmountInWei.toString(),
-          },
-        ],
-        // feeToken,
-      };
+      if (!isNativeOutput) {
+        // ERC20 withdrawal using runtimeErc20Balance (works dynamically)
+        const withdrawalFlow = biconomyService.buildWithdrawalInstruction(
+          dstTokenAddress,
+          dstChainId,
+          userAddress,
+        );
+        composeFlows.push(withdrawalFlow);
+        
+        // Build and execute quote request
+        const quoteRequest: QuoteRequest = {
+          mode: "eoa",
+          ownerAddress: userAddress,
+          composeFlows,
+          fundingTokens: [
+            {
+              tokenAddress: srcTokenAddress,
+              chainId: srcChainId,
+              amount: swapAmountInWei.toString(),
+            },
+          ],
+        };
 
-      callback?.({ text: `🔄 Getting quote from MEE...` });
+        callback?.({ text: `🔄 Getting quote from MEE...` });
 
-      // Execute the intent using CDP account for native EIP-712 signing
-      // This bypasses the RPC and signs directly on Coinbase servers
-      const result = await biconomyService.executeIntent(
-        quoteRequest,
-        cdpAccount,
-        walletClient,
-        { address: userAddress },
-        publicClient,
-        (status) => callback?.({ text: status }),
-      );
+        // Execute the intent
+        var result = await biconomyService.executeIntent(
+          quoteRequest,
+          cdpAccount,
+          walletClient,
+          { address: userAddress },
+          publicClient,
+          (status) => callback?.({ text: status }),
+        );
+      } else {
+        // Native token output - requires two-step process:
+        // 1. Get quote to determine output amount
+        // 2. Add fixed-amount withdrawal using minOutputAmount minus gas buffer
+        logger.info(
+          `[MEE_FUSION_SWAP] Native token output - using two-step quote process`,
+        );
+        
+        callback?.({ text: `🔄 Getting quote from MEE...` });
+        
+        // Step 1: Get quote WITHOUT withdrawal to determine output
+        const initialQuoteRequest: QuoteRequest = {
+          mode: "eoa",
+          ownerAddress: userAddress,
+          composeFlows: [swapFlow],
+          fundingTokens: [
+            {
+              tokenAddress: srcTokenAddress,
+              chainId: srcChainId,
+              amount: swapAmountInWei.toString(),
+            },
+          ],
+        };
+        
+        const quoteResponse = await biconomyService.getQuote(initialQuoteRequest);
+        
+        // Extract minimum output amount
+        minOutputAmount = quoteResponse.returnedData[0]?.minOutputAmount;
+        if (!minOutputAmount) {
+          throw new Error("Could not determine output amount from quote");
+        }
+        
+        logger.info(`[MEE_FUSION_SWAP] Min output: ${minOutputAmount} wei native token`);
+        
+        // Calculate withdrawal amount: leave dynamic buffer for gas
+        // Use 15% of output as buffer, with min 0.0001 ETH and max 0.002 ETH
+        const minOutputBigInt = BigInt(minOutputAmount);
+        const percentageBuffer = (minOutputBigInt * BigInt(15)) / BigInt(100); // 15%
+        const minBufferWei = BigInt("100000000000000"); // 0.0001 ETH
+        const maxBufferWei = BigInt("2000000000000000"); // 0.002 ETH
+        
+        gasBufferWei = percentageBuffer;
+        if (gasBufferWei < minBufferWei) gasBufferWei = minBufferWei;
+        if (gasBufferWei > maxBufferWei) gasBufferWei = maxBufferWei;
+        
+        // Ensure we have enough to withdraw after buffer
+        const minWithdrawableWei = BigInt("50000000000000"); // 0.00005 ETH minimum to make withdrawal worthwhile
+        
+        if (minOutputBigInt <= gasBufferWei + minWithdrawableWei) {
+          // Output too small to auto-withdraw
+          logger.warn(`[MEE_FUSION_SWAP] Output amount ${minOutputAmount} wei too small for auto-withdrawal (need >${gasBufferWei + minWithdrawableWei} wei)`);
+          callback?.({
+            text: `⚠️ Output amount too small for auto-withdrawal. Swap will execute but you'll need to manually withdraw from Biconomy after.`,
+          });
+          
+          // Execute without withdrawal
+          var result = await biconomyService.executeIntent(
+            initialQuoteRequest,
+            cdpAccount,
+            walletClient,
+            { address: userAddress },
+            publicClient,
+            (status) => callback?.({ text: status }),
+          );
+        } else {
+          const withdrawAmountWei = (minOutputBigInt - gasBufferWei).toString();
+          const bufferEth = Number(gasBufferWei) / 1e18;
+          const withdrawEth = Number(withdrawAmountWei) / 1e18;
+          logger.info(`[MEE_FUSION_SWAP] Withdrawing ${withdrawEth.toFixed(6)} ${dstChain === "polygon" ? "POL" : "ETH"} (leaving ${bufferEth.toFixed(6)} for gas)`);
+          
+          // Step 2: Add native withdrawal with fixed amount
+          const nativeWithdrawalFlow = biconomyService.buildNativeWithdrawalInstruction(
+            dstChainId,
+            userAddress,
+            withdrawAmountWei,
+          );
+          composeFlows.push(nativeWithdrawalFlow);
+          
+          // Build final quote request with withdrawal
+          const finalQuoteRequest: QuoteRequest = {
+            mode: "eoa",
+            ownerAddress: userAddress,
+            composeFlows,
+            fundingTokens: [
+              {
+                tokenAddress: srcTokenAddress,
+                chainId: srcChainId,
+                amount: swapAmountInWei.toString(),
+              },
+            ],
+          };
+          
+          callback?.({ text: `🔄 Re-quoting with auto-withdrawal...` });
+          
+          // Execute with withdrawal
+          var result = await biconomyService.executeIntent(
+            finalQuoteRequest,
+            cdpAccount,
+            walletClient,
+            { address: userAddress },
+            publicClient,
+            (status) => callback?.({ text: status }),
+          );
+        }
+      }
 
       if (result.success && result.supertxHash) {
         const explorerUrl = biconomyService.getExplorerUrl(result.supertxHash);
@@ -489,6 +597,11 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
         const gasTokenDescription = preferredFeeTokenResult?.usedBaseUsdc
           ? "Base USDC"
           : `${srcToken.toUpperCase()} on ${srcChain}`;
+
+        // Add native token buffer note if applicable
+        const nativeTokenNote = isNativeOutput && minOutputAmount
+          ? `\n\n_Note: A small gas buffer (~${(Number(gasBufferWei) / 1e18).toFixed(4)} ${dstChain === "polygon" ? "POL" : "ETH"}) remains in your Biconomy Nexus for future transactions._`
+          : '';
 
         const responseText = `
 ✅ **MEE Fusion Swap Executed**
@@ -499,7 +612,7 @@ Native gas tokens: ETH on Base/Ethereum/Arbitrum/Optimism, POL on Polygon. On Po
 **Gas:** Paid in ${gasTokenDescription}
 
 **Supertx Hash:** \`${result.supertxHash}\`
-**Track:** [MEE Explorer](${explorerUrl})
+**Track:** [MEE Explorer](${explorerUrl})${nativeTokenNote}
         `.trim();
 
         callback?.({

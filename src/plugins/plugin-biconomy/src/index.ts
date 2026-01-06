@@ -4,6 +4,7 @@ import {
   meeSupertransactionRebalanceAction,
   meeSupertransactionStatusAction,
   biconomyWithdrawAllAction,
+  biconomyAutoWithdrawAction,
 } from "./actions/index";
 import { BiconomyService } from "./services/biconomy.service";
 
@@ -19,7 +20,8 @@ import { BiconomyService } from "./services/biconomy.service";
  * - MEE_FUSION_SWAP: Gasless cross-chain token swap (single input → single output)
  * - MEE_SUPERTRANSACTION_REBALANCE: Gasless multi-chain portfolio rebalancing (single input → multiple weighted outputs)
  * - MEE_SUPERTRANSACTION_STATUS: Track supertransaction status
- * - BICONOMY_WITHDRAW_ALL: Withdraw all tokens from Nexus companion wallet to user address
+ * - BICONOMY_WITHDRAW_ALL: Withdraw specific token from Nexus companion wallet to user address
+ * - BICONOMY_AUTO_WITHDRAW: Automatically scan and withdraw all tokens from all Nexus accounts across all chains
  * 
  * Supported Chains:
  * Ethereum, Base, Arbitrum, Polygon, Optimism, Scroll.
@@ -30,7 +32,7 @@ export const meePlugin: Plugin = {
   name: "mee",
   description:
     "Biconomy MEE (Modular Execution Environment) plugin for gasless cross-chain swaps and portfolio rebalancing",
-  actions: [meeFusionSwapAction, biconomyWithdrawAllAction, meeSupertransactionRebalanceAction, meeSupertransactionStatusAction],
+  actions: [meeFusionSwapAction, biconomyWithdrawAllAction, biconomyAutoWithdrawAction, meeSupertransactionRebalanceAction, meeSupertransactionStatusAction],
   services: [BiconomyService],
   evaluators: [],
   providers: [],
