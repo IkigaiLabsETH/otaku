@@ -11,14 +11,10 @@ import { formatUnits, parseUnits } from "viem";
 import { getEntityWallet } from "../../../../utils/entity";
 import { CdpService } from "../../../plugin-cdp/services/cdp.service";
 import { CdpNetwork } from "../../../plugin-cdp/types";
-import {
-  getTokenDecimals,
-  resolveTokenToAddress,
-} from "../../../plugin-relay/src/utils/token-resolver";
 import { BiconomyService } from "../services/biconomy.service";
 import { type QuoteRequest } from "../types";
 import { tryGetBaseUsdcFeeToken } from "../utils/fee-token";
-import { resolveTokenForBiconomy, isNativeToken } from "../utils/token-resolver";
+import { resolveTokenForBiconomy, getTokenDecimalsForBiconomy, isNativeToken } from "../utils/token-resolver";
 import {
   DEFAULT_SLIPPAGE,
   validateSlippage,
@@ -378,8 +374,9 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism.`,
         });
       }
 
-      // Resolve token addresses using CoinGecko (same as CDP/Relay)
-      const inputTokenAddress = await resolveTokenToAddress(
+      // Resolve input token address - use Biconomy resolver to handle native tokens correctly
+      // On Base/Ethereum/Arbitrum/Optimism, ETH should resolve to native (zero address), not WETH
+      const inputTokenAddress = await resolveTokenForBiconomy(
         inputToken,
         inputChain,
       );
@@ -411,8 +408,8 @@ Supports: Ethereum, Base, Arbitrum, Polygon, Optimism.`,
         targetTokenAddresses.push(address);
       }
 
-      // Get token decimals from CoinGecko
-      const decimals = await getTokenDecimals(inputTokenAddress, inputChain);
+      // Get token decimals - use Biconomy helper to handle native tokens (18 decimals)
+      const decimals = await getTokenDecimalsForBiconomy(inputTokenAddress, inputChain);
 
       const amountInWei = parseUnits(inputAmount, decimals);
 

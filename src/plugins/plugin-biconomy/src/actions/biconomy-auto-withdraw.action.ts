@@ -98,9 +98,11 @@ async function getNexusTokenBalances(
   // Check native token balance first
   try {
     const nativeBalance = await publicClient.getBalance({ address: nexusAddress });
+    const nativeSymbol = chainName === "polygon" ? "POL" : "ETH";
+    logger.info(`[BICONOMY_AUTO_WITHDRAW] Native ${nativeSymbol} balance on ${chainName}: ${formatUnits(nativeBalance, 18)} (${nativeBalance.toString()} wei)`);
+    
     if (nativeBalance > 0n) {
-      const nativeSymbol = chainName === "polygon" ? "POL" : "ETH";
-      logger.info(`[BICONOMY_AUTO_WITHDRAW] Found native ${nativeSymbol} balance: ${formatUnits(nativeBalance, 18)}`);
+      logger.info(`[BICONOMY_AUTO_WITHDRAW] ✅ Adding native ${nativeSymbol} to withdrawal list`);
       balances.push({
         chainId,
         chainName,
@@ -110,9 +112,11 @@ async function getNexusTokenBalances(
         decimals: 18,
         isNative: true,
       });
+    } else {
+      logger.info(`[BICONOMY_AUTO_WITHDRAW] Native ${nativeSymbol} balance is zero, skipping`);
     }
   } catch (error) {
-    logger.warn(`[BICONOMY_AUTO_WITHDRAW] Error checking native balance: ${(error as Error).message}`);
+    logger.error(`[BICONOMY_AUTO_WITHDRAW] ❌ Error checking native balance on ${chainName}: ${(error as Error).message}`);
   }
 
   // Check priority ERC20 tokens
@@ -186,6 +190,7 @@ async function getNexusTokenBalances(
 /**
  * Filter spam tokens based on minimum thresholds
  * Filters out tokens with very low balance (likely spam/dust)
+ * Lower thresholds for auto-withdrawal to catch small balances
  */
 function filterSpamTokens(balances: TokenBalance[]): TokenBalance[] {
   const SPAM_THRESHOLDS: Record<string, bigint> = {
@@ -196,16 +201,16 @@ function filterSpamTokens(balances: TokenBalance[]): TokenBalance[] {
     "USDC.E": parseUnits("0.01", 6),
     USDCE: parseUnits("0.01", 6),
     
-    // WETH: minimum 0.0001 ETH (~$0.30 at $3000/ETH)
-    WETH: parseUnits("0.0001", 18),
+    // WETH: minimum 0.00001 ETH (~$0.03 at $3000/ETH) - lower threshold for auto-withdraw
+    WETH: parseUnits("0.00001", 18),
     
-    // Native tokens: minimum 0.0001 (same as WETH)
-    ETH: parseUnits("0.0001", 18),
-    POL: parseUnits("0.01", 18), // POL is cheaper, use higher threshold
+    // Native tokens: minimum 0.00001 (very low threshold to catch small balances)
+    ETH: parseUnits("0.00001", 18),
+    POL: parseUnits("0.001", 18), // POL is cheaper, but still low threshold
   };
 
   const filtered = balances.filter((balance) => {
-    const threshold = SPAM_THRESHOLDS[balance.tokenSymbol] || parseUnits("0.0001", balance.decimals);
+    const threshold = SPAM_THRESHOLDS[balance.tokenSymbol] || parseUnits("0.00001", balance.decimals);
     
     if (balance.balance < threshold) {
       logger.info(
@@ -222,8 +227,68 @@ function filterSpamTokens(balances: TokenBalance[]): TokenBalance[] {
 }
 
 /**
+ * Get token USD price from token metadata
+ */
+async function getTokenUsdPrice(address: string, chainName: string): Promise<number | null> {
+  try {
+    const { getTokenMetadata } = await import("../../../plugin-relay/src/utils/token-resolver");
+    const metadata = await getTokenMetadata(address, chainName);
+    return metadata?.usdPrice || null;
+  } catch (error) {
+    logger.debug(`[BICONOMY_AUTO_WITHDRAW] Error getting USD price: ${(error as Error).message}`);
+    return null;
+  }
+}
+
+/**
+ * Calculate minimum token amount needed for $0.25 USD worth
+ */
+async function getMinAmountInUsd(
+  symbol: string,
+  address: string,
+  decimals: number,
+  chainName: string,
+): Promise<{ minAmount: bigint; usdValue: number }> {
+  const lowerSymbol = symbol.toLowerCase();
+  const MIN_USD_VALUE = 0.25; // $0.25 minimum
+  
+  // Stablecoins: assume 1:1 USD parity
+  if (["usdc", "usdt", "dai", "usdce", "usdc.e"].includes(lowerSymbol)) {
+    return {
+      minAmount: parseUnits(MIN_USD_VALUE.toString(), decimals),
+      usdValue: MIN_USD_VALUE,
+    };
+  }
+  
+  // For other tokens (WETH, WPOL, etc.), fetch actual USD price
+  const usdPrice = await getTokenUsdPrice(address, chainName);
+  
+  if (!usdPrice || usdPrice <= 0) {
+    logger.warn(`[BICONOMY_AUTO_WITHDRAW] No USD price found for ${symbol}, using fallback minimum`);
+    // Fallback: use a small amount (0.0001) if price unavailable
+    return {
+      minAmount: parseUnits("0.0001", decimals),
+      usdValue: 0,
+    };
+  }
+  
+  // Calculate how many tokens needed for $0.25
+  // Formula: tokens = $0.25 / price_per_token
+  const tokensNeeded = MIN_USD_VALUE / usdPrice;
+  const minAmount = parseUnits(tokensNeeded.toFixed(decimals), decimals);
+  
+  logger.debug(`[BICONOMY_AUTO_WITHDRAW] ${symbol} price: $${usdPrice}, need ${tokensNeeded} tokens for $${MIN_USD_VALUE}`);
+  
+  return {
+    minAmount,
+    usdValue: MIN_USD_VALUE,
+  };
+}
+
+/**
  * Find a suitable funding token from user's EOA balance
- * Checks hardcoded tokens (USDC, USDT, DAI, etc.) and returns the first one with balance
+ * Priority: USDC → WETH/WPOL → Other stablecoins
+ * Minimum requirement: $0.25 USD worth of tokens
  */
 async function findFundingTokenWithBalance(
   publicClient: PublicClient,
@@ -231,7 +296,18 @@ async function findFundingTokenWithBalance(
   chainName: string,
 ): Promise<{ symbol: string; address: `0x${string}` } | null> {
   const hardcodedTokens = getHardcodedTokens(chainName);
-  const priorityOrder = ["usdc", "usdt", "dai", "usdce", "usdc.e"];
+
+  // Priority order: USDC → Wrapped native → Other stablecoins
+  const priorityOrder = [
+    "usdc",           // 1. USDC (highest priority)
+    "weth",           // 2. Wrapped ETH
+    "wpol",           // 2. Wrapped POL (Polygon)
+    "wmatic",         // 2. Wrapped MATIC (legacy Polygon)
+    "usdt",           // 3. Other stablecoins
+    "dai",
+    "usdce",          // 4. Legacy/bridged USDC
+    "usdc.e",
+  ];
   
   // Check priority tokens first
   for (const symbol of priorityOrder) {
@@ -247,18 +323,30 @@ async function findFundingTokenWithBalance(
       }) as bigint;
       
       const decimals = await getTokenDecimals(address, chainName);
-      const minAmount = parseUnits("1", decimals); // Require at least 1 token for funding
+      const { minAmount, usdValue } = await getMinAmountInUsd(symbol, address, decimals, chainName);
       
       if (balance >= minAmount) {
-        logger.info(`[BICONOMY_AUTO_WITHDRAW] Found funding token: ${symbol.toUpperCase()} with balance ${formatUnits(balance, decimals)}`);
+        const balanceFormatted = formatUnits(balance, decimals);
+        const minFormatted = formatUnits(minAmount, decimals);
+        logger.info(
+          `[BICONOMY_AUTO_WITHDRAW] ✅ Found funding token on ${chainName}: ${symbol.toUpperCase()} ` +
+          `balance=${balanceFormatted} (min=${minFormatted} ≈ $${usdValue.toFixed(2)})`
+        );
         return { symbol, address: address as `0x${string}` };
+      } else {
+        const balanceFormatted = formatUnits(balance, decimals);
+        const minFormatted = formatUnits(minAmount, decimals);
+        logger.debug(
+          `[BICONOMY_AUTO_WITHDRAW] ${chainName}: ${symbol.toUpperCase()} balance ${balanceFormatted} ` +
+          `below minimum ${minFormatted} ($${usdValue.toFixed(2)})`
+        );
       }
     } catch (error) {
-      logger.debug(`[BICONOMY_AUTO_WITHDRAW] Error checking ${symbol}: ${(error as Error).message}`);
+      logger.debug(`[BICONOMY_AUTO_WITHDRAW] ${chainName}: Error checking ${symbol}: ${(error as Error).message}`);
     }
   }
   
-  // Check other tokens
+  // Check other tokens as fallback
   for (const [symbol, address] of Object.entries(hardcodedTokens)) {
     if (priorityOrder.includes(symbol)) continue;
     
@@ -271,14 +359,18 @@ async function findFundingTokenWithBalance(
       }) as bigint;
       
       const decimals = await getTokenDecimals(address, chainName);
-      const minAmount = parseUnits("1", decimals);
+      const { minAmount, usdValue } = await getMinAmountInUsd(symbol, address, decimals, chainName);
       
       if (balance >= minAmount) {
-        logger.info(`[BICONOMY_AUTO_WITHDRAW] Found funding token: ${symbol.toUpperCase()} with balance ${formatUnits(balance, decimals)}`);
+        const balanceFormatted = formatUnits(balance, decimals);
+        logger.info(
+          `[BICONOMY_AUTO_WITHDRAW] Found funding token on ${chainName}: ${symbol.toUpperCase()} ` +
+          `balance=${balanceFormatted} (≈ $${usdValue.toFixed(2)} min)`
+        );
         return { symbol, address: address as `0x${string}` };
       }
     } catch (error) {
-      logger.debug(`[BICONOMY_AUTO_WITHDRAW] Error checking ${symbol}: ${(error as Error).message}`);
+      logger.debug(`[BICONOMY_AUTO_WITHDRAW] ${chainName}: Error checking ${symbol}: ${(error as Error).message}`);
     }
   }
   
@@ -453,189 +545,187 @@ No parameters needed - fully automatic!`,
 
       callback?.({ text: `✅ ${legitimateBalances.length} legitimate token(s) to withdraw` });
 
-      // Group balances by chain for batch processing
-      const balancesByChain = legitimateBalances.reduce((acc, balance) => {
-        if (!acc[balance.chainId]) {
-          acc[balance.chainId] = [];
+      // Group balances by chain - execute separate withdrawals per chain
+      // This matches the pattern in biconomy-withdraw-all where funding is from the same chain
+      const balancesByChain: Record<number, TokenBalance[]> = {};
+      for (const balance of legitimateBalances) {
+        if (!balancesByChain[balance.chainId]) {
+          balancesByChain[balance.chainId] = [];
         }
-        acc[balance.chainId].push(balance);
-        return acc;
-      }, {} as Record<number, TokenBalance[]>);
+        balancesByChain[balance.chainId].push(balance);
+      }
 
-      // Build withdrawal instructions and execute per chain
-      const results: any[] = [];
+      const chainIds = Object.keys(balancesByChain).map(Number);
+      logger.info(`[BICONOMY_AUTO_WITHDRAW] Executing ${chainIds.length} separate withdrawal(s) - one per chain with same-chain funding`);
       
-      for (const [chainIdStr, balances] of Object.entries(balancesByChain)) {
-        const chainId = Number(chainIdStr);
+      const successfulWithdrawals: Array<{ chainName: string; tokens: TokenBalance[]; supertxHash: string; explorerUrl: string }> = [];
+      const failedWithdrawals: Array<{ chainName: string; error: string }> = [];
+
+      // Execute withdrawals chain by chain
+      for (const chainId of chainIds) {
+        const balances = balancesByChain[chainId];
         const chainName = getChainNameFromId(chainId);
         
+        callback?.({ text: `🔄 Processing ${balances.length} token(s) on ${chainName}...` });
+        
         try {
-          callback?.({ text: `\n💰 Withdrawing ${balances.length} token(s) from ${chainName}...` });
-
           // Get viem client for this chain
           const cdpNetwork = resolveCdpNetworkFromChainId(chainId);
           const viemClient = await cdpService.getViemClientsForAccount({
             accountName,
             network: cdpNetwork,
           });
-          const publicClient = viemClient.publicClient;
-          const walletClient = viemClient.walletClient;
-          const cdpAccount = viemClient.cdpAccount;
-
-          // Find funding token on this chain
-          const fundingTokenInfo = await findFundingTokenWithBalance(publicClient, userAddress, chainName);
+          
+          // Find funding token on THIS chain (same-chain funding pattern)
+          const fundingTokenInfo = await findFundingTokenWithBalance(viemClient.publicClient, userAddress, chainName);
+          
           if (!fundingTokenInfo) {
-            callback?.({ text: `⚠️ No funding token found on ${chainName}, skipping withdrawals for this chain` });
+            const errorMsg = `No funding token (USDC/USDT/DAI) found on ${chainName}. Need at least 1 token for gas.`;
+            logger.warn(`[BICONOMY_AUTO_WITHDRAW] ${errorMsg}`);
+            callback?.({ text: `⚠️ Skipping ${chainName}: ${errorMsg}` });
+            failedWithdrawals.push({ chainName, error: errorMsg });
             continue;
           }
-
-          const { symbol: fundingTokenSymbol, address: fundingTokenAddress } = fundingTokenInfo;
-          logger.info(`[BICONOMY_AUTO_WITHDRAW] Using funding token on ${chainName}: ${fundingTokenSymbol}`);
-
-          // Build withdrawal instructions for all tokens on this chain
-          const withdrawalFlows: ComposeFlow[] = [];
           
+          callback?.({ text: `✅ Using ${fundingAmountPerChain} ${fundingTokenInfo.symbol.toUpperCase()} from ${chainName}` });
+          
+          // Build withdrawal flows for all tokens on this chain
+          const withdrawalFlows: ComposeFlow[] = [];
           for (const balance of balances) {
             logger.info(
               `[BICONOMY_AUTO_WITHDRAW] Creating withdrawal for ${balance.tokenSymbol} on ${chainName}: ${formatUnits(balance.balance, balance.decimals)}`
             );
 
             if (balance.isNative) {
-              // Native token withdrawal - MUST use fixed amount, not runtime balance
-              // Biconomy API rejects runtimeErc20Balance with zero address (native token)
               const flow = biconomyService.buildNativeWithdrawalInstruction(
-                chainId,
+                balance.chainId,
                 withdrawAddress,
-                balance.balance.toString() // Use the actual balance we already fetched
+                balance.balance.toString()
               );
+              (flow as any).batch = true;
               withdrawalFlows.push(flow);
             } else {
-              // ERC20 token withdrawal using runtime balance
               const flow = biconomyService.buildWithdrawalInstruction(
                 balance.tokenAddress,
-                chainId,
+                balance.chainId,
                 withdrawAddress
               );
+              (flow as any).batch = true;
               withdrawalFlows.push(flow);
             }
           }
-
+          
           // Get funding token decimals and amount
-          const fundingDecimals = await getTokenDecimals(fundingTokenAddress, chainName);
+          const fundingDecimals = await getTokenDecimals(fundingTokenInfo.address, chainName);
           const fundingAmountWei = parseUnits(fundingAmountPerChain, fundingDecimals);
 
-          // Build quote request
+          // Build quote request with same-chain funding
           const quoteRequest: QuoteRequest = {
             mode: "eoa",
             ownerAddress: userAddress,
             composeFlows: withdrawalFlows,
             fundingTokens: [
               {
-                tokenAddress: fundingTokenAddress,
+                tokenAddress: fundingTokenInfo.address,
                 chainId: chainId,
                 amount: fundingAmountWei.toString(),
               },
             ],
           };
 
-          callback?.({ text: `🔄 Getting quote for ${chainName} (funding: ${fundingAmountPerChain} ${fundingTokenSymbol})...` });
+          logger.info(`[BICONOMY_AUTO_WITHDRAW] Executing withdrawal on ${chainName} (${balances.length} tokens)`);
+          callback?.({ text: `🔄 Executing withdrawal on ${chainName}...` });
 
-          // Execute - getting a quote means the withdrawals are valid and will succeed
+          // Execute
           const result = await biconomyService.executeIntent(
             quoteRequest,
-            cdpAccount,
-            walletClient,
+            viemClient.cdpAccount,
+            viemClient.walletClient,
             { address: userAddress },
-            publicClient,
-            (status) => callback?.({ text: `[${chainName}] ${status}` })
+            viemClient.publicClient,
+            (status) => callback?.({ text: status })
           );
 
           if (result.success && result.supertxHash) {
             const explorerUrl = biconomyService.getExplorerUrl(result.supertxHash);
-            const tokensList = balances.map(b => `${formatUnits(b.balance, b.decimals)} ${b.tokenSymbol}`).join(", ");
-            callback?.({ text: `✅ **${chainName}**: Withdrew ${balances.length} token(s) (${tokensList}) - [Track Transaction](${explorerUrl})` });
-            
-            results.push({
-              chain: chainName,
-              chainId,
-              success: true,
-              supertxHash: result.supertxHash,
-              explorerUrl,
-              tokensWithdrawn: balances.length,
-              tokens: balances.map(b => ({
-                symbol: b.tokenSymbol,
-                amount: formatUnits(b.balance, b.decimals),
-                address: b.tokenAddress,
-              })),
-            });
+            successfulWithdrawals.push({ chainName, tokens: balances, supertxHash: result.supertxHash, explorerUrl });
+            callback?.({ text: `✅ ${chainName} withdrawal complete! [Track](${explorerUrl})` });
           } else {
             const errorMsg = result.error || "Unknown error";
-            callback?.({ text: `❌ ${chainName} withdrawals failed: ${errorMsg}` });
-            results.push({
-              chain: chainName,
-              chainId,
-              success: false,
-              error: errorMsg,
-            });
+            failedWithdrawals.push({ chainName, error: errorMsg });
+            callback?.({ text: `❌ ${chainName} withdrawal failed: ${errorMsg}` });
           }
         } catch (error) {
-          const err = error as Error;
-          logger.error(`[BICONOMY_AUTO_WITHDRAW] Error withdrawing from ${chainName}: ${err.message}`);
-          callback?.({ text: `❌ Error withdrawing from ${chainName}: ${err.message}` });
-          results.push({
-            chain: chainName,
-            chainId,
-            success: false,
-            error: err.message,
-          });
+          const errorMsg = (error as Error).message;
+          logger.error(`[BICONOMY_AUTO_WITHDRAW] Error on ${chainName}: ${errorMsg}`);
+          failedWithdrawals.push({ chainName, error: errorMsg });
+          callback?.({ text: `❌ ${chainName} error: ${errorMsg}` });
         }
       }
 
-      // Summary
-      const successfulWithdrawals = results.filter(r => r.success).length;
-      const failedWithdrawals = results.filter(r => !r.success).length;
-      const totalTokensWithdrawn = results
-        .filter(r => r.success)
-        .reduce((sum, r) => sum + (r.tokensWithdrawn || 0), 0);
+      // Build summary
+      const totalWithdrawn = successfulWithdrawals.reduce((sum, w) => sum + w.tokens.length, 0);
       
-      let summaryText = `\n✅ **Auto-Withdrawal Complete**\n\n`;
+      let summaryText = `\n📊 **Auto-Withdrawal Summary**\n\n`;
       summaryText += `**Scanned:** ${supportedChains.length} chains\n`;
       summaryText += `**Found:** ${totalTokensFound} tokens (filtered ${totalTokensFound - legitimateBalances.length} spam)\n`;
-      summaryText += `**Withdrawn:** ${totalTokensWithdrawn} tokens from ${successfulWithdrawals} chain(s)\n`;
-      
-      if (failedWithdrawals > 0) {
-        summaryText += `**Failed:** ${failedWithdrawals} chain(s)\n`;
+      summaryText += `**Successful:** ${successfulWithdrawals.length}/${chainIds.length} chains, ${totalWithdrawn} tokens\n`;
+      if (failedWithdrawals.length > 0) {
+        summaryText += `**Failed:** ${failedWithdrawals.length} chains\n`;
       }
       
-      // Add detailed breakdown by chain
-      if (results.length > 0) {
-        summaryText += `\n**Details:**\n`;
-        for (const result of results.filter(r => r.success)) {
-          summaryText += `- **${result.chain}**: `;
-          if (result.tokens && result.tokens.length > 0) {
-            const tokenList = result.tokens.map(t => `${t.amount} ${t.symbol}`).join(", ");
-            summaryText += `${tokenList}\n`;
-          } else {
-            summaryText += `${result.tokensWithdrawn} token(s)\n`;
-          }
+      // Successful withdrawals
+      if (successfulWithdrawals.length > 0) {
+        summaryText += `\n**✅ Completed:**\n`;
+        for (const withdrawal of successfulWithdrawals) {
+          const tokenList = withdrawal.tokens.map(t => `${formatUnits(t.balance, t.decimals)} ${t.tokenSymbol}`).join(", ");
+          summaryText += `- **${withdrawal.chainName}**: ${tokenList}\n`;
+          summaryText += `  [Track Transaction](${withdrawal.explorerUrl})\n`;
+        }
+      }
+      
+      // Failed withdrawals
+      if (failedWithdrawals.length > 0) {
+        summaryText += `\n**❌ Failed:**\n`;
+        for (const failure of failedWithdrawals) {
+          summaryText += `- **${failure.chainName}**: ${failure.error}\n`;
         }
       }
       
       summaryText += `\n**Withdraw Address:** \`${withdrawAddress}\`\n`;
 
-      callback?.({ text: summaryText, actions: ["BICONOMY_AUTO_WITHDRAW"], source: message.content.source });
+      const isPartialSuccess = successfulWithdrawals.length > 0 && failedWithdrawals.length > 0;
+      const isFullSuccess = successfulWithdrawals.length > 0 && failedWithdrawals.length === 0;
+      const isFullFailure = successfulWithdrawals.length === 0;
+
+      if (isFullSuccess) {
+        callback?.({ text: summaryText, actions: ["BICONOMY_AUTO_WITHDRAW"], source: message.content.source });
+      } else {
+        callback?.({ text: summaryText });
+      }
       
       return {
         text: summaryText,
-        success: successfulWithdrawals > 0,
+        success: isFullSuccess || isPartialSuccess,
+        error: isFullFailure ? "all_withdrawals_failed" : (isPartialSuccess ? "partial_failure" : undefined),
         data: {
           chainsScanned: supportedChains.length,
           tokensFound: totalTokensFound,
           tokensFiltered: totalTokensFound - legitimateBalances.length,
-          tokensWithdrawn: totalTokensWithdrawn,
-          chainsWithdrawn: successfulWithdrawals,
-          chainsFailed: failedWithdrawals,
-          results,
+          tokensWithdrawn: totalWithdrawn,
+          successfulChains: successfulWithdrawals.length,
+          failedChains: failedWithdrawals.length,
+          withdrawals: successfulWithdrawals.map(w => ({
+            chainName: w.chainName,
+            tokens: w.tokens.map(t => ({
+              symbol: t.tokenSymbol,
+              amount: formatUnits(t.balance, t.decimals),
+              address: t.tokenAddress,
+            })),
+            supertxHash: w.supertxHash,
+            explorerUrl: w.explorerUrl,
+          })),
+          failures: failedWithdrawals,
         }
       };
     } catch (error) {
