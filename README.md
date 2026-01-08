@@ -256,6 +256,43 @@ Follow original Otaku Railway guide for web app deployment.
 
 Deploy backend only (disable frontend build if desired). Works on any platform supporting Bun/Node.
 
+#### Example: Polymarket Specialist
+
+This specialist pulls BTC sentiment data from Polymarket, focusing on prediction market odds to gauge short-, mid-, and long-term price expectations.
+
+**Prompt Design:**
+
+> 8. Polymarket (for short, mid, and long-term BTC price predictions)
+>
+> You are an AI data puller for Ikigai Studio, tapping Polymarket for BTC sentiment checks via prediction odds—killer for short (next few days), mid (week/month), and long-term (quarter/year) vibes. Use browse_page on polymarket.com or API endpoints (instructions: “Extract BTC price markets like ‘BTC >$50k by Jan 15?’, odds, volumes for horizons: short (1-3 days), mid (1-4 weeks), long (1-12 months). Summarize implied probabilities.”). Or web_search for “Polymarket BTC predictions.” Code_execution to process: calculate sentiment score (e.g., avg bull odds). Output markdown: - Short-Term: “70% odds BTC > current in 3 days—bullish lean.” - Mid-Term: [list odds] - Long-Term: “Sentiment at 60% for $100k EOY.” Weave as market expectation proxy, cross-check multiples.
+
+**Daily Output Example:**
+
+> **Short-Term (next few days):** 15% odds BTC up over the next 24 hours (from noon Jan 7 to noon Jan 8), with similar low probabilities (averaging ~12% up) across recent 15-minute and hourly intervals—bearish lean. For the week (Jan 5-11), 7% odds to reach >$96k, 52% odds to dip <$88k, reinforcing short-term downward pressure as a market expectation proxy. 
+>
+> [polymarket.com](https://polymarket.com)
+>
+> Cross-checks from multiple up/down markets show consistent bearish sentiment, with bots dominating latency arbitrage but human-implied odds tilting negative.
+>
+> **Mid-Term (week/month):** 
+> - 60% odds to reach >$95k in January.
+> - 29% odds to reach >$100k in January.
+> - 13% odds to reach >$105k in January.
+> - 48% odds to dip <$85k in January.
+> - 21% odds to dip <$80k in January.
+>
+> Overall mid-term sentiment averages ~30% on bullish thresholds above current ~$90.5k, suggesting mild bullish expectations for price recovery by month-end, though balanced by ~35% average on bearish dips. 
+>
+> [polymarket.com](https://polymarket.com)
+>
+> This proxies market consensus for volatility, with higher volumes on thresholds near current price indicating uncertainty.
+>
+> **Long-Term (quarter/year):** Sentiment at 44% for Bitcoin hitting a new all-time high (>~$126k) by EOY 2026, increasing from 10% by Q1 end to 36% by Q3. 
+>
+> [polymarket.com](https://polymarket.com)
+>
+> Additional proxies: 59% odds Bitcoin outperforms Gold in 2026, 42% odds Bitcoin is top performer vs. Gold/S&P 500. Average bullish odds ~40%, indicating moderate optimism for long-term growth amid cross-checks from quarterly milestones.
+
 ## Troubleshooting
 
 (See original Otaku troubleshooting — all issues remain relevant.)  
