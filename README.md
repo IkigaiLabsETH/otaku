@@ -287,51 +287,6 @@ Follow original Otaku Railway guide for web app deployment.
 
 Deploy backend only (disable frontend build if desired). Works on any platform supporting Bun/Node.
 
-#### Example: Polymarket Specialist
-
-This specialist pulls BTC sentiment data from Polymarket, focusing on prediction market odds to gauge short-, mid-, and long-term price expectations.
-
-**Prompt Design:**
-
-> 8. Polymarket (for short, mid, and long-term BTC price predictions)
->
-> You are an AI data puller for Ikigai Studio, tapping Polymarket for BTC sentiment checks via prediction odds—killer for short (next few days), mid (week/month), and long-term (quarter/year) vibes. Use browse_page on polymarket.com or API endpoints (instructions: “Extract BTC price markets like ‘BTC >$50k by Jan 15?’, odds, volumes for horizons: short (1-3 days), mid (1-4 weeks), long (1-12 months). Summarize implied probabilities.”). Or web_search for “Polymarket BTC predictions.” Code_execution to process: calculate sentiment score (e.g., avg bull odds). Output markdown: - Short-Term: “70% odds BTC > current in 3 days—bullish lean.” - Mid-Term: [list odds] - Long-Term: “Sentiment at 60% for $100k EOY.” Weave as market expectation proxy, cross-check multiples.
-
-**Daily Output Example (as of January 10, 2026 — current BTC spot ≈ $91,000):**
-
-> **Short-Term (next few days):** 
-> - 89% implied probability Bitcoin closes January 10 in the $90,000–$92,000 range (high-volume daily range market).
-> - Probabilities decline gradually over the coming week (65% for Jan 11, down to ~20–30% by Jan 15–16 staying in that tight range), reflecting growing uncertainty.
-> - Only 8% odds of dipping below $88,000 during January 5–11 period.
-> - Intraday “Up or Down” intervals today trading ~50–54% Up.
-> 
-> Overall short-term sentiment neutral-to-mildly bullish — market expects stability around current levels with very low downside risk and balanced intraday moves.
-> 
-> [polymarket.com](https://polymarket.com/crypto)
-> 
-> Cross-checks across daily range ladders, “above X” binaries (100% above $80k today), and weekly hit markets ($3m+ volume) confirm high conviction against any near-term crash.
-> 
-> **Mid-Term (week/month):** 
-> - 60% odds Bitcoin reaches >$95,000 at any point in January ( flagship monthly hit market, $18m volume, $3m liquidity).
-> 
-> Mid-term sentiment moderately bullish — market assigns solid probability of upside push above current ~$91k by month-end, implying expectations of recovery or continued grind higher.
-> 
-> [polymarket.com](https://polymarket.com/crypto)
-> 
-> High volume and liquidity signal strong consensus and active hedging around January thresholds.
-> 
-> **Long-Term (quarter/year):** 
-> - 84% odds Bitcoin hits >$100,000 at some point in 2026.
-> - ~9% odds to reach >$200,000 in 2026.
-> - ~4–5% odds to reach >$250,000 in 2026.
-> - Only 10% chance of a new all-time high by March 31, 2026 (Q1 end).
-> 
-> Long-term sentiment moderately optimistic — strong base-case expectation of at least modest new highs (>100k) over the full year, but priced-in skepticism on early parabolic moves or extreme levels.
-> 
-> [polymarket.com](https://polymarket.com/crypto)
-> 
-> Ladder-style binary markets ($5m+ total volume) provide consistent cross-check: high certainty on six-figure prices, rapidly decaying odds for 2x+ from here.
-
 ## Troubleshooting
 
 (See original Otaku troubleshooting — all issues remain relevant.)  
