@@ -39,32 +39,55 @@ Monorepo with Bun/Turbo:
 ### Project Structure (extended from original Otaku)
 
 ```
+```
+### Project Structure
+
+```
 ├── src/
-│   ├── index.ts                  # Entry: plugin loading, optional Slack client, swarm orchestration
-│   ├── coordinator.ts            # New: Swarm coordinator (routing, aggregation, scheduling)
-│   ├── specialists/              # New: One file per research specialist (coingeckoSpecialist.ts, etc.)
-│   ├── character.ts              # Original Otaku character + optional swarm variants
-│   ├── frontend/                 # Retained React app (chat, dashboard, CDP wallet)
+│   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
+│   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis
+│   ├── specialists/              # Research specialists — each file contains a self-contained, modular prompt system 
+│   │                             # with detailed 2026 BTC regime analysis templates (33 prompts total across 10+ specialists)
+│   │   ├── fundamentalsSpecialist.ts     # Price/ratio fundamentals (CoinGecko, ratios, valuation models)
+│   │   ├── defiFlowsSpecialist.ts        # DeFi & wrapped BTC flows (DefiLlama, Artemis)
+│   │   ├── liquiditySpecialist.ts        # Liquidity depth & market microstructure (DEX Screener, Kaiko)
+│   │   ├── onChainHealthSpecialist.ts    # On-chain health metrics (CryptoQuant, Glassnode, Dune, CoinMetrics, IntoTheBlock, BitInfoCharts)
+│   │   ├── derivativesSpecialist.ts      # Derivatives leverage & positioning (Coinglass, CME, Bitfinex, Deribit, Skew)
+│   │   ├── socialPsychologySpecialist.ts # Social & crowd psychology (X/Twitter, Santiment, LunarCrush)
+│   │   ├── institutionalSpecialist.ts    # Institutional demand signals (ETF flows, CME, Arkham, Nansen)
+│   │   ├── macroOverlaysSpecialist.ts     # Macro overlays & external regime drivers (FRED, IMF, Zillow, rates, housing)
+│   │   ├── cycleContextSpecialist.ts      # Historical cycle context & research synthesis (Substack, Binance Research, The Block)
+│   │   ├── polymarketSpecialist.ts       # Sentiment hedging & prediction markets (Polymarket odds, election/geopolitical overlays)
+│   │   └── regimeAggregatorSpecialist.ts # Optional: final synthesis specialist that combines all outputs
+│   ├── character.ts              # Core Otaku character definition + swarm personality variants
+│   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
 │   │   ├── App.tsx
 │   │   ├── components/
-│   │   │   ├── chat/
-│   │   │   ├── dashboard/
-│   │   │   ├── agents/
-│   │   │   ├── auth/
-│   │   │   └── ui/
-│   │   ├── lib/
-│   │   ├── hooks/
-│   │   ├── contexts/
-│   │   └── types/
-│   ├── plugins/                  # Core crypto plugins (extended as needed)
+│   │   │   ├── chat/             # Chat UI, message streaming, specialist selection
+│   │   │   ├── dashboard/        # Regime dashboard, charts, signal visualizations
+│   │   │   ├── agents/           # Agent cards, status indicators, swarm view
+│   │   │   ├── auth/             # Auth flows
+│   │   │   └── ui/               # Shared UI components
+│   │   ├── lib/                  # API clients, utilities
+│   │   ├── hooks/                # Custom React hooks
+│   │   ├── contexts/             # Global state (auth, swarm, regime)
+│   │   └── types/                # TypeScript interfaces
+│   ├── plugins/                  # Core data-fetching plugins (extended for new data sources)
 │   │   ├── plugin-cdp/
 │   │   ├── plugin-coingecko/
 │   │   ├── plugin-defillama/
 │   │   ├── plugin-relay/
 │   │   ├── plugin-etherscan/
-│   │   ├── plugin-web-search/
-│   │   └── plugin-bootstrap/
-│   └── utils/                    # Shared helpers (charts, regime logic)
+│   │   ├── plugin-web-search/    # Used heavily for sources without dedicated APIs
+│   │   ├── plugin-bootstrap/
+│   │   ├── plugin-cryptoquant/   # Added for on-chain health
+│   │   ├── plugin-glassnode/     # Added for on-chain health
+│   │   ├── plugin-coinglass/     # Added for derivatives
+│   │   ├── plugin-santiment/     # Added for social signals
+│   │   ├── plugin-arkham/        # Added for institutional flows
+│   │   ├── plugin-polymarket/    # Added for prediction markets
+│   │   └── plugin-dune/          # Added for custom on-chain queries
+│   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities
 ├── dist/
 ├── build.ts
 ├── start-server.ts
@@ -72,6 +95,14 @@ Monorepo with Bun/Turbo:
 ├── tailwind.config.js
 ├── turbo.json
 └── package.json
+```
+
+#### Key Updates
+- **specialists/** now explicitly lists the 10+ core research specialists, each backed by highly refined, modular prompt templates optimized for 2026 BTC regime analysis.
+- Total of **33 self-contained prompts** distributed across these specialists for comprehensive multi-angle coverage.
+- Added new plugins for high-signal data sources that have reliable APIs; remaining sources fall back to `plugin-web-search` or scheduled scrapers.
+- `regimeAggregatorSpecialist.ts` added as optional final layer for cross-specialist synthesis.
+```
 ```
 
 ## Prerequisites
