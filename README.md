@@ -297,32 +297,40 @@ This specialist pulls BTC sentiment data from Polymarket, focusing on prediction
 >
 > You are an AI data puller for Ikigai Studio, tapping Polymarket for BTC sentiment checks via prediction odds—killer for short (next few days), mid (week/month), and long-term (quarter/year) vibes. Use browse_page on polymarket.com or API endpoints (instructions: “Extract BTC price markets like ‘BTC >$50k by Jan 15?’, odds, volumes for horizons: short (1-3 days), mid (1-4 weeks), long (1-12 months). Summarize implied probabilities.”). Or web_search for “Polymarket BTC predictions.” Code_execution to process: calculate sentiment score (e.g., avg bull odds). Output markdown: - Short-Term: “70% odds BTC > current in 3 days—bullish lean.” - Mid-Term: [list odds] - Long-Term: “Sentiment at 60% for $100k EOY.” Weave as market expectation proxy, cross-check multiples.
 
-**Daily Output Example:**
+**Daily Output Example (as of January 10, 2026 — current BTC spot ≈ $91,000):**
 
-> **Short-Term (next few days):** 15% odds BTC up over the next 24 hours (from noon Jan 7 to noon Jan 8), with similar low probabilities (averaging ~12% up) across recent 15-minute and hourly intervals—bearish lean. For the week (Jan 5-11), 7% odds to reach >$96k, 52% odds to dip <$88k, reinforcing short-term downward pressure as a market expectation proxy. 
->
-> [polymarket.com](https://polymarket.com)
->
-> Cross-checks from multiple up/down markets show consistent bearish sentiment, with bots dominating latency arbitrage but human-implied odds tilting negative.
->
+> **Short-Term (next few days):** 
+> - 89% implied probability Bitcoin closes January 10 in the $90,000–$92,000 range (high-volume daily range market).
+> - Probabilities decline gradually over the coming week (65% for Jan 11, down to ~20–30% by Jan 15–16 staying in that tight range), reflecting growing uncertainty.
+> - Only 8% odds of dipping below $88,000 during January 5–11 period.
+> - Intraday “Up or Down” intervals today trading ~50–54% Up.
+> 
+> Overall short-term sentiment neutral-to-mildly bullish — market expects stability around current levels with very low downside risk and balanced intraday moves.
+> 
+> [polymarket.com](https://polymarket.com/crypto)
+> 
+> Cross-checks across daily range ladders, “above X” binaries (100% above $80k today), and weekly hit markets ($3m+ volume) confirm high conviction against any near-term crash.
+> 
 > **Mid-Term (week/month):** 
-> - 60% odds to reach >$95k in January.
-> - 29% odds to reach >$100k in January.
-> - 13% odds to reach >$105k in January.
-> - 48% odds to dip <$85k in January.
-> - 21% odds to dip <$80k in January.
->
-> Overall mid-term sentiment averages ~30% on bullish thresholds above current ~$90.5k, suggesting mild bullish expectations for price recovery by month-end, though balanced by ~35% average on bearish dips. 
->
-> [polymarket.com](https://polymarket.com)
->
-> This proxies market consensus for volatility, with higher volumes on thresholds near current price indicating uncertainty.
->
-> **Long-Term (quarter/year):** Sentiment at 44% for Bitcoin hitting a new all-time high (>~$126k) by EOY 2026, increasing from 10% by Q1 end to 36% by Q3. 
->
-> [polymarket.com](https://polymarket.com)
->
-> Additional proxies: 59% odds Bitcoin outperforms Gold in 2026, 42% odds Bitcoin is top performer vs. Gold/S&P 500. Average bullish odds ~40%, indicating moderate optimism for long-term growth amid cross-checks from quarterly milestones.
+> - 60% odds Bitcoin reaches >$95,000 at any point in January ( flagship monthly hit market, $18m volume, $3m liquidity).
+> 
+> Mid-term sentiment moderately bullish — market assigns solid probability of upside push above current ~$91k by month-end, implying expectations of recovery or continued grind higher.
+> 
+> [polymarket.com](https://polymarket.com/crypto)
+> 
+> High volume and liquidity signal strong consensus and active hedging around January thresholds.
+> 
+> **Long-Term (quarter/year):** 
+> - 84% odds Bitcoin hits >$100,000 at some point in 2026.
+> - ~9% odds to reach >$200,000 in 2026.
+> - ~4–5% odds to reach >$250,000 in 2026.
+> - Only 10% chance of a new all-time high by March 31, 2026 (Q1 end).
+> 
+> Long-term sentiment moderately optimistic — strong base-case expectation of at least modest new highs (>100k) over the full year, but priced-in skepticism on early parabolic moves or extreme levels.
+> 
+> [polymarket.com](https://polymarket.com/crypto)
+> 
+> Ladder-style binary markets ($5m+ total volume) provide consistent cross-check: high certainty on six-figure prices, rapidly decaying odds for 2x+ from here.
 
 ## Troubleshooting
 
