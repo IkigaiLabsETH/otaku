@@ -1,4 +1,4 @@
-# RALPH.md: Autonomous Code Iteration Loop (Inspired by Ralph Wiggum Technique)
+# RALPH.md: Autonomous Code Iteration Loop
 
 ## Overview
 RALPH is a persistent, fresh-slate iterative loop for `codeEngineerSpecialist` to handle codebase tasks autonomously. Inspired by Geoffrey Huntley's 2025 bash loop and Matt Pocock's agile adaptation, it processes one requirement at a time until completion, enforcing focus and reducing context bloat.
