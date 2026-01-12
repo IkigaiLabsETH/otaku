@@ -341,7 +341,78 @@ Common Eliza Cloud issues:
 
 ##  Small edges compound.
 
+```
+## Prompt Design & Specialist Architecture
+
+The core edge of the Ikigai Studio swarm comes from its **battle-tested, Grok-derived prompt templates**. These are not generic instructions—they are highly refined, modular system prompts that drive autonomous, high-signal research.
+
+All 44+ prompt templates (36 BTC-centric + 8 altcoin-focused) are embedded directly as the `system_prompt` field in the specialist `.ts` files.
+
+### How Prompts Fit Into the Architecture
+
+- **Each specialist file (`src/specialists/*.ts`)** defines one agent with:
+  ```ts
+  export const exampleSpecialist = {
+    name: "ExampleSpecialist",
+    channel: "#example-channel",
+    system_prompt: `...full prompt template pasted here...`,
+    tools: [/* relevant tool schemas, e.g., browse_page, code_execution, web_search */],
+    schedule: "daily" // or null for on-demand
+  };
+  ```
+- The `system_prompt` is the "brain":
+  - Defines role, objectives, retrieval strategy, tool usage, and exact output format.
+  - Ensures quantitative precision (BTC layer) or qualitative discovery (altcoin layer).
+  - Forces structured JSON/markdown for easy handoffs to other agents or Grok synthesis.
+
+### BTC-Centric Layer (Quantitative Regime Analysis)
+- **36 modular prompts** (refined 33 + 3 additive) distributed across **11 specialists**.
+- Roughly 3–4 prompts per specialist (some combined into one primary system prompt).
+- Heavy reliance on direct data plugins + tool calling (`browse_page`, `code_execution`, `web_search`).
+- Mapping overview:
+  - `fundamentalsSpecialist.ts` → CoinGecko ratios/dominance (#1)
+  - `defiFlowsSpecialist.ts` → DeFiLlama + Artemis bridge flows (#2, #14)
+  - `liquiditySpecialist.ts` → DEX Screener + Kaiko depth (#3, #21)
+  - `onChainHealthSpecialist.ts` → CryptoQuant, Glassnode, Dune, CoinMetrics, IntoTheBlock, BitInfoCharts, Blockchain.com (#4–#6, #18–#19, #26, #28)
+  - `derivativesSpecialist.ts` → Coinglass, CME, Bitfinex, Skew, Deribit (#13, #23, #29–#31)
+  - `socialPsychologySpecialist.ts` → X sentiment, Santiment, LunarCrush (#10, #17, #20)
+  - `institutionalSpecialist.ts` → Nansen/Arkham, ETF flows (#16, #24, #33)
+  - `macroOverlaysSpecialist.ts` → FRED/Zillow, IMF/global liquidity (#9, #27)
+  - `cycleContextSpecialist.ts` → Substack archive, TOTAL2/3, The Block, Binance Research (#11–#12, #25, #32)
+  - `polymarketSpecialist.ts` → Prediction market odds (#8)
+  - `regimeAggregatorSpecialist.ts` → Synthesizes all BTC outputs into final regime scoring
+- **Proposed additions** (#34–#36) → New specialists: `lookIntoBitcoinSpecialist.ts`, `mempoolSpecialist.ts`, `stablecoinFlowsSpecialist.ts`
+
+### Altcoin Layer (Qualitative Discovery)
+- **8 key prompts**, one per specialist:
+  - `altSentimentSpecialist.ts` → X sentiment analysis (#1)
+  - `gemHunterSpecialist.ts` → Early-stage 100x screening (#2)
+  - `projectAssessorSpecialist.ts` → Professional evaluation (#3)
+  - `whaleMonitorSpecialist.ts` → Smart money tracking (#4)
+  - `tradeTimingSpecialist.ts` → Entry/exit planning (#5)
+  - `narrativeDetectorSpecialist.ts` → Narrative shifts (#6)
+  - `portfolioDesignerSpecialist.ts` → Allocation design (#7)
+  - `scamGuardSpecialist.ts` → Rug/scam detection (#8)
+- Heavy reliance on tool calling (web_search + planned plugin-x-search for real-time X data).
+
+### Why This Works
+- **Modularity**: Prompts are self-contained but chainable—outputs feed coordinator or aggregator.
+- **Autonomy**: Precise tool instructions + output formats enable zero-human runs.
+- **Edge**: Grok-refined templates cut noise, force data-driven reasoning, and compound small signals.
+- **Extensibility**: Add new specialists by creating a `.ts` file with a refined prompt + tools.
+
+The prompts are the DNA of the swarm. Quantitative depth from BTC layer → discovery from altcoin layer → synthesis in `regimeAggregatorSpecialist` (and final Grok polish when needed).
+
+Small prompts compound into relentless alpha.
+```
+
+Add this section to your README after "Specialists Overview" or before "Multi-Agent Chaining". It clearly maps every template to the architecture, shows the pattern, and reinforces the philosophy.
+
+Now it's crystal clear how the prompts power the entire system. The swarm is fully documented and ready to evolve. 🚀
+
+  ```
 To achieve true "agents making agents" in our Ikigai Studio swarm — where one specialist autonomously identifies a gap (e.g., missing metric in BTC cycle analysis), designs and spins up a new specialist to fill it, integrates the results, and potentially persists the improvement — we need a combination of architectural upgrades, tool additions, and careful safety rails. Our current setup is already 80% of the way there: shared Postgres state, coordinator orchestration, structured outputs, tool-calling agents, and battle-tested Grok-derived prompts. The missing pieces are **dynamic instantiation** (temporary or persistent new agents) and **meta-reasoning capabilities** (agents that can reflect on swarm gaps and propose/create fixes). Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
+  ```
 
 ### 1. Core Architectural Changes Needed
 
