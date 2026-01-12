@@ -1,3 +1,4 @@
+```markdown
 # Ikigai Studio Research Tools
 
 An extended fork of the **Otaku AI Agent** repo, built on **ElizaOS**. This repository serves dual purposes for Ikigai Studio:
@@ -6,9 +7,9 @@ An extended fork of the **Otaku AI Agent** repo, built on **ElizaOS**. This repo
 
 2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is explicitly divided into two distinct categories:
    - **BTC-Centric Specialists**: Deep, quantitative focus on Bitcoin regime analysis, cycle metrics, and macro overlays (33 refined prompt templates).
-   - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates).
-   
-   Features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering.
+   - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates that rely heavily on real-time tool calling).
+
+   Features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering when needed.
 
 The original Otaku web frontend (React + CDP wallet) remains fully functional and useful for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration — full quantitative and qualitative autonomy in a dedicated workspace.
 
@@ -42,10 +43,10 @@ Monorepo with Bun/Turbo:
 
 ### Specialists Overview
 
-The swarm is deliberately separated into two categories with distinct prompt design philosophies:
+The swarm is deliberately separated into two categories with distinct prompt design and tool dependencies:
 
 #### BTC-Centric Specialists (33 refined prompt templates)
-Deep quantitative focus on Bitcoin-specific regimes, on-chain health, derivatives, institutional flows, and macro context. These agents are optimized for cycle analysis and regime detection in 2026+ Bitcoin markets.
+Deep quantitative focus backed by dedicated data plugins/actions.
 
 - `fundamentalsSpecialist.ts` — Price/ratio fundamentals (CoinGecko, ratios, valuation models)
 - `defiFlowsSpecialist.ts` — DeFi & wrapped BTC flows (DefiLlama, Artemis)
@@ -60,7 +61,7 @@ Deep quantitative focus on Bitcoin-specific regimes, on-chain health, derivative
 - `regimeAggregatorSpecialist.ts` — Final BTC regime synthesis (combines all BTC-centric outputs)
 
 #### Altcoin Research Specialists (8 key prompt templates)
-Qualitative, discovery-oriented templates designed specifically for altcoin workflows: sentiment tracking, gem hunting, project due diligence, narrative detection, and risk avoidance. These complement the BTC core with actionable altcoin edge.
+Qualitative, discovery-oriented agents that require tool calling (especially X/Twitter and web search) for full autonomy.
 
 - `altSentimentSpecialist.ts` — Real-time X sentiment analysis for altcoins/projects
 - `gemHunterSpecialist.ts` — Early-stage altcoin gem discovery with 100x screening
@@ -70,6 +71,17 @@ Qualitative, discovery-oriented templates designed specifically for altcoin work
 - `narrativeDetectorSpecialist.ts` — Detecting narrative shifts and emerging trends in altcoins
 - `portfolioDesignerSpecialist.ts` — Diversified portfolio construction with altcoin allocation
 - `scamGuardSpecialist.ts` — Scam/rug-pull detection and avoidance framework
+
+### Research Actions & Tools
+
+**BTC Layer**: Primarily uses direct API plugins as actions (CoinGecko, DeFiLlama, CryptoQuant, Glassnode, Coinglass, Arkham, Polymarket, Dune, etc.).
+
+**Altcoin Layer**: Relies heavily on tool calling for real-time data:
+- Web search (`plugin-web-search` — Tavily + CoinDesk news) — currently available
+- X/Twitter search tools (keyword, semantic, user, thread fetch) — **in progress / planned**
+  - These are critical for full autonomy of altcoin specialists
+  - Will be implemented as new plugins (e.g., `plugin-x-search`) using X API access or reliable third-party providers
+  - Until complete, agents fall back to aggressive web-search queries targeting X (e.g., site:x.com) and recent news sources
 
 ### Project Structure
 
@@ -141,8 +153,8 @@ Qualitative, discovery-oriented templates designed specifically for altcoin work
 - Clear architectural separation between BTC-centric quantitative regime agents (33 prompts across 11 specialists) and altcoin-focused qualitative/discovery agents (8 prompts across 8 specialists)
 - Total of **41 self-contained prompts** across 19 specialists
 - `regimeAggregatorSpecialist.ts` enhanced to synthesize both BTC regime signals and altcoin opportunity outputs
-- All altcoin specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution
-- Added new plugins for high-signal data sources; remaining sources fall back to `plugin-web-search` or scheduled scrapers
+- Altcoin specialists require additional X/Twitter tool actions for full autonomy (in progress)
+- All specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution
 
 ## Prerequisites
 
@@ -240,7 +252,7 @@ Transaction verification.
 
 Core ElizaOS capabilities + persistent storage.
 
-(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier as needed.)
+(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed.)
 
 ## Customization
 
@@ -248,16 +260,33 @@ Core ElizaOS capabilities + persistent storage.
 
 Edit character.ts, add plugins, use frontend — everything from the original repo works unchanged.
 
+### Adding Actions/Tools for Altcoin Specialists (Critical for Autonomy)
+
+To enable full autonomy of altcoin agents:
+1. Implement X/Twitter search tools as new plugins (e.g., `plugin-x-search`) or OpenAI-style function calling wrappers.
+2. Define tool schemas in each altcoin specialist file.
+3. Register tools in the agent's configuration.
+
+Example tool schema pattern:
+```ts
+tools: [
+  { type: "function", function: { name: "x_keyword_search", description: "...", parameters: { ... } } },
+  { type: "function", function: { name: "x_semantic_search", description: "...", parameters: { ... } } },
+  { type: "function", function: { name: "web_search", description: "...", parameters: { ... } } },
+]
+```
+
 ### Building the Research Swarm
 
 - Add specialists in src/specialists/ (follow BTC or altcoin prompt design patterns)
 - Register in index.ts loading array
 - Configure channel routing in coordinator
+- Define required tools/actions per specialist
 - Prompts should output structured JSON/tables for easy Grok handoff
 
 ### Adding New Plugins
 
-Follow pattern in src/plugins/. Ideal for new data sources.
+Follow pattern in src/plugins/. Ideal for new data sources or tool actions.
 
 ## Deployment Options
 
@@ -291,7 +320,7 @@ Passing Secrets (Slack tokens, API keys, etc.)
 elizaos deploy --project-name ikigai-swarm \
   --env "SLACK_BOT_TOKEN=xoxb-..." \
   --env "SLACK_SIGNING_SECRET=..." \
-  --env"Come "POSTGRES_URL=postgresql://..." \
+  --env "POSTGRES_URL=postgresql://..." \
   --env "OPENAI_API_KEY=sk-..."
 ```
 
@@ -336,9 +365,9 @@ Common Eliza Cloud issues:
 
 ## Boundaries & Philosophy
 
-- **BTC Layer**: Quantitative, regime-focused, data-heavy
-- **Altcoin Layer**: Qualitative, discovery-focused, narrative-aware
-- Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive
+- **BTC Layer**: Quantitative, data-plugin heavy, regime-focused
+- **Altcoin Layer**: Qualitative, tool-calling heavy (web + X search), discovery-focused
+- Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive when needed
 - Original DeFi actions/wallet features preserved for flexibility
 - Core edge: public data + curated X network + Grok synthesis
 
@@ -357,3 +386,4 @@ MIT
 - Managed hosting: Eliza Cloud
 
 © 2026 Ikigai Studio. All original Otaku features retained and extended. Small edges compound.
+```
