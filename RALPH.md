@@ -1,8 +1,8 @@
-You're spot on — the swarm has strong recursion for spawning and improving agents (via `metaEngineerSpecialist` and dynamic specialists), but it lacks a dedicated agent for working directly on the codebase itself. Adding a **codeEngineerSpecialist** with "Ralph Wiggum"-style logic (the persistent, fresh-slate iterative loop popularized with Claude Code in late 2025/early 2026) would close that gap perfectly.
+The swarm has strong recursion for spawning and improving agents (via `metaEngineerSpecialist` and dynamic specialists), but it lacks a dedicated agent for working directly on the codebase itself. Adding a **codeEngineerSpecialist** with "Ralph Wiggum"-style logic (the persistent, fresh-slate iterative loop popularized with Claude Code in late 2025/early 2026) would close that gap perfectly.
 
 Ralph logic is brutally simple but powerful: run the agent repeatedly with a clean context each time, let it make persistent changes to files, check for a completion signal, and loop until done (or max iterations). No long conversation history bloat — just accumulated progress in the repo + fresh reasoning each cycle.
 
-This fits your stack beautifully: the repo is on disk, agents already support tools, and the coordinator can orchestrate loops. The new specialist becomes the swarm's "hands" for self-improvement at the code level — fixing bugs, refactoring, adding plugins/tools, implementing new features, or even hardening other specialists by editing their .ts files.
+This fits our stack beautifully: the repo is on disk, agents already support tools, and the coordinator can orchestrate loops. The new specialist becomes the swarm's "hands" for self-improvement at the code level — fixing bugs, refactoring, adding plugins/tools, implementing new features, or even hardening other specialists by editing their .ts files.
 
 Here's a concrete, incremental path to add it. Stays 100% within ElizaOS + TypeScript + Bun + Postgres + Slack.
 
