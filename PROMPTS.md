@@ -24,7 +24,7 @@ Before writing any code, create a PRD with:
 2. User Stories: 5-7 stories in "As a [user], I want [action] so that [benefit]" format  
 3. Core Features (MVP only): What's essential for v1? Be ruthless.  
 4. Out of Scope: What waits for v2?  
-5. Tech Requirements: Stack, integrations, data models, auth needs (e.g., ElizaOS, TypeScript, Bun, Postgres)  
+5. Tech Requirements: Stack, integrations, data models, auth needs (e.g., ElizaOS, TypeScript, Bun, Postgres, Slack integration)  
 6. Success Metrics: How do we know it works?  
 7. Open Questions: What needs deciding before we build?  
 Be specific, not generic.
@@ -34,10 +34,10 @@ Be specific, not generic.
 ## 2. The Architecture Analyzer Prior To A Key New Feature That Wasn't Thought Out
 
 Analyze this codebase and give me:  
-1. Architecture pattern (e.g., monorepo with Bun/Turbo, ElizaOS server)  
-2. Data flow: user input → API → database → UI (consider Slack integration or web frontend)  
-3. Key files: Where is routing? Models? Auth? Business logic? (e.g., index.ts, coordinator.ts, specialists/)  
-4. Critical dependencies and what they do (e.g., ElizaOS, React, Vite, Tailwind)  
+1. Architecture pattern (e.g., monorepo with Bun/Turbo, ElizaOS server, swarm orchestration)  
+2. Data flow: user input → API → database → UI (consider Slack integration or optional web frontend)  
+3. Key files: Where is routing? Models? Auth? Business logic? (e.g., index.ts, coordinator.ts, specialists/, plugins/)  
+4. Critical dependencies and what they do (e.g., ElizaOS, React, Vite, Tailwind, Radix UI)  
 5. Patterns I need to follow for new features (show examples from the code)  
 6. Potential issues (security, performance, outdated patterns in crypto plugins)  
 7. If I wanted to add **[a new crypto specialist or plugin]**, which files would I touch?  
@@ -54,11 +54,11 @@ Before writing code, create an implementation plan:
 - What new files needed?  
 - Dependencies between tasks?  
 **Phase 2 - Data:**  
-- Schema changes (e.g., Postgres for persistent state)  
+- Schema changes (e.g., Postgres for persistent state, dynamic_specialists table)  
 - New endpoints  
 - Validation rules  
 **Phase 3 - Backend:**  
-- Business logic (e.g., in TypeScript specialists)  
+- Business logic (e.g., in TypeScript specialists or plugins)  
 - Error handling  
 - Edge cases  
 **Phase 4 - Frontend:**  
@@ -66,7 +66,7 @@ Before writing code, create an implementation plan:
 - State management  
 - User feedback  
 **Phase 5 - Integration:**  
-- How pieces connect (e.g., swarm orchestration, Slack events)  
+- How pieces connect (e.g., swarm orchestration, Slack events, tool calls)  
 - Testing approach  
 - Rollback plan  
 For each phase: complexity (simple/medium/complex) and specific files.  
@@ -80,7 +80,7 @@ I'm building **[a new swarm specialist like Polymarket data puller]**. Be my rut
 1. Minimum Viable Version: What's the absolute simplest version that delivers value?  
 2. NOT Building Yet: Nice-to-haves, edge cases for <5% of users, premature optimizations  
 3. Definition of Done: What criteria = shipped?  
-4. Time Traps: What will take 10x longer than expected? (e.g., API integrations with CoinGecko or DeFiLlama)  
+4. Time Traps: What will take 10x longer than expected? (e.g., API integrations with CoinGecko or DeFiLlama, X/Twitter tool implementation)  
 5. The One Thing: If I could only ship ONE capability, what should it be?  
 Be aggressive. I can always add more later.
 
@@ -92,10 +92,10 @@ I'm stuck in a debugging loop. The bug: **[describe it, e.g., swarm agent not po
 You already tried many things that didn't work; analyze what didn't help first. Before suggesting fixes:  
 1. List 5-7 different new possible causes. Consider:  
 - Data issue, not code?  
-- Environment/config? (e.g., Slack tokens in .env)  
+- Environment/config? (e.g., Slack tokens in .env, Postgres connection)  
 - Race condition/timing?  
 - Caching?  
-- Bug is somewhere else entirely? (e.g., ElizaOS core)  
+- Bug is somewhere else entirely? (e.g., ElizaOS core, tool schemas)  
 2. Rank by likelihood  
 3. For top 2: add diagnostic logs to prove/disprove each. Don't fix yet.  
 4. Only after we confirm the cause do we fix.
@@ -108,7 +108,7 @@ Audit this codebase for technical debt. Prioritized list I can act on.
 Find:  
 1. Duplicated code that should be extracted (e.g., in plugins or specialists)  
 2. Dead code (unused files, functions, exports)  
-3. Outdated patterns, deprecated APIs (e.g., in Otaku extensions)  
+3. Outdated patterns, deprecated APIs (e.g., in Otaku extensions or crypto plugins)  
 4. Missing error handling  
 5. Security smells (hardcoded secrets, SQL concat, missing validation in crypto ops)  
 6. Performance issues (N+1, missing indexes, unnecessary re-renders in React)  
@@ -165,7 +165,7 @@ Deploying to production. Run pre-launch checklist:
 **Security:**  
 - Auth on sensitive routes? (e.g., wallet features)  
 - Rate limiting on public endpoints?  
-- Input validation everywhere? (e.g., in plugins)  
+- Input validation everywhere? (e.g., in plugins, tool calls)  
 - HTTPS enforced?  
 - Security headers set?  
 **Errors:**  
@@ -174,7 +174,7 @@ Deploying to production. Run pre-launch checklist:
 - Errors logged with context?  
 **Database:**  
 - Migrations current? (Postgres)  
-- Indexes on queried columns? (e.g., for multi-year series)  
+- Indexes on queried columns? (e.g., for multi-year series, dynamic_specialists)  
 - Connection pooling?  
 For each:  
 ✅ Good,  
