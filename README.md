@@ -337,13 +337,9 @@ Common Eliza Cloud issues:
 - Original DeFi actions/wallet features preserved for flexibility.
 - Core edge: public data + curated X network + Grok synthesis.
 
-Small edges compound.
+##  Small edges compound.
 
-To achieve true "agents making agents" in your Ikigai Studio swarm — where one specialist autonomously identifies a gap (e.g., missing metric in BTC cycle analysis), designs and spins up a new specialist to fill it, integrates the results, and potentially persists the improvement — you need a combination of architectural upgrades, tool additions, and careful safety rails.
-
-Your current setup is already 80% of the way there: shared Postgres state, coordinator orchestration, structured outputs, tool-calling agents, and battle-tested Grok-derived prompts. The missing pieces are **dynamic instantiation** (temporary or persistent new agents) and **meta-reasoning capabilities** (agents that can reflect on swarm gaps and propose/create fixes).
-
-Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
+To achieve true "agents making agents" in our Ikigai Studio swarm — where one specialist autonomously identifies a gap (e.g., missing metric in BTC cycle analysis), designs and spins up a new specialist to fill it, integrates the results, and potentially persists the improvement — we need a combination of architectural upgrades, tool additions, and careful safety rails. Our current setup is already 80% of the way there: shared Postgres state, coordinator orchestration, structured outputs, tool-calling agents, and battle-tested Grok-derived prompts. The missing pieces are **dynamic instantiation** (temporary or persistent new agents) and **meta-reasoning capabilities** (agents that can reflect on swarm gaps and propose/create fixes). Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
 
 ### 1. Core Architectural Changes Needed
 
