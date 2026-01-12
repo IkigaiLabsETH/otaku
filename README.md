@@ -42,6 +42,34 @@ Monorepo with Bun/Turbo:
 - **Swarm Orchestration**: index.ts + coordinator.ts + specialists/ directory
 - **Interface Options**: Web UI (default Otaku) **or** Slack client adapter (research swarm)
 
+flowchart TD
+    Start[User Query / Schedule] --> Coord[Swarm Coordinator]
+    Coord --> Route{Route to Specialists}
+    
+    subgraph BTC[BTC-Centric Layer (Quantitative)]
+        Route --> BTC11[11 Specialists<br>(33 prompts)]
+        BTC11 --> ToolsBTC[Direct API Plugins<br>(Glassnode, Deribit, etc.)]
+        BTC11 --> Agg[Regime Aggregator]
+    end
+    
+    subgraph Alt[Altcoin Layer (Qualitative)]
+        Route --> Alt8[8 Specialists<br>(8 prompts)]
+        Alt8 --> ToolsAlt[Tool Calling<br>(Web Search + X Search - in progress)]
+    end
+    
+    ToolsBTC --> BTC11
+    ToolsAlt --> Alt8
+    Agg --> Coord
+    Alt8 --> Coord
+    BTC11 --> Coord
+    
+    Coord --> Synthesis[Aggregate & Synthesize]
+    Synthesis --> Output[Structured Output<br>→ Slack / Web / Grok]
+    
+    style BTC fill:#e6f3ff,stroke:#333
+    style Alt fill:#fff0f5,stroke:#333
+    style Coord fill:#ffebcc,stroke:#333
+
 ### Specialists Overview
 
 The swarm is deliberately separated into two categories with distinct prompt design and tool dependencies:
