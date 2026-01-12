@@ -1,4 +1,5 @@
-```markdown
+markdown
+
 # Ikigai Studio Research Tools
 
 An extended fork of the **Otaku AI Agent** repo, built on **ElizaOS**. This repository serves dual purposes for Ikigai Studio:
@@ -147,243 +148,135 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 ├── tailwind.config.js
 ├── turbo.json
 └── package.json
-```
 
-#### Key Updates
-- Clear architectural separation between BTC-centric quantitative regime agents (33 prompts across 11 specialists) and altcoin-focused qualitative/discovery agents (8 prompts across 8 specialists)
-- Total of **41 self-contained prompts** across 19 specialists
-- `regimeAggregatorSpecialist.ts` enhanced to synthesize both BTC regime signals and altcoin opportunity outputs
-- Altcoin specialists require additional X/Twitter tool actions for full autonomy (in progress)
-- All specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution
+Key UpdatesClear architectural separation between BTC-centric quantitative regime agents (33 prompts across 11 specialists) and altcoin-focused qualitative/discovery agents (8 prompts across 8 specialists)
+Total of 41 self-contained prompts across 19 specialists
+regimeAggregatorSpecialist.ts enhanced to synthesize both BTC regime signals and altcoin opportunity outputs
+Altcoin specialists require additional X/Twitter tool actions for full autonomy (in progress)
+All specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution
 
-## Prerequisites
+PrerequisitesBun 1.2.21+
+Node.js 18+ (compatibility)
+Optional: Coinbase Developer Platform keys (for wallet features)
+For swarm: Private Slack workspace + bot tokens
+API keys for data sources
+For Eliza Cloud deployment: ElizaOS CLI (bunx @elizaos/cli or global install)
 
-- Bun 1.2.21+
-- Node.js 18+ (compatibility)
-- Optional: Coinbase Developer Platform keys (for wallet features)
-- For swarm: Private Slack workspace + bot tokens
-- API keys for data sources
-- For Eliza Cloud deployment: ElizaOS CLI (`bunx @elizaos/cli` or global install)
+Running LocallyStandard Otaku Mode (Web UI + Single Agent)bash
 
-## Running Locally
-
-### Standard Otaku Mode (Web UI + Single Agent)
-
-```bash
 bun install
 cp .env.sample .env
 # Fill required keys (JWT_SECRET, AI provider, CDP if using wallet)
 bun run dev
-```
 
-Visit http://localhost:3000 for the React chat/dashboard.
+Visit http://localhost:3000 for the React chat/dashboard.Research Swarm Mode (Slack-Native, Multi-Agent)Add Slack variables to .env:
 
-### Research Swarm Mode (Slack-Native, Multi-Agent)
-
-Add Slack variables to .env:
-
-```
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
-```
 
-Enable specialists in src/index.ts (uncomment swarm loading)  
-Create Slack channels and invite bot  
-Run:
+Enable specialists in src/index.ts (uncomment swarm loading)
+Create Slack channels and invite bot
+Run:bash
 
-```bash
 bun run dev
-```
 
-Swarm connects to Slack; specialists post to channels, respond to mentions.  
-You can run both modes simultaneously if desired (web for testing, Slack for research).
+Swarm connects to Slack; specialists post to channels, respond to mentions.
+You can run both modes simultaneously if desired (web for testing, Slack for research).Available Scriptsbun run dev - Build and start development server
+bun run dev:watch - Watch mode with auto-rebuild
+bun run build - Build for production (all packages + frontend)
+bun run build:all - Build all workspace packages via Turbo
+bun run build:backend - Build backend only
+bun run build:frontend - Build frontend only
+bun run start - Start production server
+bun run type-check - Check TypeScript types
 
-### Available Scripts
+PluginsCDP Plugin (plugin-cdp)Coinbase Developer Platform integration providing wallet and payment functionality.Actions:USER_WALLET_INFO
+CHECK_TOKEN_BALANCE
+USER_WALLET_TOKEN_TRANSFER
+USER_WALLET_NFT_TRANSFER
+USER_WALLET_SWAP
+FETCH_WITH_PAYMENT
 
-- `bun run dev` - Build and start development server
-- `bun run dev:watch` - Watch mode with auto-rebuild
-- `bun run build` - Build for production (all packages + frontend)
-- `bun run build:all` - Build all workspace packages via Turbo
-- `bun run build:backend` - Build backend only
-- `bun run build:frontend` - Build frontend only
-- `bun run start` - Start production server
-- `bun run type-check` - Check TypeScript types
+Features:Automatic wallet creation
+Multi-chain support
+x402 protocol support
 
-## Plugins
+CoinGecko Plugin (plugin-coingecko)Real-time prices, market data, trending.Web Search Plugin (plugin-web-search)Tavily + CoinDesk news.DeFiLlama Plugin (plugin-defillama)TVL and protocol analytics.Relay Plugin (plugin-relay)Cross-chain bridging.Etherscan Plugin (plugin-etherscan)Transaction verification.Bootstrap & SQL PluginsCore ElizaOS capabilities + persistent storage.(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed.)CustomizationUsing Original Otaku FeaturesEdit character.ts, add plugins, use frontend — everything from the original repo works unchanged.Adding Actions/Tools for Altcoin Specialists (Critical for Autonomy)To enable full autonomy of altcoin agents:Implement X/Twitter search tools as new plugins (e.g., plugin-x-search) or OpenAI-style function calling wrappers.
+Define tool schemas in each altcoin specialist file.
+Register tools in the agent's configuration.
 
-### CDP Plugin (plugin-cdp)
+Example tool schema pattern:ts
 
-Coinbase Developer Platform integration providing wallet and payment functionality.
-
-Actions:
-- USER_WALLET_INFO
-- CHECK_TOKEN_BALANCE
-- USER_WALLET_TOKEN_TRANSFER
-- USER_WALLET_NFT_TRANSFER
-- USER_WALLET_SWAP
-- FETCH_WITH_PAYMENT
-
-Features:
-- Automatic wallet creation
-- Multi-chain support
-- x402 protocol support
-
-### CoinGecko Plugin (plugin-coingecko)
-
-Real-time prices, market data, trending.
-
-### Web Search Plugin (plugin-web-search)
-
-Tavily + CoinDesk news.
-
-### DeFiLlama Plugin (plugin-defillama)
-
-TVL and protocol analytics.
-
-### Relay Plugin (plugin-relay)
-
-Cross-chain bridging.
-
-### Etherscan Plugin (plugin-etherscan)
-
-Transaction verification.
-
-### Bootstrap & SQL Plugins
-
-Core ElizaOS capabilities + persistent storage.
-
-(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed.)
-
-## Customization
-
-### Using Original Otaku Features
-
-Edit character.ts, add plugins, use frontend — everything from the original repo works unchanged.
-
-### Adding Actions/Tools for Altcoin Specialists (Critical for Autonomy)
-
-To enable full autonomy of altcoin agents:
-1. Implement X/Twitter search tools as new plugins (e.g., `plugin-x-search`) or OpenAI-style function calling wrappers.
-2. Define tool schemas in each altcoin specialist file.
-3. Register tools in the agent's configuration.
-
-Example tool schema pattern:
-```ts
 tools: [
   { type: "function", function: { name: "x_keyword_search", description: "...", parameters: { ... } } },
   { type: "function", function: { name: "x_semantic_search", description: "...", parameters: { ... } } },
   { type: "function", function: { name: "web_search", description: "...", parameters: { ... } } },
 ]
-```
 
-### Building the Research Swarm
+Building the Research SwarmAdd specialists in src/specialists/ (follow BTC or altcoin prompt design patterns)
+Register in index.ts loading array
+Configure channel routing in coordinator
+Define required tools/actions per specialist
+Prompts should output structured JSON/tables for easy Grok handoff
 
-- Add specialists in src/specialists/ (follow BTC or altcoin prompt design patterns)
-- Register in index.ts loading array
-- Configure channel routing in coordinator
-- Define required tools/actions per specialist
-- Prompts should output structured JSON/tables for easy Grok handoff
+Adding New PluginsFollow pattern in src/plugins/. Ideal for new data sources or tool actions.Deployment OptionsOption 1: Eliza Cloud (Managed Hosting — Recommended for Quick Production)Eliza Cloud provides dedicated, production-grade hosting for ElizaOS agents with a single command. Perfect for running the full web app or the Slack-native swarm 24/7 with zero infrastructure management.Why Eliza Cloud?Deploy in ~5 minutes
+Dedicated EC2 instance (not shared)
+Automatic HTTPS, health monitoring, zero-downtime updates
+Real-time logs and easy management via CLI
 
-### Adding New Plugins
+Quick Start
+Sign up at elizacloud.ai
+Install/login CLI:bash
 
-Follow pattern in src/plugins/. Ideal for new data sources or tool actions.
-
-## Deployment Options
-
-### Option 1: Eliza Cloud (Managed Hosting — Recommended for Quick Production)
-
-Eliza Cloud provides dedicated, production-grade hosting for ElizaOS agents with a single command. Perfect for running the full web app or the Slack-native swarm 24/7 with zero infrastructure management.
-
-Why Eliza Cloud?
-- Deploy in ~5 minutes
-- Dedicated EC2 instance (not shared)
-- Automatic HTTPS, health monitoring, zero-downtime updates
-- Real-time logs and easy management via CLI
-
-Quick Start  
-Sign up at elizacloud.ai  
-Install/login CLI:
-
-```bash
 elizaos login
-```
 
-Deploy:
+Deploy:bash
 
-```bash
 elizaos deploy --project-name ikigai-swarm
-```
 
-Passing Secrets (Slack tokens, API keys, etc.)
+Passing Secrets (Slack tokens, API keys, etc.)bash
 
-```bash
 elizaos deploy --project-name ikigai-swarm \
   --env "SLACK_BOT_TOKEN=xoxb-..." \
   --env "SLACK_SIGNING_SECRET=..." \
   --env "POSTGRES_URL=postgresql://..." \
   --env "OPENAI_API_KEY=sk-..."
-```
 
-Scaling Resources (if needed for heavy swarm)
+Scaling Resources (if needed for heavy swarm)bash
 
-```bash
 elizaos deploy --project-name ikigai-swarm \
   --cpu 1792 \
   --memory 1792 \
   --desired-count 1
-```
 
-Management  
-- List: `elizaos containers list`
-- Logs: `elizaos containers logs --follow`
-- Update: Re-run `elizaos deploy` (zero downtime)
-- Delete: `elizaos containers delete --project-name ikigai-swarm`
+Management  List: elizaos containers list
+Logs: elizaos containers logs --follow
+Update: Re-run elizaos deploy (zero downtime)
+Delete: elizaos containers delete --project-name ikigai-swarm
 
-Your agent runs at https://{userId}-ikigai-swarm.containers.elizacloud.ai (web mode) or connects directly to Slack (swarm mode).
+Your agent runs at https://{userId}-ikigai-swarm.containers.elizacloud.ai (web mode) or connects directly to Slack (swarm mode).Option 2: Self-Hosted (Railway, Fly.io, VPS, etc.)For full control:Build: bun run build
+Start: bun run start
+Set env vars (Slack tokens, Postgres, etc.)
+Use Railway templates or generic Docker deploy
 
-### Option 2: Self-Hosted (Railway, Fly.io, VPS, etc.)
+Follow original Otaku Railway guide for web app deployment.Option 3: Swarm-Only (Server + Slack)Deploy backend only (disable frontend build if desired). Works on any platform supporting Bun/Node.Troubleshooting(See original Otaku troubleshooting — all issues remain relevant.)
+Common Eliza Cloud issues:Ensure Docker is running locally for builds
+Verify API keys/secrets are passed correctly
+Check credits in Eliza Cloud dashboard
 
-For full control:
-- Build: `bun run build`
-- Start: `bun run start`
-- Set env vars (Slack tokens, Postgres, etc.)
-- Use Railway templates or generic Docker deploy
+Boundaries & PhilosophyBTC Layer: Quantitative, data-plugin heavy, regime-focused
+Altcoin Layer: Qualitative, tool-calling heavy (web + X search), discovery-focused
+Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive when needed
+Original DeFi actions/wallet features preserved for flexibility
+Core edge: public data + curated X network + Grok synthesis
 
-Follow original Otaku Railway guide for web app deployment.
-
-### Option 3: Swarm-Only (Server + Slack)
-
-Deploy backend only (disable frontend build if desired). Works on any platform supporting Bun/Node.
-
-## Troubleshooting
-
-(See original Otaku troubleshooting — all issues remain relevant.)  
-Common Eliza Cloud issues:
-- Ensure Docker is running locally for builds
-- Verify API keys/secrets are passed correctly
-- Check credits in Eliza Cloud dashboard
-
-## Boundaries & Philosophy
-
-- **BTC Layer**: Quantitative, data-plugin heavy, regime-focused
-- **Altcoin Layer**: Qualitative, tool-calling heavy (web + X search), discovery-focused
-- Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive when needed
-- Original DeFi actions/wallet features preserved for flexibility
-- Core edge: public data + curated X network + Grok synthesis
-
-Small edges compound.
-
-## License
-
-MIT
-
-## Acknowledgements
-
-- Original Otaku by Shaw Walters and elizaOS contributors
-- Extended for Ikigai Studio BTC regime and altcoin research
-- ElizaOS: https://github.com/elizaos/eliza
-- Slack client: @elizaos-plugins/client-slack
-- Managed hosting: Eliza Cloud
+Small edges compound.LicenseMITAcknowledgementsOriginal Otaku by Shaw Walters and elizaOS contributors
+Extended for Ikigai Studio BTC regime and altcoin research
+ElizaOS: https://github.com/elizaos/eliza
+Slack client: @elizaos
+-plugins/client-slack
+Managed hosting: Eliza Cloud
 
 © 2026 Ikigai Studio. All original Otaku features retained and extended. Small edges compound.
 ```
+
