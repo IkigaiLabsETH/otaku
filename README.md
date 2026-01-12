@@ -83,12 +83,11 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
   - Until complete, agents fall back to aggressive web-search queries targeting X (e.g., `site:x.com`) and recent news sources.
 
 ### Project Structure
-
 ```
 ├── src/
 │   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
-│   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis
-│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused, 41 prompts total)
+│   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis, dynamic agent loading
+│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused + meta)
 │   │   # BTC-Centric (33 prompts)
 │   │   ├── fundamentalsSpecialist.ts
 │   │   ├── defiFlowsSpecialist.ts
@@ -110,6 +109,8 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 │   │   ├── narrativeDetectorSpecialist.ts
 │   │   ├── portfolioDesignerSpecialist.ts
 │   │   └── scamGuardSpecialist.ts
+│   │   # Meta / Self-Improvement
+│   │   └── metaEngineerSpecialist.ts   # Swarm architect: reflection, gap detection, agent spawning
 │   ├── character.ts              # Core Otaku character definition + swarm personality variants
 │   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
 │   │   ├── App.tsx
@@ -138,7 +139,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 │   │   ├── plugin-arkham/
 │   │   ├── plugin-polymarket/
 │   │   └── plugin-dune/
-│   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities
+│   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities, spawn tools
 ├── dist/
 ├── build.ts
 ├── start-server.ts
@@ -146,6 +147,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 ├── tailwind.config.js
 ├── turbo.json
 └── package.json
+
 ```
 
 ### Key Updates
