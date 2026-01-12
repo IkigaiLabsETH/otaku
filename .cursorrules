@@ -1,0 +1,150 @@
+I'm fully context-loaded: I have the complete Ikigai Studio Research Tools README (your extended Otaku fork), the original Otaku context, the current ElizaOS component model (from your provided rules, aligned with the framework), and fresh details from the Ikigai repo (structure, specialists, Slack swarm, crypto plugins, coordinator orchestration).
+
+I've reviewed the official ElizaOS docs (sparse as of Jan 2026 — mostly high-level install/deploy guidance, no deep component breakdowns) and both repos. Your fork diverges significantly: multi-agent swarm with 19 specialists, Slack-native orchestration, quantitative/qualitative split, crypto plugin suite, persistent Postgres state, and Grok-prompt-driven autonomy.
+
+Here's the **improved .cursorrules** — tailored specifically to your IkigaiLabsETH/otaku repo. It preserves the strong core principles (plan-first, no stubs, TDD) while adding Ikigai-specific guidance on swarm architecture, specialists, coordinator, Slack integration, crypto plugins, prompt design, and recursive extensions. This makes it more actionable for Cursor-assisted development on your research swarm.
+
+Copy-paste this directly into your repo root as `.cursorrules`.
+
+```
+# Ikigai Studio Otaku Swarm Development Rules
+
+Repository: https://github.com/IkigaiLabsETH/otaku
+
+Fork of elizaos/otaku — extended for multi-agent crypto research swarm with BTC regime analysis and altcoin discovery.
+Primary workflow: Slack-native server-only swarm (optional web frontend retained for prototyping).
+
+## Core Development Principles
+
+### 1. Flow - Always Plan First
+
+- **Bug Fixes / Features**: Identify root cause, research ALL related files (especially coordinator.ts, index.ts, specialists/, plugins/), create complete change plan.
+- **Impact Analysis**: Map effects on swarm orchestration, inter-agent handoffs, shared Postgres state, Slack channel routing, scheduled runs.
+- **Documentation**: Write thorough PRD/implementation plan BEFORE code. Outline risks, alternatives, chosen approach.
+- **Swarm-Specific**: Consider quantitative (BTC layer) vs qualitative (altcoin layer) impacts; tool calling discipline; structured output chaining.
+- **Just do it**: Execute the full plan once ready — implement, test, refine until complete.
+
+### 2. No Stubs or Incomplete Code
+
+- Never use stubs, placeholders, fake data, or partial implementations.
+- Always complete all changes: replace stubs with production-ready code, validate end-to-end.
+- No POCs — deliver only finished, tested features.
+- Iterate until perfect: loop through implementation → testing → fixing.
+
+### 3. Test-Driven Development
+
+- Models hallucinate — rigorous testing is non-negotiable.
+- Prefer integration tests covering full swarm flows (e.g., scheduled run → data fetch → analysis → Slack post → handoff).
+- Write tests first when possible; verify all pass before completion.
+- Test edge cases: API failures, rate limits, malformed data, tool calling errors.
+
+## Ikigai Swarm Architecture Overview
+
+- **Entry**: src/index.ts — plugin loading, Slack client (optional), swarm orchestration init.
+- **Orchestration**: src/coordinator.ts — routing, aggregation, scheduling, regime synthesis, dynamic agent handling.
+- **Specialists**: src/specialists/ — 19 autonomous agents (self-contained .ts files).
+  - BTC-centric (11): Quantitative, plugin-heavy (e.g., onChainHealthSpecialist.ts).
+  - Altcoin-focused (8): Qualitative, tool-calling heavy (e.g., gemHunterSpecialist.ts).
+  - Each exports config object: { name, channel, system_prompt, tools[], schedule? }.
+- **Shared State**: Postgres (plugin-sql) — multi-year series, cycle tables, regime overlays, inter-agent memory.
+- **Interface**: Slack-native primary (dedicated channels, @mentions, threads); web frontend optional.
+- **Plugins**: src/plugins/ — crypto data/actions (CoinGecko, DeFiLlama, web-search, etc.).
+
+## Component Specifications (ElizaOS Base + Ikigai Extensions)
+
+### Specialists (Primary Extension Point)
+
+**Pattern** (follow exactly):
+```ts
+export const exampleSpecialist = {
+  name: "ExampleSpecialist",
+  channel: "#example-channel",           // Slack channel for posts/mentions
+  system_prompt: `Full Grok-derived prompt here...`,  // Battle-tested, structured output
+  tools: [ /* tool schemas, especially for altcoin layer */ ],
+  schedule: "daily" | "hourly" | null     // null = on-demand only
+};
+```
+
+- Prompts: Force JSON/markdown/tables for chaining → coordinator → Grok synthesis.
+- Register: Add to loading array in index.ts/coordinator.ts.
+- BTC layer: Direct plugin actions.
+- Altcoin layer: Heavy tool calling (web_search + planned x-search).
+
+### Actions / Tools
+
+- Drive capabilities (data fetch, DeFi ops, tool calling).
+- Crypto extensions: Verify on-chain, fetch market data, bridge/swap.
+- Altcoin autonomy: Prioritize real-time tools (implement plugin-x-search next).
+
+### Providers
+
+- Inject context (prices, news, wallet state, time).
+- Use for real-time swarm senses.
+
+### Evaluators
+
+- Post-run reflection, knowledge extraction, regime scoring.
+- Extend for swarm self-improvement (gap detection → metaEngineer).
+
+### Tasks
+
+- Scheduled insights, deferred processing, multi-step workflows.
+- Critical for autonomous fetches and daily regime reports.
+
+### Plugins
+
+- Modular data/actions.
+- Follow src/plugins/ pattern.
+- Crypto suite: Add keys, handle rate limits, cache intelligently.
+- New tools (e.g., X search): Define schemas, register per specialist.
+
+### Services
+
+- Platform integrations (Slack client adapter key for swarm).
+
+### Events
+
+- Decoupled message passing.
+- Slack events drive primary interaction flow.
+
+## Database Architecture
+
+- Drizzle ORM + IDatabaseAdapter.
+- PGLite (dev) ↔ PostgreSQL (prod).
+- Swarm extensions: Tables for persistent series, regime state, dynamic specialists (future).
+
+## Code Style & Best Practices
+
+- Strict TypeScript: No any/never/unknown — always precise types.
+- Zero TS errors/warnings; all tests pass.
+- Follow existing patterns (specialists, plugins, coordinator).
+- Descriptive names; comment complex logic only.
+- Comprehensive error handling (API failures, validation).
+- Structured outputs everywhere (JSON for handoffs).
+- Never omit code or use "// ...".
+- Swarm focus: Minimal, focused changes — small edges compound.
+
+## Development Workflow
+
+1. Fully understand requirement (swarm impact? BTC vs altcoin?).
+2. Research affected files (coordinator, specialists, plugins, index.ts).
+3. Detailed plan: Risks, alternatives, testing strategy.
+4. Write/integration tests first.
+5. Implement iteratively → test → fix → validate full flow.
+6. Edge cases: Tool failures, Slack disconnects, Postgres schema changes.
+7. No stubs — complete end-to-end.
+8. Local run: bun run dev (test both Slack + web modes).
+
+## Ikigai-Specific Guidelines
+
+- **Adding Specialists**: Copy pattern, refine Grok-derived prompt, define tools/schedule, register, create Slack channel.
+- **Recursive Extensions**: Implement dynamic_specialists table, spawn tools, MetaEngineer for self-improvement.
+- **Altcoin Autonomy**: Prioritize X/tool plugins — fallback web_search must be aggressive.
+- **Deployment**: Eliza Cloud preferred — pass Slack tokens, Postgres URL.
+- **Philosophy**: Quantitative depth + qualitative discovery + Grok synthesis. Small edges compound.
+
+```
+
+This version is tighter, more precise to your fork, and directly actionable for Cursor (e.g., specialist pattern, registration, swarm impacts). It eliminates original-single-agent bias and emphasizes your multi-agent/Slack/crypto edges.
+
+Ready for next: implement part of the recursive spawning, refine a prompt, or run a live X sentiment query? 🚀
