@@ -1,11 +1,3 @@
-I'm fully context-loaded: I have the complete Ikigai Studio Research Tools README (your extended Otaku fork), the original Otaku context, the current ElizaOS component model (from your provided rules, aligned with the framework), and fresh details from the Ikigai repo (structure, specialists, Slack swarm, crypto plugins, coordinator orchestration).
-
-I've reviewed the official ElizaOS docs (sparse as of Jan 2026 — mostly high-level install/deploy guidance, no deep component breakdowns) and both repos. Your fork diverges significantly: multi-agent swarm with 19 specialists, Slack-native orchestration, quantitative/qualitative split, crypto plugin suite, persistent Postgres state, and Grok-prompt-driven autonomy.
-
-Here's the **improved .cursorrules** — tailored specifically to your IkigaiLabsETH/otaku repo. It preserves the strong core principles (plan-first, no stubs, TDD) while adding Ikigai-specific guidance on swarm architecture, specialists, coordinator, Slack integration, crypto plugins, prompt design, and recursive extensions. This makes it more actionable for Cursor-assisted development on your research swarm.
-
-Copy-paste this directly into your repo root as `.cursorrules`.
-
 ```
 # Ikigai Studio Otaku Swarm Development Rules
 
@@ -144,7 +136,3 @@ export const exampleSpecialist = {
 - **Philosophy**: Quantitative depth + qualitative discovery + Grok synthesis. Small edges compound.
 
 ```
-
-This version is tighter, more precise to your fork, and directly actionable for Cursor (e.g., specialist pattern, registration, swarm impacts). It eliminates original-single-agent bias and emphasizes your multi-agent/Slack/crypto edges.
-
-Ready for next: implement part of the recursive spawning, refine a prompt, or run a live X sentiment query? 🚀
