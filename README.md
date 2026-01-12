@@ -4,14 +4,18 @@ An extended fork of the **Otaku AI Agent** repo, built on **ElizaOS**. This repo
 
 1. **Core Crypto-Native Foundation** — Production-ready plugins for market data, DeFi analytics, on-chain operations, wallet interactions, bridging, and swaps. These power quantitative agents with direct API access to CoinGecko, DeFiLlama, Deribit, Etherscan, Relay, and more.
 
-2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of up to 32 specialized agents for autonomous crypto market research. Quantitative heavy lifting (prices, flows, metrics, skew, liquidity) with shared state, persistent memory, scheduled insights, and **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for qualitative synthesis and X discourse layering.
+2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is explicitly divided into two distinct categories:
+   - **BTC-Centric Specialists**: Deep, quantitative focus on Bitcoin regime analysis, cycle metrics, and macro overlays (33 refined prompt templates).
+   - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates).
+   
+   Features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering.
 
-The original Otaku web frontend (React + CDP wallet) remains fully functional and useful for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration — quantitative autonomy in a dedicated workspace.
+The original Otaku web frontend (React + CDP wallet) remains fully functional and useful for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration — full quantitative and qualitative autonomy in a dedicated workspace.
 
 ## Features
 
-- **Multi-Agent Swarm** — Up to 32 domain specialists (prices, DeFi TVL, on-chain flows, derivatives, macro, institutional signals, etc.)
-- **Slack-Native Interface** — Each specialist in its own channel (#coingecko-insights, #deribit-derivs, #swarm-coordinator); @mentions for queries, threaded reports, scheduled notifications
+- **Multi-Agent Swarm** — 19 specialized agents (11 BTC-centric + 8 altcoin-focused) providing comprehensive coverage of Bitcoin regimes and altcoin opportunities
+- **Slack-Native Interface** — Each specialist in its own channel (e.g., #btc-onchain-health, #alt-sentiment, #gem-hunter, #swarm-coordinator); @mentions for queries, threaded reports, scheduled notifications
 - **Shared Persistent State** — Postgres/plugin-sql for multi-year series, cycle tables, inter-agent handoffs, regime overlays
 - **Autonomous Operation** — Self-maintaining fetches, schema validation, anomaly detection, statistical processing
 - **Crypto Plugin Suite** (inherited & extended from Otaku)
@@ -36,29 +40,65 @@ Monorepo with Bun/Turbo:
 - **Swarm Orchestration**: index.ts + coordinator.ts + specialists/ directory
 - **Interface Options**: Web UI (default Otaku) **or** Slack client adapter (research swarm)
 
-### Project Structure (extended from original Otaku)
+### Specialists Overview
 
-```
-```
+The swarm is deliberately separated into two categories with distinct prompt design philosophies:
+
+#### BTC-Centric Specialists (33 refined prompt templates)
+Deep quantitative focus on Bitcoin-specific regimes, on-chain health, derivatives, institutional flows, and macro context. These agents are optimized for cycle analysis and regime detection in 2026+ Bitcoin markets.
+
+- `fundamentalsSpecialist.ts` — Price/ratio fundamentals (CoinGecko, ratios, valuation models)
+- `defiFlowsSpecialist.ts` — DeFi & wrapped BTC flows (DefiLlama, Artemis)
+- `liquiditySpecialist.ts` — Liquidity depth & market microstructure (DEX Screener, Kaiko)
+- `onChainHealthSpecialist.ts` — On-chain health metrics (CryptoQuant, Glassnode, Dune, CoinMetrics, IntoTheBlock, BitInfoCharts)
+- `derivativesSpecialist.ts` — Derivatives leverage & positioning (Coinglass, CME, Bitfinex, Deribit, Skew)
+- `socialPsychologySpecialist.ts` — Social & crowd psychology (X/Twitter, Santiment, LunarCrush)
+- `institutionalSpecialist.ts` — Institutional demand signals (ETF flows, CME, Arkham, Nansen)
+- `macroOverlaysSpecialist.ts` — Macro overlays & external regime drivers (FRED, IMF, Zillow, rates, housing)
+- `cycleContextSpecialist.ts` — Historical cycle context & research synthesis (Substack, Binance Research, The Block)
+- `polymarketSpecialist.ts` — Sentiment hedging & prediction markets (Polymarket odds, election/geopolitical overlays)
+- `regimeAggregatorSpecialist.ts` — Final BTC regime synthesis (combines all BTC-centric outputs)
+
+#### Altcoin Research Specialists (8 key prompt templates)
+Qualitative, discovery-oriented templates designed specifically for altcoin workflows: sentiment tracking, gem hunting, project due diligence, narrative detection, and risk avoidance. These complement the BTC core with actionable altcoin edge.
+
+- `altSentimentSpecialist.ts` — Real-time X sentiment analysis for altcoins/projects
+- `gemHunterSpecialist.ts` — Early-stage altcoin gem discovery with 100x screening
+- `projectAssessorSpecialist.ts` — Professional-grade evaluation of any altcoin project
+- `whaleMonitorSpecialist.ts` — Whale movements and smart-money tracking across altcoins
+- `tradeTimingSpecialist.ts` — Entry/exit timing and position management for altcoins
+- `narrativeDetectorSpecialist.ts` — Detecting narrative shifts and emerging trends in altcoins
+- `portfolioDesignerSpecialist.ts` — Diversified portfolio construction with altcoin allocation
+- `scamGuardSpecialist.ts` — Scam/rug-pull detection and avoidance framework
+
 ### Project Structure
 
-```
+```plaintext
 ├── src/
 │   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
 │   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis
-│   ├── specialists/              # Research specialists — each file contains a self-contained, modular prompt system 
-│   │                             # with detailed 2026 BTC regime analysis templates (33 prompts total across 10+ specialists)
-│   │   ├── fundamentalsSpecialist.ts     # Price/ratio fundamentals (CoinGecko, ratios, valuation models)
-│   │   ├── defiFlowsSpecialist.ts        # DeFi & wrapped BTC flows (DefiLlama, Artemis)
-│   │   ├── liquiditySpecialist.ts        # Liquidity depth & market microstructure (DEX Screener, Kaiko)
-│   │   ├── onChainHealthSpecialist.ts    # On-chain health metrics (CryptoQuant, Glassnode, Dune, CoinMetrics, IntoTheBlock, BitInfoCharts)
-│   │   ├── derivativesSpecialist.ts      # Derivatives leverage & positioning (Coinglass, CME, Bitfinex, Deribit, Skew)
-│   │   ├── socialPsychologySpecialist.ts # Social & crowd psychology (X/Twitter, Santiment, LunarCrush)
-│   │   ├── institutionalSpecialist.ts    # Institutional demand signals (ETF flows, CME, Arkham, Nansen)
-│   │   ├── macroOverlaysSpecialist.ts     # Macro overlays & external regime drivers (FRED, IMF, Zillow, rates, housing)
-│   │   ├── cycleContextSpecialist.ts      # Historical cycle context & research synthesis (Substack, Binance Research, The Block)
-│   │   ├── polymarketSpecialist.ts       # Sentiment hedging & prediction markets (Polymarket odds, election/geopolitical overlays)
-│   │   └── regimeAggregatorSpecialist.ts # Optional: final synthesis specialist that combines all outputs
+│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused, 41 prompts total)
+│   │   # BTC-Centric (33 prompts)
+│   │   ├── fundamentalsSpecialist.ts
+│   │   ├── defiFlowsSpecialist.ts
+│   │   ├── liquiditySpecialist.ts
+│   │   ├── onChainHealthSpecialist.ts
+│   │   ├── derivativesSpecialist.ts
+│   │   ├── socialPsychologySpecialist.ts
+│   │   ├── institutionalSpecialist.ts
+│   │   ├── macroOverlaysSpecialist.ts
+│   │   ├── cycleContextSpecialist.ts
+│   │   ├── polymarketSpecialist.ts
+│   │   └── regimeAggregatorSpecialist.ts
+│   │   # Altcoin Research (8 prompts)
+│   │   ├── altSentimentSpecialist.ts
+│   │   ├── gemHunterSpecialist.ts
+│   │   ├── projectAssessorSpecialist.ts
+│   │   ├── whaleMonitorSpecialist.ts
+│   │   ├── tradeTimingSpecialist.ts
+│   │   ├── narrativeDetectorSpecialist.ts
+│   │   ├── portfolioDesignerSpecialist.ts
+│   │   └── scamGuardSpecialist.ts
 │   ├── character.ts              # Core Otaku character definition + swarm personality variants
 │   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
 │   │   ├── App.tsx
@@ -78,15 +118,15 @@ Monorepo with Bun/Turbo:
 │   │   ├── plugin-defillama/
 │   │   ├── plugin-relay/
 │   │   ├── plugin-etherscan/
-│   │   ├── plugin-web-search/    # Used heavily for sources without dedicated APIs
+│   │   ├── plugin-web-search/
 │   │   ├── plugin-bootstrap/
-│   │   ├── plugin-cryptoquant/   # Added for on-chain health
-│   │   ├── plugin-glassnode/     # Added for on-chain health
-│   │   ├── plugin-coinglass/     # Added for derivatives
-│   │   ├── plugin-santiment/     # Added for social signals
-│   │   ├── plugin-arkham/        # Added for institutional flows
-│   │   ├── plugin-polymarket/    # Added for prediction markets
-│   │   └── plugin-dune/          # Added for custom on-chain queries
+│   │   ├── plugin-cryptoquant/
+│   │   ├── plugin-glassnode/
+│   │   ├── plugin-coinglass/
+│   │   ├── plugin-santiment/
+│   │   ├── plugin-arkham/
+│   │   ├── plugin-polymarket/
+│   │   └── plugin-dune/
 │   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities
 ├── dist/
 ├── build.ts
@@ -98,12 +138,11 @@ Monorepo with Bun/Turbo:
 ```
 
 #### Key Updates
-- **specialists/** now explicitly lists the 10+ core research specialists, each backed by highly refined, modular prompt templates optimized for 2026 BTC regime analysis.
-- Total of **33 self-contained prompts** distributed across these specialists for comprehensive multi-angle coverage.
-- Added new plugins for high-signal data sources that have reliable APIs; remaining sources fall back to `plugin-web-search` or scheduled scrapers.
-- `regimeAggregatorSpecialist.ts` added as optional final layer for cross-specialist synthesis.
-```
-```
+- Clear architectural separation between BTC-centric quantitative regime agents (33 prompts across 11 specialists) and altcoin-focused qualitative/discovery agents (8 prompts across 8 specialists)
+- Total of **41 self-contained prompts** across 19 specialists
+- `regimeAggregatorSpecialist.ts` enhanced to synthesize both BTC regime signals and altcoin opportunity outputs
+- All altcoin specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution
+- Added new plugins for high-signal data sources; remaining sources fall back to `plugin-web-search` or scheduled scrapers
 
 ## Prerequisites
 
@@ -211,7 +250,7 @@ Edit character.ts, add plugins, use frontend — everything from the original re
 
 ### Building the Research Swarm
 
-- Add specialists in src/specialists/ (unique prompts, domain plugins)
+- Add specialists in src/specialists/ (follow BTC or altcoin prompt design patterns)
 - Register in index.ts loading array
 - Configure channel routing in coordinator
 - Prompts should output structured JSON/tables for easy Grok handoff
@@ -252,7 +291,7 @@ Passing Secrets (Slack tokens, API keys, etc.)
 elizaos deploy --project-name ikigai-swarm \
   --env "SLACK_BOT_TOKEN=xoxb-..." \
   --env "SLACK_SIGNING_SECRET=..." \
-  --env "POSTGRES_URL=postgresql://..." \
+  --env"Come "POSTGRES_URL=postgresql://..." \
   --env "OPENAI_API_KEY=sk-..."
 ```
 
@@ -297,9 +336,13 @@ Common Eliza Cloud issues:
 
 ## Boundaries & Philosophy
 
-Quantitative layer (swarm) handles data engineering. Qualitative edge (X discourse, contrarian framing) remains Grok-exclusive.  
-Original DeFi actions/wallet features preserved for flexibility.  
-Core edge: public data + curated X network + Grok synthesis.
+- **BTC Layer**: Quantitative, regime-focused, data-heavy
+- **Altcoin Layer**: Qualitative, discovery-focused, narrative-aware
+- Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive
+- Original DeFi actions/wallet features preserved for flexibility
+- Core edge: public data + curated X network + Grok synthesis
+
+Small edges compound.
 
 ## License
 
@@ -308,7 +351,7 @@ MIT
 ## Acknowledgements
 
 - Original Otaku by Shaw Walters and elizaOS contributors
-- Extended for Ikigai Studio quantitative research
+- Extended for Ikigai Studio BTC regime and altcoin research
 - ElizaOS: https://github.com/elizaos/eliza
 - Slack client: @elizaos-plugins/client-slack
 - Managed hosting: Eliza Cloud
