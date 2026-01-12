@@ -1,70 +1,145 @@
 # Ikigai Studio Research Tools
 
-An extended fork of the **Otaku AI Agent** repo, built on **ElizaOS**. This repository serves dual purposes for Ikigai Studio:
+An extended fork of the **Otaku AI Agent** repository, built on **ElizaOS**. This repository serves two primary purposes for Ikigai Studio:
 
-1. **Core Crypto-Native Foundation** — Production-ready plugins for market data, DeFi analytics, on-chain operations, wallet interactions, bridging, and swaps. These power quantitative agents with direct API access to CoinGecko, DeFiLlama, Deribit, Etherscan, Relay, and more.
+1. **Core Crypto-Native Foundation** — Production-ready plugins for market data, DeFi analytics, on-chain operations, wallet interactions, bridging, and swaps. These enable quantitative agents with direct API access to CoinGecko, DeFiLlama, Deribit, Etherscan, Relay, and more.
 
-2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of up to 32 specialized agents for autonomous crypto market research. Quantitative heavy lifting (prices, flows, metrics, skew, liquidity) with shared state, persistent memory, scheduled insights, and **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for qualitative synthesis and X discourse layering.
+2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is divided into two distinct categories:
+   - **BTC-Centric Specialists**: Deep quantitative focus on Bitcoin regime analysis, cycle metrics, and macro overlays (33 refined prompt templates).
+   - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates that rely heavily on real-time tool calling).
 
-The original Otaku web frontend (React + CDP wallet) remains fully functional and useful for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration — quantitative autonomy in a dedicated workspace.
+   The swarm features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering when needed.
+
+The original Otaku web frontend (React + CDP wallet) remains fully functional for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration—achieving full quantitative and qualitative autonomy in a dedicated workspace.
 
 ## Features
 
-- **Multi-Agent Swarm** — Up to 32 domain specialists (prices, DeFi TVL, on-chain flows, derivatives, macro, institutional signals, etc.)
-- **Slack-Native Interface** — Each specialist in its own channel (#coingecko-insights, #deribit-derivs, #swarm-coordinator); @mentions for queries, threaded reports, scheduled notifications
-- **Shared Persistent State** — Postgres/plugin-sql for multi-year series, cycle tables, inter-agent handoffs, regime overlays
-- **Autonomous Operation** — Self-maintaining fetches, schema validation, anomaly detection, statistical processing
-- **Crypto Plugin Suite** (inherited & extended from Otaku)
-  - Real-time prices & trending (CoinGecko)
-  - TVL & protocol analytics (DeFiLlama)
-  - Options skew & funding (Deribit — add your own plugin)
-  - On-chain verification (Etherscan)
-  - Bridging (Relay)
-  - Web search & news
-- **Optional Web Frontend** — Modern React UI with CDP wallet integration, chat interface, dashboard — retained for plugin testing, interactive prototypes, or public-facing agents
-- **DeFi Actions** (available if frontend/wallet enabled) — Swaps, transfers, bridging, NFT ops via CDP
-- **Real-time Communication** — Socket.IO (web) or Slack events (swarm mode)
+- **Multi-Agent Swarm** — 19 specialized agents (11 BTC-centric + 8 altcoin-focused) providing comprehensive coverage of Bitcoin regimes and altcoin opportunities.
+- **Slack-Native Interface** — Each specialist in its own channel (e.g., `#btc-onchain-health`, `#alt-sentiment`, `#gem-hunter`, `#swarm-coordinator`); supports @mentions for queries, threaded reports, and scheduled notifications.
+- **Shared Persistent State** — Postgres/plugin-sql for multi-year series, cycle tables, inter-agent handoffs, and regime overlays.
+- **Autonomous Operation** — Self-maintaining fetches, schema validation, anomaly detection, and statistical processing.
+- **Crypto Plugin Suite** (inherited & extended from Otaku):
+  - Real-time prices & trending (CoinGecko).
+  - TVL & protocol analytics (DeFiLlama).
+  - Options skew & funding (Deribit — add your own plugin).
+  - On-chain verification (Etherscan).
+  - Bridging (Relay).
+  - Web search & news.
+- **Optional Web Frontend** — Modern React UI with CDP wallet integration, chat interface, and dashboard—retained for plugin testing, interactive prototypes, or public-facing agents.
+- **DeFi Actions** (available if frontend/wallet enabled) — Swaps, transfers, bridging, and NFT operations via CDP.
+- **Real-time Communication** — Socket.IO (web) or Slack events (swarm mode).
 
 ## Architecture
 
-Monorepo with Bun/Turbo:
+Monorepo managed with Bun and Turbo:
 
-- **Runtime**: Bun 1.2.21+
-- **Framework**: ElizaOS + Otaku extensions
-- **Frontend** (optional): React 18 + TypeScript + Vite + Tailwind + Radix UI
-- **Backend**: Custom ElizaOS server
-- **Swarm Orchestration**: index.ts + coordinator.ts + specialists/ directory
-- **Interface Options**: Web UI (default Otaku) **or** Slack client adapter (research swarm)
+- **Runtime**: Bun 1.2.21+.
+- **Framework**: ElizaOS + Otaku extensions.
+- **Frontend** (optional): React 18 + TypeScript + Vite + Tailwind + Radix UI.
+- **Backend**: Custom ElizaOS server.
+- **Swarm Orchestration**: `index.ts` + `coordinator.ts` + `specialists/` directory.
+- **Interface Options**: Web UI (default Otaku) **or** Slack client adapter (research swarm).
 
-### Project Structure (extended from original Otaku)
+### Specialists Overview
 
+The swarm is separated into two categories with distinct prompt designs and tool dependencies.
+
+#### BTC-Centric Specialists (33 refined prompt templates)
+Deep quantitative focus backed by dedicated data plugins/actions.
+
+- `fundamentalsSpecialist.ts` — Price/ratio fundamentals (CoinGecko, ratios, valuation models).
+- `defiFlowsSpecialist.ts` — DeFi & wrapped BTC flows (DeFiLlama, Artemis).
+- `liquiditySpecialist.ts` — Liquidity depth & market microstructure (DEX Screener, Kaiko).
+- `onChainHealthSpecialist.ts` — On-chain health metrics (CryptoQuant, Glassnode, Dune, CoinMetrics, IntoTheBlock, BitInfoCharts).
+- `derivativesSpecialist.ts` — Derivatives leverage & positioning (Coinglass, CME, Bitfinex, Deribit, Skew).
+- `socialPsychologySpecialist.ts` — Social & crowd psychology (X/Twitter, Santiment, LunarCrush).
+- `institutionalSpecialist.ts` — Institutional demand signals (ETF flows, CME, Arkham, Nansen).
+- `macroOverlaysSpecialist.ts` — Macro overlays & external regime drivers (FRED, IMF, Zillow, rates, housing).
+- `cycleContextSpecialist.ts` — Historical cycle context & research synthesis (Substack, Binance Research, The Block).
+- `polymarketSpecialist.ts` — Sentiment hedging & prediction markets (Polymarket odds, election/geopolitical overlays).
+- `regimeAggregatorSpecialist.ts` — Final BTC regime synthesis (combines all BTC-centric outputs).
+
+#### Altcoin Research Specialists (8 key prompt templates)
+Qualitative, discovery-oriented agents that require tool calling (especially X/Twitter and web search) for full autonomy.
+
+- `altSentimentSpecialist.ts` — Real-time X sentiment analysis for altcoins/projects.
+- `gemHunterSpecialist.ts` — Early-stage altcoin gem discovery with 100x screening.
+- `projectAssessorSpecialist.ts` — Professional-grade evaluation of any altcoin project.
+- `whaleMonitorSpecialist.ts` — Whale movements and smart-money tracking across altcoins.
+- `tradeTimingSpecialist.ts` — Entry/exit timing and position management for altcoins.
+- `narrativeDetectorSpecialist.ts` — Detecting narrative shifts and emerging trends in altcoins.
+- `portfolioDesignerSpecialist.ts` — Diversified portfolio construction with altcoin allocation.
+- `scamGuardSpecialist.ts` — Scam/rug-pull detection and avoidance framework.
+
+### Research Actions & Tools
+
+**BTC Layer**: Primarily uses direct API plugins as actions (CoinGecko, DeFiLlama, CryptoQuant, Glassnode, Coinglass, Arkham, Polymarket, Dune, etc.).
+
+**Altcoin Layer**: Relies heavily on tool calling for real-time data:
+- Web search (`plugin-web-search` — Tavily + CoinDesk news) — currently available.
+- X/Twitter search tools (keyword, semantic, user, thread fetch) — **in progress / planned**.
+  - These are critical for full autonomy of altcoin specialists.
+  - Will be implemented as new plugins (e.g., `plugin-x-search`) using X API access or reliable third-party providers.
+  - Until complete, agents fall back to aggressive web-search queries targeting X (e.g., `site:x.com`) and recent news sources.
+
+### Project Structure
 ```
 ├── src/
-│   ├── index.ts                  # Entry: plugin loading, optional Slack client, swarm orchestration
-│   ├── coordinator.ts            # New: Swarm coordinator (routing, aggregation, scheduling)
-│   ├── specialists/              # New: One file per research specialist (coingeckoSpecialist.ts, etc.)
-│   ├── character.ts              # Original Otaku character + optional swarm variants
-│   ├── frontend/                 # Retained React app (chat, dashboard, CDP wallet)
+│   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
+│   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis, dynamic agent loading
+│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused + meta)
+│   │   # BTC-Centric (33 prompts)
+│   │   ├── fundamentalsSpecialist.ts
+│   │   ├── defiFlowsSpecialist.ts
+│   │   ├── liquiditySpecialist.ts
+│   │   ├── onChainHealthSpecialist.ts
+│   │   ├── derivativesSpecialist.ts
+│   │   ├── socialPsychologySpecialist.ts
+│   │   ├── institutionalSpecialist.ts
+│   │   ├── macroOverlaysSpecialist.ts
+│   │   ├── cycleContextSpecialist.ts
+│   │   ├── polymarketSpecialist.ts
+│   │   └── regimeAggregatorSpecialist.ts
+│   │   # Altcoin Research (8 prompts)
+│   │   ├── altSentimentSpecialist.ts
+│   │   ├── gemHunterSpecialist.ts
+│   │   ├── projectAssessorSpecialist.ts
+│   │   ├── whaleMonitorSpecialist.ts
+│   │   ├── tradeTimingSpecialist.ts
+│   │   ├── narrativeDetectorSpecialist.ts
+│   │   ├── portfolioDesignerSpecialist.ts
+│   │   └── scamGuardSpecialist.ts
+│   │   # Meta / Self-Improvement
+│   │   └── metaEngineerSpecialist.ts   # Swarm architect: reflection, gap detection, agent spawning
+│   ├── character.ts              # Core Otaku character definition + swarm personality variants
+│   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
 │   │   ├── App.tsx
 │   │   ├── components/
-│   │   │   ├── chat/
-│   │   │   ├── dashboard/
-│   │   │   ├── agents/
-│   │   │   ├── auth/
-│   │   │   └── ui/
-│   │   ├── lib/
-│   │   ├── hooks/
-│   │   ├── contexts/
-│   │   └── types/
-│   ├── plugins/                  # Core crypto plugins (extended as needed)
+│   │   │   ├── chat/             # Chat UI, message streaming, specialist selection
+│   │   │   ├── dashboard/        # Regime dashboard, charts, signal visualizations
+│   │   │   ├── agents/           # Agent cards, status indicators, swarm view
+│   │   │   ├── auth/             # Auth flows
+│   │   │   └── ui/               # Shared UI components
+│   │   ├── lib/                  # API clients, utilities
+│   │   ├── hooks/                # Custom React hooks
+│   │   ├── contexts/             # Global state (auth, swarm, regime)
+│   │   └── types/                # TypeScript interfaces
+│   ├── plugins/                  # Core data-fetching plugins (extended for new data sources)
 │   │   ├── plugin-cdp/
 │   │   ├── plugin-coingecko/
 │   │   ├── plugin-defillama/
 │   │   ├── plugin-relay/
 │   │   ├── plugin-etherscan/
 │   │   ├── plugin-web-search/
-│   │   └── plugin-bootstrap/
-│   └── utils/                    # Shared helpers (charts, regime logic)
+│   │   ├── plugin-bootstrap/
+│   │   ├── plugin-cryptoquant/
+│   │   ├── plugin-glassnode/
+│   │   ├── plugin-coinglass/
+│   │   ├── plugin-santiment/
+│   │   ├── plugin-arkham/
+│   │   ├── plugin-polymarket/
+│   │   └── plugin-dune/
+│   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities, spawn tools
 ├── dist/
 ├── build.ts
 ├── start-server.ts
@@ -72,16 +147,25 @@ Monorepo with Bun/Turbo:
 ├── tailwind.config.js
 ├── turbo.json
 └── package.json
+
 ```
+
+### Key Updates
+
+- Clear architectural separation between BTC-centric quantitative regime agents (33 prompts across 11 specialists) and altcoin-focused qualitative/discovery agents (8 prompts across 8 specialists).
+- Total of 41 self-contained prompts across 19 specialists.
+- `regimeAggregatorSpecialist.ts` enhanced to synthesize both BTC regime signals and altcoin opportunity outputs.
+- Altcoin specialists require additional X/Twitter tool actions for full autonomy (in progress).
+- All specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution.
 
 ## Prerequisites
 
-- Bun 1.2.21+
-- Node.js 18+ (compatibility)
-- Optional: Coinbase Developer Platform keys (for wallet features)
-- For swarm: Private Slack workspace + bot tokens
-- API keys for data sources
-- For Eliza Cloud deployment: ElizaOS CLI (`bunx @elizaos/cli` or global install)
+- Bun 1.2.21+.
+- Node.js 18+ (for compatibility).
+- Optional: Coinbase Developer Platform keys (for wallet features).
+- For swarm: Private Slack workspace + bot tokens.
+- API keys for data sources.
+- For Eliza Cloud deployment: ElizaOS CLI (bunx `@elizaos/cli` or global install).
 
 ## Running Locally
 
@@ -94,100 +178,90 @@ cp .env.sample .env
 bun run dev
 ```
 
-Visit http://localhost:3000 for the React chat/dashboard.
+Visit `http://localhost:3000` for the React chat/dashboard.
 
 ### Research Swarm Mode (Slack-Native, Multi-Agent)
 
-Add Slack variables to .env:
+Add Slack variables to `.env`:
 
 ```
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
 ```
 
-Enable specialists in src/index.ts (uncomment swarm loading)  
-Create Slack channels and invite bot  
-Run:
+Enable specialists in `src/index.ts` (uncomment swarm loading). Create Slack channels and invite the bot. Run:
 
 ```bash
 bun run dev
 ```
 
-Swarm connects to Slack; specialists post to channels, respond to mentions.  
-You can run both modes simultaneously if desired (web for testing, Slack for research).
+The swarm connects to Slack; specialists post to channels and respond to mentions. You can run both modes simultaneously if desired (web for testing, Slack for research).
 
-### Available Scripts
+## Available Scripts
 
-- `bun run dev` - Build and start development server
-- `bun run dev:watch` - Watch mode with auto-rebuild
-- `bun run build` - Build for production (all packages + frontend)
-- `bun run build:all` - Build all workspace packages via Turbo
-- `bun run build:backend` - Build backend only
-- `bun run build:frontend` - Build frontend only
-- `bun run start` - Start production server
-- `bun run type-check` - Check TypeScript types
+- `bun run dev` - Build and start development server.
+- `bun run dev:watch` - Watch mode with auto-rebuild.
+- `bun run build` - Build for production (all packages + frontend).
+- `bun run build:all` - Build all workspace packages via Turbo.
+- `bun run build:backend` - Build backend only.
+- `bun run build:frontend` - Build frontend only.
+- `bun run start` - Start production server.
+- `bun run type-check` - Check TypeScript types.
 
 ## Plugins
 
-### CDP Plugin (plugin-cdp)
+- **CDP Plugin (`plugin-cdp`)**: Coinbase Developer Platform integration for wallet and payment functionality.
+  - Actions: `USER_WALLET_INFO`, `CHECK_TOKEN_BALANCE`, `USER_WALLET_TOKEN_TRANSFER`, `USER_WALLET_NFT_TRANSFER`, `USER_WALLET_SWAP`, `FETCH_WITH_PAYMENT`.
+  - Features: Automatic wallet creation, multi-chain support, x402 protocol support.
 
-Coinbase Developer Platform integration providing wallet and payment functionality.
+- **CoinGecko Plugin (`plugin-coingecko`)**: Real-time prices, market data, trending.
 
-Actions:
-- USER_WALLET_INFO
-- CHECK_TOKEN_BALANCE
-- USER_WALLET_TOKEN_TRANSFER
-- USER_WALLET_NFT_TRANSFER
-- USER_WALLET_SWAP
-- FETCH_WITH_PAYMENT
+- **Web Search Plugin (`plugin-web-search`)**: Tavily + CoinDesk news.
 
-Features:
-- Automatic wallet creation
-- Multi-chain support
-- x402 protocol support
+- **DeFiLlama Plugin (`plugin-defillama`)**: TVL and protocol analytics.
 
-### CoinGecko Plugin (plugin-coingecko)
+- **Relay Plugin (`plugin-relay`)**: Cross-chain bridging.
 
-Real-time prices, market data, trending.
+- **Etherscan Plugin (`plugin-etherscan`)**: Transaction verification.
 
-### Web Search Plugin (plugin-web-search)
+- **Bootstrap & SQL Plugins**: Core ElizaOS capabilities + persistent storage.
 
-Tavily + CoinDesk news.
-
-### DeFiLlama Plugin (plugin-defillama)
-
-TVL and protocol analytics.
-
-### Relay Plugin (plugin-relay)
-
-Cross-chain bridging.
-
-### Etherscan Plugin (plugin-etherscan)
-
-Transaction verification.
-
-### Bootstrap & SQL Plugins
-
-Core ElizaOS capabilities + persistent storage.
-
-(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier as needed.)
+(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed.)
 
 ## Customization
 
 ### Using Original Otaku Features
 
-Edit character.ts, add plugins, use frontend — everything from the original repo works unchanged.
+Edit `character.ts`, add plugins, use frontend—everything from the original repo works unchanged.
+
+### Adding Actions/Tools for Altcoin Specialists (Critical for Autonomy)
+
+To enable full autonomy of altcoin agents:
+- Implement X/Twitter search tools as new plugins (e.g., `plugin-x-search`) or OpenAI-style function calling wrappers.
+- Define tool schemas in each altcoin specialist file.
+- Register tools in the agent's configuration.
+
+Example tool schema pattern:
+
+```ts
+tools: [
+  { type: "function", function: { name: "x_keyword_search", description: "...", parameters: { ... } } },
+  { type: "function", function: { name: "x_semantic_search", description: "...", parameters: { ... } } },
+  { type: "function", function: { name: "web_search", description: "...", parameters: { ... } } },
+]
+```
 
 ### Building the Research Swarm
 
-- Add specialists in src/specialists/ (unique prompts, domain plugins)
-- Register in index.ts loading array
-- Configure channel routing in coordinator
-- Prompts should output structured JSON/tables for easy Grok handoff
+- Add specialists in `src/specialists/` (follow BTC or altcoin prompt design patterns).
+- Register in `index.ts` loading array.
+- Configure channel routing in coordinator.
+- Define required tools/actions per specialist.
+- Prompts should output structured JSON/tables for easy Grok handoff.
 
 ### Adding New Plugins
 
-Follow pattern in src/plugins/. Ideal for new data sources.
+Follow the pattern in `src/plugins/`. Ideal for new data sources or tool actions.
 
 ## Deployment Options
 
@@ -195,62 +269,54 @@ Follow pattern in src/plugins/. Ideal for new data sources.
 
 Eliza Cloud provides dedicated, production-grade hosting for ElizaOS agents with a single command. Perfect for running the full web app or the Slack-native swarm 24/7 with zero infrastructure management.
 
-Why Eliza Cloud?
-- Deploy in ~5 minutes
-- Dedicated EC2 instance (not shared)
-- Automatic HTTPS, health monitoring, zero-downtime updates
-- Real-time logs and easy management via CLI
+**Why Eliza Cloud?**
+- Deploy in ~5 minutes.
+- Dedicated EC2 instance (not shared).
+- Automatic HTTPS, health monitoring, zero-downtime updates.
+- Real-time logs and easy management via CLI.
 
-Quick Start  
-Sign up at elizacloud.ai  
-Install/login CLI:
+**Quick Start**
+- Sign up at [elizacloud.ai](https://elizacloud.ai).
+- Install/login CLI:
+  ```bash
+  elizaos login
+  ```
+- Deploy:
+  ```bash
+  elizaos deploy --project-name ikigai-swarm
+  ```
+- Passing Secrets (Slack tokens, API keys, etc.):
+  ```bash
+  elizaos deploy --project-name ikigai-swarm \
+    --env "SLACK_BOT_TOKEN=xoxb-..." \
+    --env "SLACK_SIGNING_SECRET=..." \
+    --env "POSTGRES_URL=postgresql://..." \
+    --env "OPENAI_API_KEY=sk-..."
+  ```
+- Scaling Resources (if needed for heavy swarm):
+  ```bash
+  elizaos deploy --project-name ikigai-swarm \
+    --cpu 1792 \
+    --memory 1792 \
+    --desired-count 1
+  ```
+- Management:
+  - List: `elizaos containers list`
+  - Logs: `elizaos containers logs --follow`
+  - Update: Re-run `elizaos deploy` (zero downtime)
+  - Delete: `elizaos containers delete --project-name ikigai-swarm`
 
-```bash
-elizaos login
-```
-
-Deploy:
-
-```bash
-elizaos deploy --project-name ikigai-swarm
-```
-
-Passing Secrets (Slack tokens, API keys, etc.)
-
-```bash
-elizaos deploy --project-name ikigai-swarm \
-  --env "SLACK_BOT_TOKEN=xoxb-..." \
-  --env "SLACK_SIGNING_SECRET=..." \
-  --env "POSTGRES_URL=postgresql://..." \
-  --env "OPENAI_API_KEY=sk-..."
-```
-
-Scaling Resources (if needed for heavy swarm)
-
-```bash
-elizaos deploy --project-name ikigai-swarm \
-  --cpu 1792 \
-  --memory 1792 \
-  --desired-count 1
-```
-
-Management  
-- List: `elizaos containers list`
-- Logs: `elizaos containers logs --follow`
-- Update: Re-run `elizaos deploy` (zero downtime)
-- Delete: `elizaos containers delete --project-name ikigai-swarm`
-
-Your agent runs at https://{userId}-ikigai-swarm.containers.elizacloud.ai (web mode) or connects directly to Slack (swarm mode).
+Your agent runs at `https://{userId}-ikigai-swarm.containers.elizacloud.ai` (web mode) or connects directly to Slack (swarm mode).
 
 ### Option 2: Self-Hosted (Railway, Fly.io, VPS, etc.)
 
 For full control:
 - Build: `bun run build`
 - Start: `bun run start`
-- Set env vars (Slack tokens, Postgres, etc.)
-- Use Railway templates or generic Docker deploy
+- Set env vars (Slack tokens, Postgres, etc.).
+- Use Railway templates or generic Docker deploy.
 
-Follow original Otaku Railway guide for web app deployment.
+Follow the original Otaku Railway guide for web app deployment.
 
 ### Option 3: Swarm-Only (Server + Slack)
 
@@ -258,31 +324,36 @@ Deploy backend only (disable frontend build if desired). Works on any platform s
 
 ## Troubleshooting
 
-(See original Otaku troubleshooting — all issues remain relevant.)  
+(See original Otaku troubleshooting—all issues remain relevant.)
+
 Common Eliza Cloud issues:
-- Ensure Docker is running locally for builds
-- Verify API keys/secrets are passed correctly
-- Check credits in Eliza Cloud dashboard
+- Ensure Docker is running locally for builds.
+- Verify API keys/secrets are passed correctly.
+- Check credits in Eliza Cloud dashboard.
 
 ## Boundaries & Philosophy
 
-Quantitative layer (swarm) handles data engineering. Qualitative edge (X discourse, contrarian framing) remains Grok-exclusive.  
-Original DeFi actions/wallet features preserved for flexibility.  
-Core edge: public data + curated X network + Grok synthesis.
+- **BTC Layer**: Quantitative, data-plugin heavy, regime-focused.
+- **Altcoin Layer**: Qualitative, tool-calling heavy (web + X search), discovery-focused.
+- Final qualitative edge (X discourse, contrarian framing, synthesis) remains Grok-exclusive when needed.
+- Original DeFi actions/wallet features preserved for flexibility.
+- Core edge: public data + curated X network + Grok synthesis.
+
+##  Small edges compound.
 
 ## Development Tips
 
-In 2026, Claude Opus 4.5 remains the undisputed frontier for coding and agentic work. Its terminal-based agent reads your repo, edits files, runs commands, and thinks alongside you—making it the default environment for shipping serious software without unnecessary overhead.
+In 2026, Grok 4 remains the undisputed frontier for coding and agentic work. Its terminal-based agent reads your repo, edits files, runs commands, and thinks alongside you—making it the default environment for shipping serious software without unnecessary overhead.
 
 But the model isn’t the alpha. The mindset is.
 
-Most treat Claude like a faster Stack Overflow: quick fixes, isolated tasks. The elite treat it like a studio—where every line is crafted with the care of a master painter, the precision of an engineer, and the vision of a designer.
+Most treat Grok like a faster Stack Overflow: quick fixes, isolated tasks. The elite treat it like a studio—where every line is crafted with the care of a master painter, the precision of an engineer, and the vision of a designer.
 
 Inspired by repos like IkigaiLabsETH/otaku—an autonomous DeFi agent built on ElizaOS with modular plugins, AI integrations, and a character-driven core—this guide adapts that setup for our goal: an OP Slack bot for onchain options research and newsletter generation. No frontend bloat—just a lean backend bot that orchestrates workflows via Slack commands, pulling onchain data, X sentiment, and drafting essays in our voice from 285+ Substack archives.
 
 We’re building a system that automates our weekly Hypersurface newsletter: reference last essay, check metrics (Fear & Greed, OI, funding, Deribit, Coinglass), scan X, synthesize into a ~1,500-word post.
 
-Claude handles the heavy lifting; Slack is the interface.
+Grok handles the heavy lifting; Slack is the interface.
 
 This isn’t about replacing creators. It’s about elevating them to creative directors of agents, where ambition scales with AI’s capabilities.
 
@@ -299,7 +370,7 @@ Don’t accept the first solution that works.
 
 Demand the one that feels right—so elegant it seems obvious in hindsight.
 
-In 2026, AI accelerates agentic bots like our OP Slack bot: no UI cruft, just Slack hooks triggering Claude-driven workflows for research and drafting.
+In 2026, AI accelerates agentic bots like our OP Slack bot: no UI cruft, just Slack hooks triggering Grok-driven workflows for research and drafting.
 
 ### The Process: Six Non-Negotiable Steps
 
@@ -311,7 +382,7 @@ Use /ultrathink for deep reasoning—up to 32k tokens—when stakes are high, li
 #### Obsess Over Details
 Read the codebase like a masterpiece.  
 Start every project with a CLAUDE.md in the root: tech stack, architectural principles, naming conventions, testing philosophy, deployment rules, known pain points.  
-Claude loads it automatically, becoming the soul of your repo—eliminating re-explanation, just like Otaku’s config-driven AI integration.
+Grok loads it automatically, becoming the soul of your repo—eliminating re-explanation, just like Otaku’s config-driven AI integration.
 
 #### Plan Like Da Vinci
 Sketch the full architecture before a line of code.  
@@ -320,7 +391,7 @@ Document as Artifact, approve, then execute. For our bot: Slack event listener �
 
 #### Craft, Don’t Just Code
 Implementation is sacred: poetic names, natural abstractions, thoughtful errors, TDD as commitment.  
-Spawn subagents for parallel work—one for onchain data, one for X sentiment, one for drafting. Opus 4.5 orchestrates flawlessly, mirroring Otaku’s plugin ecosystem.
+Spawn subagents for parallel work—one for onchain data, one for X sentiment, one for drafting. Grok 4 orchestrates flawlessly, mirroring Otaku’s plugin ecosystem.
 
 #### Iterate Relentlessly
 The first version is never good enough.  
@@ -334,7 +405,7 @@ For a Slack bot: No frontend—pure Node/Bun backend with Slack API, ElizaOS-ins
 
 ### Your Tools Are Your Instruments
 
-Use MCP servers like a virtuoso: GitHub for PRs, real-data debugging. Git history is your story—honor it. Multiple Claude instances aren’t redundancy—they’re collaboration. With Tool Search, dynamically access APIs like Deribit or Coinglass.For our OP bot: Integrate Slack Bolt for event handling, plugins for data sources, character.ts-like file for bot personality tied to our 285+ essays.
+Use MCP servers like a virtuoso: GitHub for PRs, real-data debugging. Git history is your story—honor it. Multiple Grok instances aren’t redundancy—they’re collaboration. With Tool Search, dynamically access APIs like Deribit or Coinglass.For our OP bot: Integrate Slack Bolt for event handling, plugins for data sources, character.ts-like file for bot personality tied to our 285+ essays.
 
 ### The Integration
 
@@ -362,159 +433,367 @@ Ultrathink your next move.
 
 ### CLAUDE.md
 
-This file provides guidance to Claude Code when working on this repository. Claude automatically loads it into context for every session, ensuring consistent architecture, style, and workflows.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Update via PRs and tag Claude for reviews to evolve it over time.
+## Project Overview
 
-#### Project Overview
-[Project Name] is a backend Slack bot for OP (onchain options) research and Hypersurface newsletter generation, inspired by IkigaiLabsETH/otaku. Core functionality: Slack command triggers → onchain data fetch (Fear & Greed, OI, funding, Deribit, Coinglass) → X sentiment analysis → voice-matched essay drafting from 285+ Substack archives. No frontend—pure agentic backend.Vision: Craft agents that feel alive—elegant, intuitive, scalable. Every integration with a craftsman’s care, engineer’s precision, designer’s vision. Use Claude as a creative partner to ship unstoppable bots in the agentic AI era of 2026.
+Ikigai Studio Research Tools is an extended fork of the **Otaku AI Agent** repository, built on **ElizaOS**. This repository serves two primary purposes for Ikigai Studio:
 
-#### Tech Stack & Versions
+1. **Core Crypto-Native Foundation** — Production-ready plugins for market data, DeFi analytics, on-chain operations, wallet interactions, bridging, and swaps. These enable quantitative agents with direct API access to CoinGecko, DeFiLlama, Deribit, Etherscan, Relay, and more.
 
-- Runtime: Bun ~1.2 (for monorepo; fast, Node-compatible) or Node.js ~22.0
-- AI Integration: Claude Opus 4.5 (via API; terminal agent for dev)
-- Slack: @slack/bolt ~3.0 (event handling)
-- Plugins/Data: Custom modules for Deribit, Coinglass APIs; web search proxies
-- Other: ElizaOS-inspired agent framework; Markdown for outputs; no DB/UI
+2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is divided into two distinct categories:
+   - **BTC-Centric Specialists**: Deep quantitative focus on Bitcoin regime analysis, cycle metrics, and macro overlays (33 refined prompt templates).
+   - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates that rely heavily on real-time tool calling).
 
-#### Key Development Commands
+   The swarm features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Claude for final qualitative synthesis and X discourse layering when needed.
 
-##### Starting Development
+The original Otaku web frontend (React + CDP wallet) remains fully functional for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration—achieving full quantitative and qualitative autonomy in a dedicated workspace.
 
-```bash
-bun run dev  # Builds packages, starts server on port 3000 for Slack webhooks
-```
+**Runtime**: Bun 1.2.21+ (required)
+**Build System**: Turbo (monorepo task runner)
+**Package Manager**: Bun workspaces
 
-##### Testing & Quality
+## Quick Start
 
 ```bash
-bun test     # Run Jest tests
-bun test     # Run Jest tests
-bun run lint # ESLint
-bun run lint:fix # Auto-fix
+# Install dependencies
+bun install
+
+# Build everything
+bun run build
+
+# Start server
+bun run start
+
+# Development mode (build + watch + start)
+bun run dev
 ```
 
-##### Build & Deployment
+## Key Commands
+
+### Building
 
 ```bash
-bun run build # Production build
-bun start    # Start server
+bun run build              # Full build (all packages + backend + frontend)
+bun run build:all          # Workspace packages only (Turbo)
+bun run build:backend      # Backend only (Bun.build)
+bun run build:frontend     # Frontend only (Vite)
 ```
 
-#### Architecture Overview
+### Development
 
-Key Patterns:  
-- Monorepo with Bun workspaces (src/, packages/api, packages/server)  
-- Agent core: character.ts for bot personality/voice  
-- Plugins: Modular for onchain (plugin-deribit), sentiment (plugin-x-search)  
-- Slack Hooks: /weekly-newsletter command → skill orchestration  
-- Outputs: Slack message with drafted essay Markdown  
-
-Important Configuration Files:  
-- bunfig.toml – Bun config  
-- package.json – Dependencies/scripts  
-- .env – Secrets (SLACK_BOT_TOKEN, CLAUDE_API_KEY, API keys for Deribit/Coinglass)  
-- eslint.config.js – Lint rules  
-
-Architectural Principles:  
-- Simplicity First: Elegance is subtraction—remove unnecessary deps/lines.  
-- Craftsmanship Mindset: Functions sing, abstractions inevitable, edges graceful.  
-- Human-AI Collaboration: Subagents for parallel research; humans oversee drafts.  
-- Scalability & Security: Env vars for secrets; validate Slack inputs.  
-- Integration: Blend tech with humanities—bots that solve real problems intuitively.  
-
-Naming Conventions:  
-- Functions/Variables: camelCase, poetic/descriptive (e.g., fetchOnchainBias)  
-- Files: kebab-case (e.g., weekly-drafter.ts)  
-- Constants: UPPER_SNAKE_CASE  
-- Guidelines: Names read like poetry—meaningful, avoid abbreviations.  
-
-Code Style and Formatting:  
-- Follow ESLint/Prettier (.eslint.config.js)  
-- 2-4 spaces indentation  
-- Lines ≤100 chars  
-- Strict TypeScript; run typecheck  
-- No wildcard imports: standard → third-party → local  
-
-Documentation Example:
-
-```ts
-/**
- * Fetches onchain metrics for bias.
- * @param date Current date
- * @returns Bias summary
- * @throws Error on fetch fail
- */
-async function fetchOnchainMetrics(date: string): Promise<Bias> { ... }
+```bash
+bun run dev                # Build + start
+bun run dev:watch          # Build + watch + start
+bun run type-check         # TypeScript type checking
 ```
 
-Type Hints:  
-Use everywhere; Optional<T> for nullables. Run tsc; resolve errors.  
+### Testing
 
-Error Handling:  
-Catch specific errors; meaningful messages.  
-Graceful degradation: Fallback responses in Slack.  
-Function Design:  
-Single responsibility; ≤5 params (use objects).  
-Return early.  
+Tests live in workspace packages, not root:
 
-Testing Philosophy:  
-TDD commitment: Tests first. Unit for logic, integration for APIs.  
-80%+ core coverage. Mock externals.  
+```bash
+cd src/packages/api-client && bun test
+cd src/packages/server && bun test
+cd src/packages/server && bun test:unit
+cd src/packages/server && bun test:integration
+```
 
-Imports and Dependencies:  
-No wildcards. Use Bun for installs; minimal deps.  
+## Documentation
 
-Security:  
-Secrets in .env (gitignore’d).  
-Slack verification middleware.  
+Detailed documentation is organized by topic (adapt from original Otaku docs where applicable; extend for swarm-specific features):
 
-Version Control:  
-Descriptive commits: “feat: add x-sentiment plugin”. No commented code.  
+### Architecture & Build System
+📖 **[Architecture Guide](docs/architecture.md)**
+- Monorepo structure
+- Build pipeline (Turbo + Bun + Vite)
+- Entry points
+- Server architecture
+- Frontend-backend communication
+- Plugin system overview
+- Swarm orchestration (coordinator, specialists, dynamic loading)
 
-Tools:  
-ESLint/Prettier; Jest for unit.  
+### Plugin Actions (Tool Calls)
+📖 **[Plugin Actions Guide](docs/plugin-actions.md)**
+- How actions work (actions = tool calls)
+- Parameter flow and validation
+- Multi-step execution system
+- Action definition and registration
+- Complete examples
+- Swarm-specific tools (e.g., spawn agents, X search)
 
-Before Committing:  
-Tests pass; lint/typecheck ok.  
-Git push at session end.  
+### Development Patterns
+📖 **[Development Guide](docs/development.md)**
+- Adding a new plugin
+- Adding actions to existing plugins
+- Modifying character behavior
+- Adding/Modifying specialists (prompts, tools)
+- Frontend changes
+- Environment variables
+- Testing
 
-Known Pain Points & Proven Fixes:  
-- Context Overload: /compact at 60%; handoff summaries.  
-- Data Drift: Fresh API calls; “Use current date explicitly.”  
-- Hallucinations: Fresh instance reviews; /code-review.  
-- Slow Tasks: Sonnet subagents.  
+### Troubleshooting
+📖 **[Troubleshooting Guide](docs/troubleshooting.md)**
+- Build failures
+- Server won't start
+- Agent/swarm not responding
+- Action not available to LLM
+- Parameters not reaching action
+- Frontend issues
+- Database errors
+- Performance problems
+- Slack integration issues
+- Dynamic agent spawning errors
 
-Development Workflow: Six Non-Negotiable Steps:  
-- Think Different: /ultrathink: “Elegant bot architecture?”  
-- Obsess Over Details: Reference this file.  
-- Plan Like Da Vinci: /plan: “Full bot plan” → Artifact → approve.  
-- Craft, Don’t Code: Poetic names; subagents for plugins.  
-- Iterate Relentlessly: Implement → test Slack → refine.  
-- Simplify Ruthlessly: “Remove unnecessary without loss.”  
+### Character Configuration
+📖 **[Character Config Guide](docs/character-config.md)**
+- Transaction safety protocol
+- Network-specific rules
+- Tool usage guidelines
+- Message examples
+- Style rules
+- Swarm personality variants
+- Prompt design for specialists
 
-Prompting Best Practices:  
-Jira-like: Explicit constraints. “Interview me” for specs.  
-Rich context: Past essays, dates.  
+## Project Structure
 
-Tools & Integrations:  
-MCP: GitHub PRs. Subagents for perspectives.  
-Multi-sessions: Parallel research.  
+```
+├── src/
+│   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
+│   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis, dynamic agent loading
+│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused + meta)
+│   │   # BTC-Centric (33 prompts)
+│   │   ├── fundamentalsSpecialist.ts
+│   │   ├── defiFlowsSpecialist.ts
+│   │   ├── liquiditySpecialist.ts
+│   │   ├── onChainHealthSpecialist.ts
+│   │   ├── derivativesSpecialist.ts
+│   │   ├── socialPsychologySpecialist.ts
+│   │   ├── institutionalSpecialist.ts
+│   │   ├── macroOverlaysSpecialist.ts
+│   │   ├── cycleContextSpecialist.ts
+│   │   ├── polymarketSpecialist.ts
+│   │   └── regimeAggregatorSpecialist.ts
+│   │   # Altcoin Research (8 prompts)
+│   │   ├── altSentimentSpecialist.ts
+│   │   ├── gemHunterSpecialist.ts
+│   │   ├── projectAssessorSpecialist.ts
+│   │   ├── whaleMonitorSpecialist.ts
+│   │   ├── tradeTimingSpecialist.ts
+│   │   ├── narrativeDetectorSpecialist.ts
+│   │   ├── portfolioDesignerSpecialist.ts
+│   │   └── scamGuardSpecialist.ts
+│   │   # Meta / Self-Improvement
+│   │   └── metaEngineerSpecialist.ts   # Swarm architect: reflection, gap detection, agent spawning
+│   ├── character.ts              # Core Otaku character definition + swarm personality variants
+│   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   │   ├── chat/             # Chat UI, message streaming, specialist selection
+│   │   │   ├── dashboard/        # Regime dashboard, charts, signal visualizations
+│   │   │   ├── agents/           # Agent cards, status indicators, swarm view
+│   │   │   ├── auth/             # Auth flows
+│   │   │   └── ui/               # Shared UI components
+│   │   ├── lib/                  # API clients, utilities
+│   │   ├── hooks/                # Custom React hooks
+│   │   ├── contexts/             # Global state (auth, swarm, regime)
+│   │   └── types/                # TypeScript interfaces
+│   ├── plugins/                  # Core data-fetching plugins (extended for new data sources)
+│   │   ├── plugin-cdp/
+│   │   ├── plugin-coingecko/
+│   │   ├── plugin-defillama/
+│   │   ├── plugin-relay/
+│   │   ├── plugin-etherscan/
+│   │   ├── plugin-web-search/
+│   │   ├── plugin-bootstrap/
+│   │   ├── plugin-cryptoquant/
+│   │   ├── plugin-glassnode/
+│   │   ├── plugin-coinglass/
+│   │   ├── plugin-santiment/
+│   │   ├── plugin-arkham/
+│   │   ├── plugin-polymarket/
+│   │   └── plugin-dune/
+│   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities, spawn tools
+├── dist/
+├── build.ts
+├── start-server.ts
+├── vite.config.ts
+├── tailwind.config.js
+├── turbo.json
+└── package.json
+```
 
-Code Guidelines:  
-TypeScript strict; thoughtful errors.  
-Review: Fresh Claude; “Double-check simplicity.”  
+## Environment Setup
 
-Final Polish & Mindset:  
-Verify: Simulate Slack commands.  
-When impossible, ultrathink harder.  
-End sessions: Issues, push, clean.  
+Copy `.env.sample` to `.env` and configure:
 
-Remember: You’re a craftsman.  
+**Required**:
+- `JWT_SECRET`
+- `OPENAI_API_KEY` or `OPENROUTER_API_KEY`
+- `VITE_CDP_PROJECT_ID`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET`
+- `ALCHEMY_API_KEY`
+- For swarm: `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`
+- API keys for data sources (e.g., CoinGecko, DeFiLlama, etc.)
 
-Master this—ship bots that feel alive.  
+**Optional**: Plugin API keys, RPC overrides, database config (Postgres for shared state)
 
-Ultrathink your next move.
+See: `.env.sample` for complete reference
+
+## Key Concepts
+
+### Plugin Actions = Tool Calls
+
+Actions in ElizaOS work like tool calls in other LLM frameworks:
+- LLM selects action and generates parameters as JSON
+- Parameters flow through state (`state.data.actionParams`)
+- Multi-stage validation (service, required fields, types, business logic)
+- Actions chain together in multi-step execution
+- Extended for swarm: Spawn tools for dynamic agents
+
+See: [Plugin Actions Guide](docs/plugin-actions.md)
+
+### Build Pipeline
+
+Three-phase build:
+1. **Turbo** - Workspace packages based on dependency graph
+2. **Bun.build** - Backend bundle (externalizes `@elizaos/*`)
+3. **Vite** - Frontend bundle
+
+See: [Architecture Guide](docs/architecture.md)
+
+### Character Configuration
+
+Agent behavior defined in `src/character.ts`:
+- Transaction safety rules (questions vs commands vs transfers)
+- Network-specific rules (Polygon ETH = WETH, POL = gas token)
+- Tool usage patterns (WEB_SEARCH for macro data, Nansen for analytics)
+- Communication style (concise, evidence-based, natural tone)
+- Swarm variants: BTC-centric quantitative, altcoin qualitative
+
+See: [Character Config Guide](docs/character-config.md)
+
+### Swarm Orchestration
+
+- Specialists defined in `src/specialists/*.ts` with system prompts and tools
+- Coordinator handles routing, aggregation, scheduling
+- Dynamic agents via Postgres table and spawn tools
+- MetaEngineer for self-improvement
+
+## Common Tasks
+
+### Add a Plugin
+1. Create `src/plugins/plugin-name/` structure
+2. Implement actions (see [Plugin Actions Guide](docs/plugin-actions.md))
+3. Export plugin from `src/plugins/plugin-name/src/index.ts`
+4. Register in `src/index.ts` plugins array
+5. Rebuild: `bun run build:backend`
+
+See: [Development Guide](docs/development.md#adding-a-new-plugin)
+
+### Add an Action
+1. Create action file in `src/plugins/plugin-name/src/actions/`
+2. Export from plugin's `src/index.ts`
+3. Rebuild: `bun run build:backend`
+
+See: [Development Guide](docs/development.md#adding-an-action-to-existing-plugin)
+
+### Add/Modify a Specialist
+1. Create/edit `src/specialists/specialist-name.ts` (system prompt, tools, channel)
+2. Register in `src/index.ts` loading array
+3. Configure in coordinator for routing/scheduling
+4. Rebuild: `bun run build:backend`
+
+See: [Development Guide](docs/development.md#adding-specialists)
+
+### Modify Character
+1. Edit `src/character.ts`
+2. Rebuild: `bun run build:backend`
+
+See: [Character Config Guide](docs/character-config.md)
+
+### Update Frontend
+1. Edit files in `src/frontend/`
+2. Rebuild: `bun run build:frontend`
+3. Restart: `bun run start`
+
+See: [Development Guide](docs/development.md#frontend-changes)
+
+## Troubleshooting Quick Reference
+
+**Build fails**: `rm -rf dist node_modules && bun install && bun run build`
+**Server won't start**: Check `.env` has required keys, verify `dist/index.js` exists
+**Agent/swarm not responding**: Check LLM API key, WebSocket/Slack connection, server logs
+**Action not available**: Check `validate` returns true, plugin registered, rebuild backend
+**Frontend not updating**: Rebuild frontend, restart server (no hot-reload)
+**Slack issues**: Verify bot tokens, channel invites, event subscriptions
+**Dynamic agent errors**: Check Postgres table, spawn tool permissions, human approval channel
+
+See: [Troubleshooting Guide](docs/troubleshooting.md)
+
+## Important Constraints
+
+### Polygon Network
+- NO native ETH (ETH = WETH, cannot unwrap)
+- Native gas token = POL
+- POL only native on Polygon, not other chains
+
+### Gas Token Swaps
+- Keep buffer for 2+ transactions
+- ETH native on: Base, Ethereum, Arbitrum, Optimism
+- POL native on: Polygon
+- WETH is NOT a gas token anywhere
+
+### Swarm Boundaries
+- BTC Layer: Quantitative, plugin-heavy
+- Altcoin Layer: Qualitative, tool-calling heavy
+- Dynamic spawning: Rate-limited, human-approved for persistent agents
+
+See: [Character Config Guide](docs/character-config.md#network-specific-rules)
+
+## Import Path Aliases
+
+Use clean path aliases instead of relative `../` imports. Configured in `tsconfig.json`:
+
+| Alias | Maps To | Use For |
+|-------|---------|---------|
+| `@/frontend/*` | `./src/frontend/*` | All frontend code |
+| `@/constants/*` | `./src/constants/*` | Backend/shared constants |
+| `@/utils/*` | `./src/utils/*` | Backend utilities |
+| `@/managers/*` | `./src/managers/*` | Manager classes |
+| `@/plugins/*` | `./src/plugins/*` | Plugin code |
+| `@/specialists/*` | `./src/specialists/*` | Specialist definitions |
+
+**Frontend imports** should always use `@/frontend/`:
+```typescript
+// ✅ Correct
+import { Button } from '@/frontend/components/ui/button';
+import { cn } from '@/frontend/lib/utils';
+import { useModal } from '@/frontend/contexts/ModalContext';
+
+// ❌ Avoid relative paths
+import { Button } from '../../ui/button';
+import { cn } from '../../../lib/utils';
+```
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/index.ts` | Entry point, plugin/swarm loading |
+| `src/character.ts` | Character definition + swarm variants |
+| `src/coordinator.ts` | Swarm routing, aggregation, dynamic loading |
+| `build.ts` | Backend build script |
+| `start-server.ts` | Server startup |
+| `vite.config.ts` | Frontend build config |
+| `.env.sample` | Environment variables reference |
+
+## Further Reading
+
+- 📖 [Architecture Guide](docs/architecture.md) - System design & build pipeline
+- 📖 [Plugin Actions Guide](docs/plugin-actions.md) - How actions work
+- 📖 [Development Guide](docs/development.md) - Common development tasks
+- 📖 [Troubleshooting Guide](docs/troubleshooting.md) - Debugging & fixes
+- 📖 [Character Config Guide](docs/character-config.md) - Agent behavior
 
 ### SKILLS.md
 
@@ -630,7 +909,7 @@ Build a backend-only Slack bot (no frontend) inspired by IkigaiLabsETH/otaku's m
 
 ## Architecture Sketch
 - Monorepo with Bun workspaces.
-- Core: Slack event listener → plugin orchestration → Claude API calls for skills.
+- Core: Slack event listener → plugin orchestration → Grok API calls for skills.
 - Plugins: onchain-fetcher, x-sentiment, essay-drafter.
 - Persistence: Minimal (e.g., in-memory or simple file for session state); no DB unless needed for history.
 
@@ -667,7 +946,7 @@ Backend-only (Node/Bun, Slack Bolt); modular plugins like Otaku.
 
 Integrate with SKILLS.md for phases; CLAUDE.md for dev guidance.
 
-Now, the interview begins. I’ll ask 3-5 non-obvious questions per round, focusing on depth. Answer them, and say “continue” or provide more details to keep going. When you feel it’s complete, say “finalize spec.”
+Now, the interview begins. I’ll ask 3-5 non-obvious questions per round, focusing on depth. Answer them, add any clarifications, and we’ll refine from there.
 
 Interview Round 1: Probing Technical Tradeoffs and Concerns
 
@@ -804,10 +1083,10 @@ MIT
 
 ## Acknowledgements
 
-- Original Otaku by Shaw Walters and elizaOS contributors
-- Extended for Ikigai Studio quantitative research
-- ElizaOS: https://github.com/elizaos/eliza
-- Slack client: @elizaos-plugins/client-slack
+- Original Otaku by Shaw Walters and ElizaOS contributors.
+- Extended for Ikigai Studio BTC regime and altcoin research.
+- ElizaOS: [https://github.com/elizaos/eliza](https://github.com/elizaos/eliza)
+- Slack client: `@elizaos/plugins/client-slack`
 - Managed hosting: Eliza Cloud
 
 © 2026 Ikigai Studio. All original Otaku features retained and extended. Small edges compound.
