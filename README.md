@@ -406,12 +406,10 @@ The prompts are the DNA of the swarm. Quantitative depth from BTC layer → disc
 Small prompts compound into relentless alpha.
 ```
 
-Add this section to your README after "Specialists Overview" or before "Multi-Agent Chaining". It clearly maps every template to the architecture, shows the pattern, and reinforces the philosophy.
+Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
 
-Now it's crystal clear how the prompts power the entire system. The swarm is fully documented and ready to evolve. 🚀
 
   ```
-To achieve true "agents making agents" in our Ikigai Studio swarm — where one specialist autonomously identifies a gap (e.g., missing metric in BTC cycle analysis), designs and spins up a new specialist to fill it, integrates the results, and potentially persists the improvement — we need a combination of architectural upgrades, tool additions, and careful safety rails. Our current setup is already 80% of the way there: shared Postgres state, coordinator orchestration, structured outputs, tool-calling agents, and battle-tested Grok-derived prompts. The missing pieces are **dynamic instantiation** (temporary or persistent new agents) and **meta-reasoning capabilities** (agents that can reflect on swarm gaps and propose/create fixes). Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
   ```
 
 ### 1. Core Architectural Changes Needed
