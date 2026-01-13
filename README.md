@@ -87,7 +87,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 ├── src/
 │   ├── index.ts                  # Entry point: plugin loading, optional Slack client, swarm orchestration
 │   ├── coordinator.ts            # Swarm coordinator: routing, aggregation, scheduling, regime synthesis, dynamic agent loading
-│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused + meta)
+│   ├── specialists/              # Research specialists (BTC-centric + altcoin-focused + meta + repo development roles)
 │   │   # BTC-Centric (33 prompts)
 │   │   ├── fundamentalsSpecialist.ts
 │   │   ├── defiFlowsSpecialist.ts
@@ -111,8 +111,37 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 │   │   └── scamGuardSpecialist.ts
 │   │   # Meta / Self-Improvement
 │   │   └── metaEngineerSpecialist.ts   # Swarm architect: reflection, gap detection, agent spawning
+│   │   # Engineering (pruned for Slack-focused repo work)
+│   │   ├── engineering/
+│   │   │   ├── backendArchitect.ts      # Designs and architects backend systems
+│   │   │   ├── aiEngineer.ts            # Develops AI models and integrations
+│   │   │   ├── devopsAutomator.ts       # Automates DevOps processes, CI/CD pipelines
+│   │   │   └── rapidPrototyper.ts       # Quickly prototypes features and ideas
+│   │   ├── product/
+│   │   │   ├── trendResearcher.ts       # Researches market trends and user needs
+│   │   │   ├── feedbackSynthesizer.ts   # Synthesizes user feedback into actionable insights
+│   │   │   └── sprintPrioritizer.ts     # Prioritizes tasks for sprints and iterations
+│   │   ├── marketing/
+│   │   │   ├── contentCreator.ts        # Creates marketing content
+│   │   │   └── twitterEngager.ts        # Engages audiences on Twitter/X
+│   │   ├── projectManagement/
+│   │   │   ├── experimentTracker.ts     # Tracks experiments and A/B tests
+│   │   │   ├── projectShipper.ts        # Manages project delivery and shipping
+│   │   │   └── studioProducer.ts        # Oversees studio production workflows
+│   │   ├── studioOperations/
+│   │   │   ├── supportResponder.ts      # Handles support responses
+│   │   │   ├── analyticsReporter.ts     # Generates analytics reports
+│   │   │   ├── infrastructureMaintainer.ts # Maintains infrastructure
+│   │   │   ├── legalComplianceChecker.ts# Checks legal compliance
+│   │   │   └── financeTracker.ts        # Tracks finances and budgets
+│   │   └── testing/
+│   │       ├── toolEvaluator.ts         # Evaluates tools and technologies
+│   │       ├── apiTester.ts             # Tests APIs
+│   │       ├── workflowOptimizer.ts     # Optimizes workflows
+│   │       ├── performanceBenchmarker.ts# Benchmarks performance
+│   │       └── testResultsAnalyzer.ts   # Analyzes test results
 │   ├── character.ts              # Core Otaku character definition + swarm personality variants
-│   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration)
+│   ├── frontend/                 # Retained React app (chat interface, dashboard, CDP wallet integration) - optional, can be disabled for Slack-only mode
 │   │   ├── App.tsx
 │   │   ├── components/
 │   │   │   ├── chat/             # Chat UI, message streaming, specialist selection
@@ -138,7 +167,8 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 │   │   ├── plugin-santiment/
 │   │   ├── plugin-arkham/
 │   │   ├── plugin-polymarket/
-│   │   └── plugin-dune/
+│   │   ├── plugin-dune/
+│   │   └── plugin-github/        # GitHub API integration for repo management (pull, commit, PRs, etc.)
 │   └── utils/                    # Shared helpers: chart generation, regime scoring logic, prompt utilities, spawn tools
 ├── dist/
 ├── build.ts
