@@ -238,41 +238,98 @@ Inspired by the-org's role-based agents, these support development and operation
 
 - Bun 1.2.21+.
 - Node.js 18+ (for compatibility).
+- PostgreSQL database (for persistent state via @elizaos/plugin-sql).
 - Optional: Coinbase Developer Platform keys (for wallet features).
 - For swarm: Private Slack workspace + bot tokens.
 - API keys for data sources.
 - For Eliza Cloud deployment: ElizaOS CLI (bunx `@elizaos/cli` or global install).
-- .env.example for configuration templates (inspired by the-org).
+
+## Getting Started
+
+Clone the repository:
+
+```bash
+git clone https://github.com/IkigaiLabsETH/otaku.git
+cd otaku
+```
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+Set up environment variables: See the Configuration (.env file) section below.
+
+Run the application:
+
+```bash
+bun run dev
+```
+
+## Configuration (.env file)
+
+The project uses a .env file in the root directory to manage configurations like API keys and service credentials. Create a .env file by copying .env.example and filling in your values. Here's an example structure, inspired by the-org's detailed agent-specific configs:
+
+```
+# General Configuration
+POSTGRES_URL=postgresql://user:password@host:port/database  # For @elizaos/plugin-sql
+OPENAI_API_KEY=your_openai_api_key  # Or Anthropic, etc., for LLM integration
+JWT_SECRET=your_jwt_secret  # For auth if using web mode
+
+# Slack Integration (Required for Swarm Mode)
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=...
+
+# Data Source APIs (Required for Plugins)
+COINGECKO_API_KEY=your_coingecko_key  # Optional for pro features
+DEFILLAMA_API_KEY=your_defillama_key
+CRYPTOQUANT_API_KEY=your_cryptoquant_key
+GLASSNODE_API_KEY=your_glassnode_key
+COINGLASS_API_KEY=your_coinglass_key
+SANTIMENT_API_KEY=your_santiment_key
+ARKHAM_API_KEY=your_arkham_key
+POLYMARKET_API_KEY=your_polymarket_key
+DUNE_API_KEY=your_dune_key
+
+# Optional: CDP Wallet Integration
+CDP_API_KEY=your_cdp_key
+
+# Optional: GitHub for Repo Management
+GITHUB_TOKEN=your_github_token
+
+# Note: Specialists will only activate if required keys are provided. For example, BTC-centric agents need data API keys.
+```
+
+Ensure at least Slack tokens are set for swarm mode. The `index.ts` dynamically loads agents based on available env vars.
 
 ## Running Locally
+
+### Running All Available Specialists
+
+```bash
+bun run dev
+```
+
+This initializes all specialists with configured env vars.
+
+### Running Specific Specialists
+
+You can run subsets by providing flags (e.g., `--btc-fundamentals --alt-sentiment`). Update `index.ts` to support this if needed, similar to the-org's flag-based filtering.
 
 ### Standard Otaku Mode (Web UI + Single Agent)
 
 ```bash
-bun install
 cp .env.example .env
-# Fill required keys (JWT_SECRET, AI provider, CDP if using wallet)
+# Fill keys
 bun run dev
 ```
 
-Visit `http://localhost:3000` for the React chat/dashboard.
+Visit `http://localhost:3000`.
 
 ### Research Swarm Mode (Slack-Native, Multi-Agent)
 
-Add Slack variables to `.env`:
-
-```
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_SIGNING_SECRET=...
-```
-
-Enable specialists in `src/index.ts` (uncomment swarm loading). Create Slack channels and invite the bot. Run:
-
-```bash
-bun run dev
-```
-
-The swarm connects to Slack; specialists post to channels and respond to mentions. You can run both modes simultaneously if desired (web for testing, Slack for research).
+Add Slack vars to .env, create channels, invite bot, then run `bun run dev`.
 
 ## Available Scripts
 
@@ -340,6 +397,26 @@ tools: [
 ### Adding New Plugins
 
 Follow the pattern in `src/plugins/`. Ideal for new data sources or tool actions.
+
+## Testing
+
+The project uses Vitest for unit and integration testing, with a load testing suite for scalability evaluation (inspired by the-org).
+
+Run all tests:
+
+```bash
+bun test
+```
+
+Run specific tests:
+
+```bash
+bun test src/plugins.test.ts
+```
+
+For load testing (e.g., simulating swarm under high query volume), use scripts in a dedicated loadTest/ directory (planned; add as needed for production readiness).
+
+Logs from tests are stored for analysis, helping identify bottlenecks.
 
 ## Deployment Options
 
@@ -417,7 +494,7 @@ Common Eliza Cloud issues:
 - Original DeFi actions/wallet features preserved for flexibility.
 - Core edge: public data + curated X network + Grok synthesis.
 
-##  Small edges compound.
+## Small edges compound.
 
 ## Prompt Design & Specialist Architecture
 
@@ -683,6 +760,16 @@ Add this file and register it like your other specialists.
 This closes the recursion loop — agents now harden agents. Small edges compound exponentially.
 
 Deploy, test with a simple gap simulation, and watch the swarm evolve. 🚀
+
+## Key Technologies
+
+- ElizaOS: Core multi-agent framework.
+- Bun: Fast runtime, bundler, and package manager.
+- TypeScript: Static typing for robustness.
+- React/Vite/Tailwind: Optional frontend.
+- Postgres: Persistent storage via @elizaos/plugin-sql.
+- Slack.js: For Slack integration.
+- Various plugins for crypto data (CoinGecko, DeFiLlama, etc.).
 
 ## License
 
