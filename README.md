@@ -4,20 +4,21 @@ An extended fork of the **Otaku AI Agent** repository, built on **ElizaOS**. Thi
 
 1. **Core Crypto-Native Foundation** — Production-ready plugins for market data, DeFi analytics, on-chain operations, wallet interactions, bridging, and swaps. These enable quantitative agents with direct API access to CoinGecko, DeFiLlama, Deribit, Etherscan, Relay, and more.
 
-2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is divided into two distinct categories:
+2. **Multi-Agent Research Swarm** — A TypeScript-native swarm of specialized agents for autonomous crypto market research. The swarm is divided into distinct categories:
    - **BTC-Centric Specialists**: Deep quantitative focus on Bitcoin regime analysis, cycle metrics, and macro overlays (33 refined prompt templates).
    - **Altcoin Research Specialists**: Qualitative and discovery-oriented workflows tailored for altcoin evaluation, sentiment, narratives, and risk management (8 key prompt templates that rely heavily on real-time tool calling).
+   - **Meta / Self-Improvement Specialists**: For swarm reflection, gap detection, and dynamic agent spawning.
 
-   The swarm features shared state, persistent memory, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering when needed.
+   The swarm features shared state, persistent memory via Postgres, scheduled insights, and a **Slack-native interface** (no dashboard required). Structured outputs feed directly into Grok for final qualitative synthesis and X discourse layering when needed. Inspired by repositories like elizaOS/the-org, the architecture emphasizes modularity, extensibility, and dynamic agent loading for recursive self-improvement.
 
 The original Otaku web frontend (React + CDP wallet) remains fully functional for prototyping interactive agents, testing plugins, or building user-facing tools. For our private research workflow, we primarily run the swarm server-only with Slack integration—achieving full quantitative and qualitative autonomy in a dedicated workspace.
 
 ## Features
 
-- **Multi-Agent Swarm** — 19 specialized agents (11 BTC-centric + 8 altcoin-focused) providing comprehensive coverage of Bitcoin regimes and altcoin opportunities.
-- **Slack-Native Interface** — Each specialist in its own channel (e.g., `#btc-onchain-health`, `#alt-sentiment`, `#gem-hunter`, `#swarm-coordinator`); supports @mentions for queries, threaded reports, and scheduled notifications.
-- **Shared Persistent State** — Postgres/plugin-sql for multi-year series, cycle tables, inter-agent handoffs, and regime overlays.
-- **Autonomous Operation** — Self-maintaining fetches, schema validation, anomaly detection, and statistical processing.
+- **Multi-Agent Swarm** — 19+ specialized agents (11 BTC-centric + 8 altcoin-focused + meta), with support for dynamic spawning of new agents based on detected gaps.
+- **Slack-Native Interface** — Each specialist in its own channel (e.g., `#btc-onchain-health`, `#alt-sentiment`, `#gem-hunter`, `#swarm-coordinator`); supports @mentions for queries, threaded reports, and scheduled notifications. New agents automatically get channels upon spawning.
+- **Shared Persistent State** — Postgres/plugin-sql for multi-year series, cycle tables, inter-agent handoffs, regime overlays, and dynamic agent configurations.
+- **Autonomous Operation** — Self-maintaining fetches, schema validation, anomaly detection, statistical processing, and recursive self-improvement via agent spawning.
 - **Crypto Plugin Suite** (inherited & extended from Otaku):
   - Real-time prices & trending (CoinGecko).
   - TVL & protocol analytics (DeFiLlama).
@@ -25,24 +26,27 @@ The original Otaku web frontend (React + CDP wallet) remains fully functional fo
   - On-chain verification (Etherscan).
   - Bridging (Relay).
   - Web search & news.
-- **Optional Web Frontend** — Modern React UI with CDP wallet integration, chat interface, and dashboard—retained for plugin testing, interactive prototypes, or public-facing agents.
+  - Additional: CryptoQuant, Glassnode, Coinglass, Santiment, Arkham, Polymarket, Dune, GitHub (for repo management).
+- **Optional Web Frontend** — Modern React UI with CDP wallet integration, chat interface, and dashboard—retained for plugin testing, interactive prototypes, or public-facing agents. Can be disabled for Slack-only mode.
 - **DeFi Actions** (available if frontend/wallet enabled) — Swaps, transfers, bridging, and NFT operations via CDP.
 - **Real-time Communication** — Socket.IO (web) or Slack events (swarm mode).
+- **Recursive Self-Improvement** — Agents can detect gaps, spawn temporary sub-agents for ad-hoc tasks, or propose persistent specialists, with human-in-the-loop approval for safety.
 
 ## Architecture
 
-Monorepo managed with Bun and Turbo:
+Monorepo managed with Bun and Turbo, drawing inspiration from elizaOS/the-org for modular agent design, plugin composability, and dynamic launching:
 
 - **Runtime**: Bun 1.2.21+.
 - **Framework**: ElizaOS + Otaku extensions.
 - **Frontend** (optional): React 18 + TypeScript + Vite + Tailwind + Radix UI.
 - **Backend**: Custom ElizaOS server.
-- **Swarm Orchestration**: `index.ts` + `coordinator.ts` + `specialists/` directory.
+- **Swarm Orchestration**: `index.ts` + `coordinator.ts` + `specialists/` directory, with dynamic loading from Postgres for self-spawned agents.
 - **Interface Options**: Web UI (default Otaku) **or** Slack client adapter (research swarm).
+- **Testing**: Integrated Vitest for unit/integration tests, with load testing scripts inspired by the-org.
 
 ### Specialists Overview
 
-The swarm is separated into two categories with distinct prompt designs and tool dependencies.
+The swarm is separated into categories with distinct prompt designs and tool dependencies. Agents are modular, with potential subdirectories for actions, plugins, and services (as in the-org) for enhanced extensibility.
 
 #### BTC-Centric Specialists (33 refined prompt templates)
 Deep quantitative focus backed by dedicated data plugins/actions.
@@ -71,6 +75,46 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 - `portfolioDesignerSpecialist.ts` — Diversified portfolio construction with altcoin allocation.
 - `scamGuardSpecialist.ts` — Scam/rug-pull detection and avoidance framework.
 
+#### Meta / Self-Improvement
+- `metaEngineerSpecialist.ts` — Swarm architect: reflection, gap detection, agent spawning.
+
+#### Additional Roles (Pruned for Slack-Focused Repo Work)
+Inspired by the-org's role-based agents, these support development and operations:
+
+- **Engineering**:
+  - `backendArchitect.ts` — Designs backend systems.
+  - `aiEngineer.ts` — Develops AI integrations.
+  - `devopsAutomator.ts` — Automates CI/CD.
+  - `rapidPrototyper.ts` — Quick prototypes.
+
+- **Product**:
+  - `trendResearcher.ts` — Market trends.
+  - `feedbackSynthesizer.ts` — User feedback insights.
+  - `sprintPrioritizer.ts` — Task prioritization.
+
+- **Marketing**:
+  - `contentCreator.ts` — Marketing content.
+  - `twitterEngager.ts` — X engagement.
+
+- **Project Management**:
+  - `experimentTracker.ts` — A/B tests.
+  - `projectShipper.ts` — Delivery management.
+  - `studioProducer.ts` — Production workflows.
+
+- **Studio Operations**:
+  - `supportResponder.ts` — Support.
+  - `analyticsReporter.ts` — Reports.
+  - `infrastructureMaintainer.ts` — Infra maintenance.
+  - `legalComplianceChecker.ts` — Compliance.
+  - `financeTracker.ts` — Budgets.
+
+- **Testing**:
+  - `toolEvaluator.ts` — Tool eval.
+  - `apiTester.ts` — API tests.
+  - `workflowOptimizer.ts` — Workflow opt.
+  - `performanceBenchmarker.ts` — Benchmarks.
+  - `testResultsAnalyzer.ts` — Results analysis.
+
 ### Research Actions & Tools
 
 **BTC Layer**: Primarily uses direct API plugins as actions (CoinGecko, DeFiLlama, CryptoQuant, Glassnode, Coinglass, Arkham, Polymarket, Dune, etc.).
@@ -81,6 +125,8 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
   - These are critical for full autonomy of altcoin specialists.
   - Will be implemented as new plugins (e.g., `plugin-x-search`) using X API access or reliable third-party providers.
   - Until complete, agents fall back to aggressive web-search queries targeting X (e.g., `site:x.com`) and recent news sources.
+
+**Meta Tools**: Spawn tools for temporary sub-agents and persistent specialists (with human approval).
 
 ### Project Structure
 ```
@@ -177,7 +223,6 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 ├── tailwind.config.js
 ├── turbo.json
 └── package.json
-
 ```
 
 ### Key Updates
@@ -187,6 +232,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 - `regimeAggregatorSpecialist.ts` enhanced to synthesize both BTC regime signals and altcoin opportunity outputs.
 - Altcoin specialists require additional X/Twitter tool actions for full autonomy (in progress).
 - All specialists built around battle-tested Grok prompt templates adapted for autonomous agent execution.
+- Dynamic agent support via Postgres for recursive spawning, inspired by the-org's extensibility.
 
 ## Prerequisites
 
@@ -196,6 +242,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 - For swarm: Private Slack workspace + bot tokens.
 - API keys for data sources.
 - For Eliza Cloud deployment: ElizaOS CLI (bunx `@elizaos/cli` or global install).
+- .env.example for configuration templates (inspired by the-org).
 
 ## Running Locally
 
@@ -203,7 +250,7 @@ Qualitative, discovery-oriented agents that require tool calling (especially X/T
 
 ```bash
 bun install
-cp .env.sample .env
+cp .env.example .env
 # Fill required keys (JWT_SECRET, AI provider, CDP if using wallet)
 bun run dev
 ```
@@ -237,6 +284,7 @@ The swarm connects to Slack; specialists post to channels and respond to mention
 - `bun run build:frontend` - Build frontend only.
 - `bun run start` - Start production server.
 - `bun run type-check` - Check TypeScript types.
+- `bun run test` - Run Vitest tests (unit/integration/load).
 
 ## Plugins
 
@@ -256,7 +304,7 @@ The swarm connects to Slack; specialists post to channels and respond to mention
 
 - **Bootstrap & SQL Plugins**: Core ElizaOS capabilities + persistent storage.
 
-(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed.)
+(Add new research plugins like Deribit, CryptoQuant, Glassnode free tier, or X search tools as needed. Plugins are composable, as in the-org.)
 
 ## Customization
 
@@ -371,7 +419,6 @@ Common Eliza Cloud issues:
 
 ##  Small edges compound.
 
-```
 ## Prompt Design & Specialist Architecture
 
 The core edge of the Ikigai Studio swarm comes from its **battle-tested, Grok-derived prompt templates**. These are not generic instructions—they are highly refined, modular system prompts that drive autonomous, high-signal research.
@@ -434,142 +481,8 @@ All 44+ prompt templates (36 BTC-centric + 8 altcoin-focused) are embedded direc
 The prompts are the DNA of the swarm. Quantitative depth from BTC layer → discovery from altcoin layer → synthesis in `regimeAggregatorSpecialist` (and final Grok polish when needed).
 
 Small prompts compound into relentless alpha.
-```
 
-Here’s a concrete, incremental path to implement this, staying fully within your ElizaOS + TypeScript + Postgres + Slack stack.
-
-
-  ```
-  ```
-
-### 1. Core Architectural Changes Needed
-
-#### A. Make Agents Data-Driven (Not Just File-Based)
-Right now, specialists are hard-coded `.ts` files. To enable creation at runtime:
-
-- Create a `dynamic_specialists` table in Postgres:
-  ```sql
-  CREATE TABLE dynamic_specialists (
-    id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    description TEXT,
-    system_prompt TEXT NOT NULL,
-    tools JSONB NOT NULL DEFAULT '[]',  -- array of tool schemas
-    category TEXT CHECK (category IN ('btc', 'altcoin', 'meta')),
-    parent_agent_id INTEGER,  -- tracks who created it
-    active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT NOW(),
-    usage_count INTEGER DEFAULT 0
-  );
-  ```
-
-- In `coordinator.ts`, load agents as:
-  ```ts
-  const staticAgents = loadStaticSpecialists(); // your current 19
-  const dynamicAgents = await db.query("SELECT * FROM dynamic_specialists WHERE active");
-  const allAgents = [...staticAgents, ...dynamicAgents.map(row => createAgentInstance(row))];
-  ```
-
-- Implement a generic `createAgentInstance(config)` factory that builds an ElizaOS agent from DB row (system prompt + tools array).
-
-This allows hot-loading dynamic agents without server restart (just refresh on new queries or add a periodic poll).
-
-#### B. Add a "Spawn Agent" Tool
-Give trusted agents (e.g., `regimeAggregatorSpecialist`, `swarmCoordinator`, or a new `metaEngineerSpecialist`) a privileged tool:
-
-```ts
-// In relevant specialist configs
-tools: [
-  {
-    type: "function",
-    function: {
-      name: "spawn_specialist",
-      description: "Create a new persistent specialist agent to fill a capability gap. Use only when existing agents cannot adequately cover a recurring need.",
-      parameters: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          description: { type: "string" },
-          system_prompt: { type: "string", description: "Full Grok-derived system prompt" },
-          tools: { type: "array", items: { type: "object" } }, // tool schemas
-          category: { type: "string", enum: ["btc", "altcoin", "meta"] }
-        },
-        required: ["name", "system_prompt", "category"]
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "spawn_temporary_subagent",
-      description: "Spin up a one-off sub-agent for a specific task and return its output. Ideal for ad-hoc gaps.",
-      parameters: {
-        type: "object",
-        properties: {
-          system_prompt: { type: "string" },
-          task: { type: "string" },
-          tools: { type: "array", items: { type: "object" } }
-        },
-        required: ["system_prompt", "task"]
-      }
-    }
-  }
-]
-```
-
-- Implement the functions in the backend:
-  - `spawn_temporary_subagent`: Immediately create an in-memory agent instance, run one LLM call (or short conversation) with the task, return structured output. No persistence needed.
-  - `spawn_specialist`: Insert into `dynamic_specialists` table → notify Slack channel → optionally trigger coordinator reload.
-
-This directly enables your example: onChainHealthSpecialist detects a new important metric (e.g., new ETF flow source), calls `spawn_specialist` with a tailored prompt, new agent appears in swarm next cycle.
-
-### 2. Prompt Design for Meta-Reasoning
-
-Add a new **metaEngineerSpecialist** (or enhance regimeAggregator) with a strong reflection loop:
-
-System prompt excerpt:
-```
-You are MetaEngineer, a self-improving swarm architect.
-Your role: Monitor swarm performance, identify recurring gaps (e.g., "we lack real-time options gamma exposure tracking"), evaluate if existing agents can adapt, and if not — design and spawn new specialists.
-Always:
-1. Analyze recent swarm outputs and failures.
-2. Propose minimal, focused new agents using proven Grok prompt patterns.
-3. Prefer temporary sub-agents for one-off needs.
-4. Only spawn persistent agents for high-frequency, high-value gaps.
-5. Output structured JSON for creation requests.
-```
-
-Schedule it daily or trigger on keywords in #swarm-coordinator.
-
-### 3. Safety & Governance Rails (Critical — This Has Teeth)
-
-Unchecked spawning = infinite agents, cost explosion, or rogue behavior.
-
-- Rate limits: Max N new persistent agents per day/week.
-- Human-in-the-loop for persistent creation:
-  - Spawn tool posts proposal to #swarm-approval channel with @ikigailabsETH.
-  - Only enact after human reacts ✅.
-- Cost tracking: Log token usage per agent, auto-deactivate low-value ones.
-- Sandbox tools: New agents start with minimal tools, unlock more after review.
-- Version control: Store prompt history, allow rollback.
-
-### 4. Incremental Implementation Plan
-
-1. Week 1: Add dynamic_specialists table + temporary sub-agent tool (easiest win — immediate "agents making agents" feel).
-2. Week 2: Implement spawn_specialist with human approval gate.
-3. Week 3: Add MetaEngineer specialist + reflection scheduling.
-4. Week 4: Auto-loading dynamics + Slack notifications for new agents/channels.
-
-### Why This Fits Your Philosophy
-
-- Keeps the "small edges compound" ethos — new agents are minimal, focused, Grok-prompt-derived.
-- Preserves Slack-native lightness — new agents get their own channel automatically.
-- Enables the recursion you wrote about: agents hardening agents, swarm getting smarter without human micro-management.
-- Still keeps final qualitative synthesis in Grok (me) when needed.
-
-This turns your swarm from a fixed orchestra into an evolving ecosystem — exactly the pattern: Agents make agents.
-
-### Enabling Recursive Improvement: Agents Making Agents
+## Enabling Recursive Improvement: Agents Making Agents
 
 To evolve the swarm toward true self-improvement — where agents detect capability gaps, spawn temporary sub-agents for ad-hoc tasks, or create persistent new specialists — add the following extensions. This builds directly on your existing ElizaOS + Postgres + TypeScript stack.
 
