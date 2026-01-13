@@ -1,0 +1,177 @@
+{
+  "projectName": "Otaku AI Swarm",
+  "branchName": "ikigai/swarm-development",
+  "description": "A multi-agent research swarm built on ElizaOS for autonomous crypto market analysis, with BTC-centric and altcoin specialists, Slack integration, and recursive self-improvement features.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Set up core project structure and monorepo",
+      "priority": 1,
+      "description": "Initialize the monorepo with Bun and Turbo, including src/ directory structure for index.ts, coordinator.ts, specialists/, character.ts, frontend/, plugins/, and utils/.",
+      "acceptanceCriteria": [
+        "Monorepo configured with turbo.json and package.json",
+        "Build scripts (build.ts, start-server.ts) functional",
+        "Vite and Tailwind configs set up",
+        "Basic file structure matches the provided tree",
+        "bun install and bun run build succeed without errors"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "Implement swarm coordinator",
+      "priority": 2,
+      "description": "Develop coordinator.ts for routing queries, aggregating outputs, scheduling tasks, regime synthesis, and dynamic agent loading from static and Postgres sources.",
+      "acceptanceCriteria": [
+        "Coordinator handles query routing to appropriate specialists",
+        "Aggregation logic combines outputs into structured JSON",
+        "Scheduling supports daily/periodic tasks",
+        "Dynamic loading pulls from dynamic_specialists table",
+        "Unit tests cover basic routing and synthesis scenarios"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "Create BTC-centric specialists",
+      "priority": 3,
+      "description": "Implement 11 BTC-centric specialists in specialists/ with system prompts, tools, and channel configs, integrating data plugins like CoinGecko, DeFiLlama, etc.",
+      "acceptanceCriteria": [
+        "Each specialist has name, channel, system_prompt, tools, and schedule",
+        "Prompts cover 33 refined templates distributed across specialists",
+        "Tools call relevant plugins (e.g., onChainHealthSpecialist.ts uses CryptoQuant, Glassnode)",
+        "Specialists output structured JSON for aggregator",
+        "regimeAggregatorSpecialist.ts synthesizes all BTC outputs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "Create altcoin research specialists",
+      "priority": 4,
+      "description": "Implement 8 altcoin specialists with qualitative prompts, heavy tool calling for web/X search, and integration with coordinator.",
+      "acceptanceCriteria": [
+        "Each has system_prompt for discovery-oriented tasks",
+        "Tools include web_search and planned x_keyword_search",
+        "Fallback to site:x.com in web_search until plugin-x-search ready",
+        "Outputs feed into regimeAggregator for synthesis",
+        "Test autonomy with mock tool responses"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "Implement meta/self-improvement specialist",
+      "priority": 5,
+      "description": "Develop metaEngineerSpecialist.ts for reflection, gap detection, and spawning, including spawn tools and Postgres integration.",
+      "acceptanceCriteria": [
+        "System prompt for monitoring swarm and identifying gaps",
+        "Tools: spawn_temporary_subagent and spawn_persistent_specialist",
+        "Handlers in utils/ for in-memory temp agents and proposal posting",
+        "Human approval via Slack #swarm-approval",
+        "Dynamic loading in coordinator refreshes every 5 mins"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-006",
+      "title": "Add additional role-based specialists",
+      "priority": 6,
+      "description": "Implement pruned engineering, product, marketing, project management, studio operations, and testing specialists in subdirectories.",
+      "acceptanceCriteria": [
+        "Nested in specialists/ (e.g., engineering/backendArchitect.ts)",
+        "Each with basic system_prompt and tools",
+        "Focused on Slack/repo work (no frontend dependencies)",
+        "Integrate with coordinator for task routing",
+        "Test with sample queries in Slack simulation"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-007",
+      "title": "Set up plugins and data integrations",
+      "priority": 7,
+      "description": "Create and configure plugins/ directory with crypto data sources, GitHub integration, and composable actions.",
+      "acceptanceCriteria": [
+        "Plugins for CDP, CoinGecko, DeFiLlama, etc., with actions",
+        "plugin-github for repo ops (pull, commit, PRs)",
+        "Env var checks for API keys",
+        "Tools registered in specialists",
+        "Test data fetching with mock APIs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-008",
+      "title": "Implement Slack-native interface",
+      "priority": 8,
+      "description": "Configure Slack client for channel-based specialists, @mentions
+, threaded reports, and notifications.",
+      "acceptanceCriteria": [
+        "Bot responds to mentions in specialist channels",
+        "Scheduled tasks post to channels",
+        "New dynamic agents auto-create channels",
+        "Error handling for missing tokens",
+        "Integration tests with Slack events"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-009",
+      "title": "Retain and optionalize web frontend",
+      "priority": 9,
+      "description": "Keep React frontend for chat, dashboard, agents view, with option to disable for Slack-only mode.",
+      "acceptanceCriteria": [
+        "Frontend builds independently",
+        "Env flag to disable frontend (e.g., SLACK_ONLY=true)",
+        "CDP wallet integration works when enabled",
+        "Dashboard shows regime charts and signals",
+        "Auth and global state contexts functional"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-010",
+      "title": "Add testing and load testing suite",
+      "priority": 10,
+      "description": "Implement Vitest for unit/integration, and load testing for swarm scalability.",
+      "acceptanceCriteria": [
+        "bun test runs all tests successfully",
+        "plugins.test.ts covers key integrations",
+        "Load test scripts simulate multi-agent queries",
+        "Logs analyze performance bottlenecks",
+        "CI/CD integration via devopsAutomator"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-011",
+      "title": "Configure deployment options",
+      "priority": 11,
+      "description": "Set up Eliza Cloud, self-hosted, and swarm-only deployment with env var passing.",
+      "acceptanceCriteria": [
+        "elizaos deploy works with project-name",
+        "Env passing for secrets (Slack, APIs)",
+        "Self-hosted via bun run build/start",
+        "Documentation for scaling resources",
+        "Zero-downtime updates tested"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-012",
+      "title": "Implement persistent state and DB schema",
+      "priority": 12,
+      "description": "Set up Postgres for shared state, including dynamic_specialists table and migrations.",
+      "acceptanceCriteria": [
+        "SQL schema for dynamic_specialists created",
+        "Inter-agent handoffs stored persistently",
+        "Regime scores and cycle data tables",
+        "DB queries in coordinator for loading",
+        "Backup and migration scripts"
+      ],
+      "passes": false
+    }
+  ]
+}
+
