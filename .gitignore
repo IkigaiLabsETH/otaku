@@ -54,3 +54,9 @@ packages/*/tsconfig.tsbuildinfo
 /thoughts
 /strix_runs
 /scripts
+
+# Ralph runtime files (user-specific, not for repo)
+prd.json
+progress.txt
+.ralph-last-branch
+archive/
