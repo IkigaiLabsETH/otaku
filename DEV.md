@@ -531,3 +531,113 @@ ORACLE_ADDRESS=0xYOUR_ORACLE_ADDRESS
 Tests: N/A (config); validate in compose up logs for substitution errors.
 
 No architecture updates needed—aligns with /infra/docker/ convention. Next potential: Add GitHub Actions workflow for CI/CD in .github/workflows/deploy.yml. Suggest if proceeding.
+
+📁 .github/workflows/deploy.yml  
+Purpose: Defines GitHub Actions CI/CD workflow for automated linting, testing, building Docker images, and deploying the backend to production (e.g., AWS ECS or Kubernetes), triggered on push/PR to main. Ensures quality and reproducibility.  
+Depends on: Docker (build), Jest/Vitest (tests), ESLint/Prettier (lint), secrets (AWS_ACCESS_KEY_ID, etc.).  
+Used by: GitHub repo for automated pipelines.  
+
+```yaml
+# .github/workflows/deploy.yml
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd backend && npm ci
+      - name: Run ESLint
+        run: cd backend && npm run lint  # Assumes script in package.json
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: cd backend && npm ci
+      - name: Run Prisma migrations
+        env:
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ secrets.POSTGRES_DB }}
+        run: cd backend && npx prisma migrate deploy
+      - name: Run tests
+        env:
+          DATABASE_URL: postgres://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ secrets.POSTGRES_DB }}
+          INFURA_URL: ${{ secrets.INFURA_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          ORACLE_ADDRESS: ${{ secrets.ORACLE_ADDRESS }}
+        run: cd backend && npm test  # Assumes Jest/Vitest script
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build Docker image
+        run: cd backend && docker build -t swarm-backend:${{ github.sha }} .
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'  # Only deploy on main push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Login to Docker Hub  # Or AWS ECR
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker image
+        run: |
+          cd backend
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/swarm-backend:${{ github.sha }} .
+          docker push ${{ secrets.DOCKER_USERNAME }}/swarm-backend:${{ github.sha }}
+      - name: Deploy to AWS ECS  # Placeholder; use aws-actions/amazon-ecs-deploy-task-definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: task-definition.json  # Define in repo
+          service: swarm-service
+          cluster: swarm-cluster
+          wait-for-service-stability: true
+
+# Security: Use secrets for all creds; add vulnerability scans (e.g., Trivy).
+# Monitoring: Integrate Slack notifications on failure.
+# TODO: Technical debt - Extend for frontend/offchain deployment in future phases; add contract deployment via Hardhat.
+```
+
+Tests: Workflow self-test via act (local GitHub Actions runner); end-to-end: Trigger on test PR, verify jobs pass/fail based on code changes (e.g., break test to check failure).
