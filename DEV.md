@@ -641,3 +641,176 @@ jobs:
 ```
 
 Tests: Workflow self-test via act (local GitHub Actions runner); end-to-end: Trigger on test PR, verify jobs pass/fail based on code changes (e.g., break test to check failure).
+
+📁 contracts/hardhat.config.ts  
+Purpose: Configures Hardhat environment for compiling, testing, and deploying contracts, including network settings for Arbitrum (L2 primary), API keys via env vars, and plugins for verification/gas optimization.  
+Depends on: @nomicfoundation/hardhat-toolbox (plugins), dotenv (env vars), hardhat-ignition-ethers (for Ignition deployments).  
+Used by: Hardhat CLI commands (npx hardhat compile, deploy, etc.), CI/CD workflows.  
+
+```typescript
+// contracts/hardhat.config.ts
+import { HardhatUserConfig } from 'hardhat/config';
+import '@nomicfoundation/hardhat-toolbox'; // Includes ethers, chai, etc.
+import 'hardhat-ignition-ethers'; // For declarative deployments
+import * as dotenv from 'dotenv';
+
+dotenv.config();
+
+const config: HardhatUserConfig = {
+  solidity: {
+    version: '0.8.22',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200, // Gas optimization
+      },
+      evmVersion: 'paris', // For L2 compatibility
+    },
+  },
+  networks: {
+    hardhat: {
+      // Local fork for testing
+      forking: {
+        url: process.env.ARBITRUM_RPC_URL || 'https://arbitrum-sepolia.infura.io/v3/YOUR_KEY',
+      },
+    },
+    arbitrumSepolia: {
+      url: process.env.ARBITRUM_RPC_URL || 'https://arbitrum-sepolia.infura.io/v3/YOUR_KEY',
+      accounts: [process.env.PRIVATE_KEY || '0x'],
+      chainId: 421614, // Arbitrum Sepolia testnet
+    },
+    arbitrum: {
+      url: process.env.ARBITRUM_MAINNET_RPC_URL || 'https://arb1.arbitrum.io/rpc',
+      accounts: [process.env.PRIVATE_KEY || '0x'],
+      chainId: 42161, // Mainnet
+    },
+    // Add more L2s like optimism if needed
+  },
+  etherscan: {
+    // For contract verification
+    apiKey: {
+      arbitrumSepolia: process.env.ARBISCAN_API_KEY || '',
+      arbitrumOne: process.env.ARBISCAN_API_KEY || '',
+    },
+    customChains: [
+      {
+        network: 'arbitrumSepolia',
+        chainId: 421614,
+        urls: {
+          apiURL: 'https://api-sepolia.arbiscan.io/api',
+          browserURL: 'https://sepolia.arbiscan.io',
+        },
+      },
+    ],
+  },
+  ignition: {
+    // For Phase 2+ declarative deploys
+    strategy: 'basic',
+  },
+  mocha: {
+    timeout: 40000, // For tests
+  },
+};
+
+// Security: Env vars for keys; never commit.
+// TODO: Technical debt - Add sourcify verification for full transparency.
+export default config;
+```
+
+Tests: Config doesn't need direct tests; cover in deployment script tests (e.g., verify network connection).
+
+📁 contracts/scripts/deploy.ts  
+Purpose: Deployment script for the SwarmSignalVault and related contracts (e.g., Oracle, Strategies), using ethers for deployment and Ignition for modularity; logs addresses and verifies on Arbiscan.  
+Depends on: hardhat (runtime), ethers (deploy), hardhat-ignition-ethers (modules), ../src/SwarmSignalVault.sol (etc.).  
+Used by: Hardhat CLI (npx hardhat run scripts/deploy.ts --network arbitrumSepolia).  
+
+```typescript
+// contracts/scripts/deploy.ts
+import { ethers, ignition } from 'hardhat';
+import LockModule from '../ignition/modules/Lock'; // Example; replace with custom modules
+
+async function main() {
+  // Deploy Oracle first (dependency)
+  const Oracle = await ethers.getContractFactory('SwarmOracle');
+  const zkVerifierAddress = '0x...'; // Placeholder or deploy separately
+  const pythFeedAddress = '0x...'; // Pyth oracle address on Arbitrum
+  const oracle = await Oracle.deploy(zkVerifierAddress, pythFeedAddress);
+  await oracle.waitForDeployment();
+  console.log(`Oracle deployed to: ${await oracle.getAddress()}`);
+
+  // Deploy Vault
+  const Vault = await ethers.getContractFactory('SwarmSignalVault');
+  const underlying = '0x...'; // USDC address on Arbitrum
+  const name = 'SwarmSignalVault';
+  const symbol = 'SSV';
+  const treasury = '0x...'; // DAO treasury
+  const governanceToken = '0x...'; // ERC20Votes token
+  const vault = await Vault.deploy(underlying, name, symbol, await oracle.getAddress(), treasury, governanceToken);
+  await vault.waitForDeployment();
+  console.log(`Vault deployed to: ${await vault.getAddress()}`);
+
+  // Add strategies (e.g., CoveredCall)
+  const CoveredCall = await ethers.getContractFactory('CoveredCallStrategy');
+  const asset = '0x...'; // WBTC
+  const optionsProtocol = '0x...'; // Aevo/GMX address
+  const coveredCall = await CoveredCall.deploy(asset, optionsProtocol);
+  await coveredCall.waitForDeployment();
+
+  // Call addAssetStrategy on vault
+  await vault.addAssetStrategy(asset, await coveredCall.getAddress());
+
+  // Alternative: Use Ignition for declarative deploy
+  // const { lock } = await ignition.deploy(LockModule);
+  // console.log(`Deployed Lock at ${lock.address}`);
+
+  // Verify (manual or via plugin)
+  // npx hardhat verify --network arbitrumSepolia <address> <args>
+}
+
+// Error handling
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+
+// TODO: Technical debt - Parameterize addresses via env/args for flexibility; integrate with feedback loop post-deploy.
+```
+
+Tests: Integration test: Fork Arbitrum, run deploy script, assert contract addresses and events (using chai); gas usage test.
+
+📁 contracts/ignition/modules/SwarmVault.ts  
+Purpose: Ignition module for declarative deployment of the vault ecosystem, enabling reproducible deploys with dependencies (Phase 2+).  
+Depends on: hardhat-ignition-ethers (framework).  
+Used by: Hardhat Ignition CLI (npx hardhat ignition deploy ./ignition/modules/SwarmVault.ts --network arbitrumSepolia).  
+
+```typescript
+// contracts/ignition/modules/SwarmVault.ts
+import { buildModule } from '@nomicfoundation/hardhat-ignition/modules';
+
+export default buildModule('SwarmVault', (m) => {
+  const zkVerifier = m.contract('PlaceholderVerifier'); // Deploy ZK verifier
+  const pythFeed = m.getParameter('pythFeed', '0x...'); // External
+  const oracle = m.contract('SwarmOracle', [zkVerifier, pythFeed]);
+
+  const underlying = m.getParameter('underlying', '0x...');
+  const treasury = m.getParameter('treasury', '0x...');
+  const governanceToken = m.getParameter('governanceToken', '0x...');
+  const vault = m.contract('SwarmSignalVault', [underlying, 'SwarmSignalVault', 'SSV', oracle, treasury, governanceToken]);
+
+  // Strategies
+  const asset = m.getParameter('asset', '0x...');
+  const optionsProtocol = m.getParameter('optionsProtocol', '0x...');
+  const coveredCall = m.contract('CoveredCallStrategy', [asset, optionsProtocol]);
+
+  // Call post-deploy
+  m.call(vault, 'addAssetStrategy', [asset, coveredCall]);
+
+  return { oracle, vault, coveredCall };
+});
+
+// TODO: No debt; extensible for cross-chain in Phase 3.
+```
+
+Tests: Ignition test: Mock params, deploy module, verify state (using hardhat-ignition test utils).
+
+No architecture updates needed—aligns with /contracts/ convention. For full setup, add package.json scripts: "deploy": "npx hardhat run scripts/deploy.ts --network arbitrumSepolia". Suggest: Integrate with CI/CD for auto-deploy on main.
