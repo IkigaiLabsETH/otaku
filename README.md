@@ -1,31 +1,53 @@
-# Current MVP Focus 
+# Ikigai Studio Research Tools — Current MVP Focus
 
-7-Day BTC Covered Calls & Cash-Secured Puts Optimizer for HypersurfaceGoal
-Deliver high-signal, actionable recommendations for the best strike prices to sell 7-day BTC covered calls and cash-secured puts directly in the Hypersurface simplified UI (mimicking its clean "Sell Price → APR → Sell Probability" format).
+**MVP: 7-Day BTC Covered Calls & Cash-Secured Puts Optimizer**
 
-# Edge Source  
+100% focused on delivering the highest-signal strike recommendations for selling **7-day BTC options** on Deribit, formatted for direct use in the Hypersurface UI (clean "Sell Price → APR → Probability" layout).
 
-Primary data: Real-time Deribit 7-day options chain (IV surface, skew, OI clusters, volume, Greeks, funding).
-Augmented with short-term on-chain signals (exchange flows, whale activity, stablecoin dynamics, realized vol via CryptoQuant/Glassnode/Dune/Arkham).
-Sentiment overlay from X extremes and crowd positioning.
+Goal: Reliably beat native Hypersurface pricing and naive strike selection by combining deeper data layers — producing superior risk-adjusted yields on weekly rolls.
 
-# Core Workflow  
+Everything else in the swarm is **paused** until this core loop ships, validates live edge, and compounds real yield.
 
-derivativesSpecialist → Pulls fresh Deribit chain and identifies rich premiums / OI magnets.
-onChainHealthSpecialist + socialPsychologySpecialist → Short-term bullish/neutral/bearish bias.
-regimeAggregatorSpecialist → Synthesizes into ranked Hypersurface-compatible tables:
-Covered Calls: Top 5–8 OTM sell prices (e.g., $96k–$105k) with APR, Sell Probability, rationale.
-Cash-Secured Puts: Top 5–8 OTM sell prices with APR, Assignment Probability, rationale.
+### Edge Sources
+- **Primary**: Real-time Deribit 7-day options chain (full IV surface, skew, OI clusters, volume, Greeks, funding rates).
+- **Augmentation**: Short-term on-chain signals (exchange flows, whale transfers, stablecoin mints/burns, realized volatility via CryptoQuant, Glassnode, Dune, Arkham).
+- **Sentiment Overlay**: Real-time X extremes, crowd psychology, and positioning bias (via socialPsychologySpecialist).
 
-thesisValidatorSpecialist → Ruthlessly stress-tests recommendations vs. Deribit fair value to validate edge (positive APR differential per unit risk).
+### Core Workflow (Active Specialists Only)
+1. `derivativesSpecialist` → Pulls fresh Deribit chain, identifies richest premiums and OI magnets.
+2. `onChainHealthSpecialist` + `socialPsychologySpecialist` → Quantifies short-term bullish/neutral/bearish bias (next 7–10 days).
+3. `regimeAggregatorSpecialist` → Synthesizes into ranked, Hypersurface-compatible tables:
+   - **Covered Calls**: Top 6–8 OTM strikes with Sell Price, APR (annualized if rolled), Hold Probability, and concise rationale.
+   - **Cash-Secured Puts**: Top 6–8 ITM/OTM strikes with Sell Price, APR, Assignment Probability, and rationale.
+4. `thesisValidatorSpecialist` → Stress-tests every recommendation against Deribit fair value, confirming positive expected edge per unit of risk.
 
-# Output
-Clean dual markdown tables ready for manual selection in Hypersurface UI — consistently targeting superior risk-adjusted yields through deeper data than native platform pricing.In Scope
-Only the above agents + Deribit/Hypersurface-focused logic. Everything else paused until this core loop ships and validates live edge.
+### Output Format
+Dual clean markdown tables posted daily/weekly to dedicated Slack channel (#yield-optimizer) — ready for manual copy-paste into Hypersurface.
 
-# Success
-Weekly recommendations that reliably outperform naive strike selection. Small validated edges compound fastest. Ikigai Studio Research Tools
+Example structure (simplified):
+| Sell Price | APR   | Hold Prob. | Rationale |
+|------------|-------|------------|-----------|
+| $98,000    | 68%   | 62%        | Rich premium in highest OI cluster + mild bullish X vibe |
 
+### In Scope
+- Only the five specialists listed above.
+- Deribit-focused plugin enhancements.
+- Hypersurface-optimized table formatting.
+- Daily scheduled runs + on-demand triggers.
+
+### Out of Scope (Paused)
+- All altcoin specialists.
+- Longer-dated options or other assets.
+- Full regime dashboard, gem hunting, portfolio design, etc.
+- Web frontend activation.
+
+### Success Metric
+Weekly recommendations that consistently outperform:
+- Naive ATM/OTM selection.
+- Native Hypersurface implied yields.
+Measured by realized APR differential and win rate on hold vs. assignment.
+
+Small, validated edges — rolled relentlessly — compound fastest.
 
 # Ikigai Studio Research Tools
 
