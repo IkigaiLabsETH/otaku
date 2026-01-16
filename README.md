@@ -1,3 +1,32 @@
+# Current MVP Focus 
+
+7-Day BTC Covered Calls & Cash-Secured Puts Optimizer for HypersurfaceGoal
+Deliver high-signal, actionable recommendations for the best strike prices to sell 7-day BTC covered calls and cash-secured puts directly in the Hypersurface simplified UI (mimicking its clean "Sell Price → APR → Sell Probability" format).
+
+# Edge Source  
+
+Primary data: Real-time Deribit 7-day options chain (IV surface, skew, OI clusters, volume, Greeks, funding).
+Augmented with short-term on-chain signals (exchange flows, whale activity, stablecoin dynamics, realized vol via CryptoQuant/Glassnode/Dune/Arkham).
+Sentiment overlay from X extremes and crowd positioning.
+
+# Core Workflow  
+
+derivativesSpecialist → Pulls fresh Deribit chain and identifies rich premiums / OI magnets.
+onChainHealthSpecialist + socialPsychologySpecialist → Short-term bullish/neutral/bearish bias.
+regimeAggregatorSpecialist → Synthesizes into ranked Hypersurface-compatible tables:
+Covered Calls: Top 5–8 OTM sell prices (e.g., $96k–$105k) with APR, Sell Probability, rationale.
+Cash-Secured Puts: Top 5–8 OTM sell prices with APR, Assignment Probability, rationale.
+
+thesisValidatorSpecialist → Ruthlessly stress-tests recommendations vs. Deribit fair value to validate edge (positive APR differential per unit risk).
+
+# Output
+Clean dual markdown tables ready for manual selection in Hypersurface UI — consistently targeting superior risk-adjusted yields through deeper data than native platform pricing.In Scope
+Only the above agents + Deribit/Hypersurface-focused logic. Everything else paused until this core loop ships and validates live edge.
+
+# Success
+Weekly recommendations that reliably outperform naive strike selection. Small validated edges compound fastest. Ikigai Studio Research Tools
+
+
 # Ikigai Studio Research Tools
 
 An extended fork of the **Otaku AI Agent** repository, built on **ElizaOS**. This repository serves two primary purposes for Ikigai Studio:
