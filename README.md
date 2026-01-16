@@ -107,7 +107,24 @@ Goal: After any specialist (e.g., `regimeAggregator`) posts an output (like cove
 
 This keeps it Slack-first, just like your 2015 setup, but leverages the swarm's modularity for autonomous evolution. No more babysitting—feedback turns humans into scalpel-wielders for edge cases. If you want code snippets, a full `feedbackAnalyzer.ts` file, or to brainstorm ML specifics (e.g., integrating with your company's stack), hit me up. What's your priority—binary feedback first, or full pattern analysis? 🚀
 
+## North Star: Evolving to the Swarm-Signal Vault
 
+At Ikigai Studio, our guiding vision is to transform crypto research from insightful analysis into autonomous, on-chain action. The current MVP—our 7-Day BTC Covered Calls & Cash-Secured Puts Optimizer—delivers high-signal recommendations via a specialized agent swarm, compounding small edges into superior yields. But this is just the foundation.
+
+Our North Star is the **Swarm-Signal Vault**: a decentralized, AI-oracle-powered DeFi protocol that automates these strategies end-to-end. Users deposit tokenized BTC assets (e.g., WBTC) into an on-chain vault, where swarm-generated signals—fusing on-chain data, derivatives skew, sentiment overlays, and more—dynamically select and roll optimal strikes. Premiums compound as yields, distributed transparently to vault shareholders.
+
+### Why This Matters
+- **Agentic DeFi Revolution**: Bridge off-chain swarm intelligence with on-chain execution, enabling truly autonomous yield farming that outperforms manual or naive approaches.
+- **Innovation Edge**: Integrate zero-knowledge proofs for private signal verification, preventing front-running while preserving proprietary logic. Leverage emerging standards like x402 for reactive settlements and modular hooks (e.g., Uniswap v4) for adaptive strategies.
+- **Scalable Alpha**: Start with BTC options on Deribit signals, expand to altcoins, longer-dated instruments, and cross-chain vaults. In a 2026 landscape of maturing regs and AI-DeFi convergence, this positions Ikigai as a leader in programmable, signal-driven finance.
+
+### Roadmap to Realization
+- **Phase 1 (Current)**: Validate swarm edges through Slack-delivered recommendations and human-in-the-loop feedback.
+- **Phase 2**: Oracle integration—push aggregated signals (strikes, probs, APRs) to Chainlink or custom feeds for verifiable on-chain ingestion.
+- **Phase 3**: Deploy MVP vault on Ethereum L2 (e.g., Arbitrum), automating covered calls with built-in risk guards and governance.
+- **Phase 4**: Recursive enhancements—swarm self-optimizes via meta-engineers, incorporating ZK for secure computations and DAO-driven upgrades.
+
+This North Star keeps us focused: from advisory tools to a self-sustaining ecosystem where small, validated edges compound into relentless, decentralized alpha.
 
 # Ikigai Studio Research Tools
 
