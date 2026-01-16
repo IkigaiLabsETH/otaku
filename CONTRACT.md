@@ -110,8 +110,4 @@ The Swarm-Signal Vault combines AI-DeFi integration and ZK-enhanced oracles in a
 
 ## Why This Combo Is Novel Overall
 
-The system forms a loop: the Slack-native swarm with feedback provides verifiable signals to an on-chain vault. It includes AI coordination for RWA and DeFi capital flows, with features like self-optimizing governance. AI agents are expected to advance DeFi by 2026, but current examples focus on hedging or liquidity, not swarm-based BTC options with quantum randomness and RWA hybrids. No close matches exist in ecosystem discussions.  
-
-This setup may outperform standard vaults by 10-20% through validated signals. AI risk mitigation remains incomplete, supporting a phased rollout starting with MVP validation.  
-
-This design integrates quantum security, RWA composability, and agent coordination.
+The system forms a loop: the Slack-native swarm with feedback provides verifiable signals to an on-chain vault. It includes AI coordination for RWA and DeFi capital flows, with features like self-optimizing governance. AI agents are expected to advance DeFi by 2026, but current examples focus on hedging or liquidity, not swarm-based BTC options with quantum randomness and RWA hybrids. This setup may outperform standard vaults by 10-20% through validated signals. AI risk mitigation remains incomplete, supporting a phased rollout starting with MVP validation. This design integrates quantum security, RWA composability, and agent coordination.
