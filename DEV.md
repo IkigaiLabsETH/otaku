@@ -419,3 +419,115 @@ export function getOracleContract(): ethers.Contract {
 Tests: Unit test getOracleContract for correct initialization (mock env vars); error test for missing env.
 
 No architecture updates needed—fits existing structure. Next potential: Integrate with off-chain swarm scripts or frontend query service. Suggest: Add Docker compose for backend + Postgres in /infra/docker/.
+
+📁 infra/docker/docker-compose.yml  
+Purpose: Defines multi-container Docker setup for backend (Node.js API) and Postgres DB, enabling local development, testing, and reproducible environments with health checks.  
+Depends on: Docker images (node:20-alpine, postgres:16), environment variables from .env (e.g., DATABASE_URL, INFURA_URL).  
+Used by: Developers for local spin-up (docker compose up), CI/CD workflows in .github/workflows/ (e.g., for integration tests).  
+
+```yaml
+# infra/docker/docker-compose.yml
+
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile  # Assumes Dockerfile in /backend/
+    ports:
+      - '3000:3000'  # API port
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - INFURA_URL=${INFURA_URL}
+      - PRIVATE_KEY=${PRIVATE_KEY}
+      - ORACLE_ADDRESS=${ORACLE_ADDRESS}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../../backend:/app
+      - /app/node_modules  # Persist node_modules
+    command: npm run dev  # Or 'npm start' for prod
+
+  db:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+
+# Security: Use secrets for passwords in prod (e.g., Docker secrets).
+# Monitoring: Add Prometheus exporter service in future for metrics.
+# TODO: Technical debt - Extend for Redis caching service in scalability phase.
+```
+
+Tests: Integration test via GitHub Actions: Spin up compose, run Prisma migrations, test API endpoints (e.g., POST /signals) with Supertest; health check verification.
+
+📁 backend/Dockerfile  
+Purpose: Builds Docker image for backend Node.js app, optimizing for production with multi-stage build (dev deps separate).  
+Depends on: node:20-alpine (base image), package.json (deps).  
+Used by: docker-compose.yml (for backend service build).  
+
+```dockerfile
+# backend/Dockerfile
+
+# Stage 1: Build
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build  # Assumes tsconfig with build script
+
+# Stage 2: Production
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/dist ./dist  # Assuming build outputs to dist
+COPY package*.json ./
+RUN npm ci --only=production
+CMD ["node", "dist/index.js"]  # Adjust to your entrypoint
+
+# TODO: No debt; add ARG for build-time vars if needed.
+```
+
+Tests: Build test in CI: docker build -t swarm-backend .; run container and check /health endpoint (add in app).
+
+📁 infra/docker/.env.example  
+Purpose: Template for environment variables used in docker-compose, ensuring secrets are not hardcoded.  
+Depends on: None (plain text).  
+Used by: docker-compose.yml (variable substitution).  
+
+```env
+# infra/docker/.env.example
+
+# DB
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=secret
+POSTGRES_DB=swarm_db
+
+# API
+INFURA_URL=https://arbitrum-sepolia.infura.io/v3/YOUR_KEY
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+ORACLE_ADDRESS=0xYOUR_ORACLE_ADDRESS
+
+# Copy to .env and fill values; gitignore .env.
+```
+
+Tests: N/A (config); validate in compose up logs for substitution errors.
+
+No architecture updates needed—aligns with /infra/docker/ convention. Next potential: Add GitHub Actions workflow for CI/CD in .github/workflows/deploy.yml. Suggest if proceeding.
