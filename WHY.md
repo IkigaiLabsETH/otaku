@@ -436,3 +436,138 @@ As the docs summarize, the Knowledge Plugin excels at turning your Substack expo
 - **Tracks Usage**: Logs RAG metadata in conversation history—useful for auditing BTC signal validations.
 
 This troubleshooting ensures reliability in your evolving swarm—modular for extensions like character knowledge or REST API management. If you encounter a specific error (e.g., share logs), we can dive deeper. For more docs, consider using tools to fetch llms.txt if needed, but this covers the essentials for your North Star.
+
+### Practical Implementation: Integrating Substack HTML Exports with ElizaOS Knowledge Plugin Examples
+
+Drawing from the "Examples & Recipes" documentation you've shared, we can now apply these practical setups directly to your Substack exported HTML files. This section emphasizes real-world usage, like auto-loading from a `docs` folder (ideal for your archival research on BTC regimes, altcoin narratives, and macro overlays) or dynamic uploads via the web interface. For your Ikigai Studio project—building an autonomous Swarm-Signal Vault—these recipes enable agents to automatically search and use Substack as a core knowledge base, enhancing tasks like regime aggregations, 7-day strike recs, and DeFi yield optimization without manual intervention.
+
+The key takeaway: Prioritize the `docs` folder for batch loading your hundreds of HTML files (static, archival content), and use the web interface for updates (e.g., fresh exports). Avoid hardcoded snippets, as they're unsuitable for large posts. This integrates seamlessly with your existing ElizaOS setup (e.g., shared Postgres, Slack hooks), leveraging automatic RAG injection for agent responses.
+
+#### Adapting Examples to Your Swarm Agents
+
+1. **Example: Research Bot for Substack Insights**
+   Adapt the "Document-Based Support Bot" recipe to create a specialized agent that queries your Substack archives. This bot can handle real-time crypto research by auto-searching loaded HTML files.
+
+   ```typescript title="characters/substack-research-bot.ts"
+   import { type Character } from '@elizaos/core';
+
+   export const substackResearchBot: Character = {
+     name: 'SubstackResearchBot',
+     plugins: [
+       '@elizaos/plugin-openrouter', // For embeddings and cost-efficient caching (recommended for your scale)
+       '@elizaos/plugin-knowledge', // Core RAG for Substack knowledge
+     ],
+     system: 'You are a crypto research specialist. Answer questions using the Substack knowledge base you have learned, focusing on BTC regimes, altcoin narratives, and macro overlays. Always search your knowledge base before responding, and compound small insights for alpha generation.',
+     bio: [
+       'Expert in BTC options optimization and DeFi yields',
+       'Grounded in Ikigai Studio\'s Substack archives',
+       'Supports swarm coordination for signal validation',
+     ],
+   };
+   ```
+
+   - **Why This Fits**: The system prompt ensures agents reference Substack without reinventing wheels, aligning with your North Star. Use OpenRouter for 90% cost savings on embeddings, especially with contextual embeddings enabled.
+
+2. **Example: Signal Validation Assistant**
+   Similar to the "API Documentation Assistant," this can validate signals (e.g., 7-day BTC yields) against historical Substack data.
+
+   ```typescript title="characters/signal-validator.ts"
+   export const signalValidator: Character = {
+     name: 'SignalValidator',
+     plugins: [
+       '@elizaos/plugin-openai', // Or OpenRouter for better caching
+       '@elizaos/plugin-knowledge',
+     ],
+     system: 'You are a signal validation agent. Help refine crypto signals by searching the Substack knowledge base for historical regimes, narratives, and overlays. Provide grounded recommendations for superior yields.',
+     topics: [
+       'BTC regime aggregations and strike recs',
+       'Altcoin narratives and macro impacts',
+       'DeFi yield automation via oracles',
+       'Error handling in signal generation',
+     ],
+   };
+   ```
+
+   - **Integration Tip**: Spawn this as a sub-agent in your swarm for gap-filling—e.g., query for "validate 7-day BTC signal against 2023 regimes."
+
+#### Real-World Setup for Substack HTML Files
+
+Follow the "Real-World Setup Guide" tailored to your exports:
+
+1. **Step 1: Prepare Your Documents**
+   Organize HTML files thematically for easy auto-loading—mirrors your structured Substack archive.
+
+   ```
+   your-project/
+   ├── docs/                           # Auto-load folder for Substack exports
+   │   ├── btc-regimes/               # Thematic subfolders
+   │   │   ├── 2023-btc-regime-analysis.html
+   │   │   └── 2024-btc-options-optimization.html
+   │   ├── altcoin-narratives/
+   │   │   ├── defi-yields-narrative.html
+   │   │   └── altcoin-macro-overlays.html
+   │   ├── macro-overlays/
+   │   │   ├── global-macro-impact.html
+   │   │   └── economic-regime-shifts.html
+   │   └── README.md                  # Optional: Describe structure for team reference
+   ├── .env
+   │   OPENROUTER_API_KEY=your-key    # For embeddings/caching
+   │   LOAD_DOCS_ON_STARTUP=true      # Auto-load on startup
+   │   CTX_KNOWLEDGE_ENABLED=true     # For 50% better retrieval on narratives
+   └── src/
+       └── characters/                 # Your agent files
+   ```
+
+   - **HTML Handling**: The plugin auto-processes HTML (extracts text, chunks intelligently). Subfolders are supported, preserving your organization for metadata filtering.
+
+2. **Step 2: Configure Auto-Loading**
+   Use these env vars for optimization:
+
+   ```env title=".env"
+   # AI Provider (OpenRouter for caching on large batches)
+   OPENROUTER_API_KEY=your-key
+   TEXT_MODEL=anthropic/claude-3-haiku  # Fast for context generation
+
+   # Knowledge Setup
+   LOAD_DOCS_ON_STARTUP=true
+   KNOWLEDGE_PATH=./docs  # Default; change if needed
+
+   # Chunking for Substack Narratives
+   EMBEDDING_CHUNK_SIZE=800  # Larger for full post sections
+   EMBEDDING_OVERLAP_SIZE=200  # Better continuity in historical depth
+   ```
+
+   - **With Contextual Embeddings**: Enables auto-enrichment during loading, boosting accuracy for compounding insights.
+
+3. **Step 3: Start Your Agent**
+   ```bash
+   elizaos start
+   ```
+
+   - **What Happens**: Logs show "Loaded X documents from docs folder on startup" (e.g., your HTML files). Agents now auto-search this base—e.g., for "refine BTC signals," it pulls relevant chunks and injects into context.
+
+#### Using the Web Interface for Dynamic Updates
+For ongoing exports (e.g., new Substack posts):
+1. Run `elizaos start` and access `http://localhost:3000`.
+2. Select your agent (e.g., SubstackResearchBot).
+3. Go to the **Knowledge** tab.
+4. Drag-drop or upload HTML files—processed immediately for real-time use.
+5. Manage: View, search, or delete entries.
+
+- **Best For Your Project**: Human-in-the-loop feedback via Slack—upload fresh research, then query agents for instant integration into swarm tasks.
+
+#### How Agents Use Substack Knowledge
+Automatic injection works as described:
+- User/Swarm Query: "Compound insights on macro overlays for DeFi yields."
+- Agent: Searches base (e.g., finds chunks from macro-overlays.html), builds context, responds grounded in Substack without special commands.
+
+This leverages the "Knowledge Provider" for seamless RAG, fitting your conversational framework over monologuing agents.
+
+#### Best Practices for Your Use Case
+- **DO**: Use `docs` folder for bulk HTML exports—auto-loads for persistent state in Postgres.
+- **DO**: Web upload for MVP iterations (e.g., test new posts before full vault rollout).
+- **DON'T**: Hardcode—your posts are too detailed; files scale better.
+- **Testing**: After loading, ask: "Summarize Substack on BTC regimes." Verify via Knowledge tab/logs.
+- **Troubleshooting Tie-In**: If no loading, check permissions (`ls -la docs/`), env vars, and debug logs.
+
+This recipe-based approach keeps your setup modular and extensible—ready for products/demos this month. As @ikigailabsETH, if you're sharing on X, this could demo ElizaOS's edge in crypto AI! For more (e.g., via llms.txt), let me know.
