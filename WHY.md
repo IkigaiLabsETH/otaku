@@ -158,3 +158,198 @@ Once ingested, the knowledge base becomes your "core context window":
 - **Advanced**: Enable multi-modal if images in HTML are key (though Substack exports are mostly text). Explore contextual embeddings for 50% better accuracy on narrative content.
 
 This setup turns your exports into "relentless alpha" fuel—agents reference Substack without reinventing wheels, compounding validated insights. If you share a sample HTML or agent config, I can refine the upload script further. For more, check the docs index you provided (via llms.txt) for related guides like agent memory integration.
+
+### Enhancing Substack HTML Integration with Contextual Embeddings in ElizaOS
+
+Building on our previous discussion about ingesting exported Substack HTML files into the Knowledge Plugin, enabling **Contextual Embeddings** is a powerful upgrade. This feature, inspired by Anthropic's techniques, addresses a key limitation in traditional RAG: isolated chunks losing broader document context. For your Substack archives—rich in interconnected narratives like BTC regimes, altcoin stories, and macro analyses—it can boost retrieval accuracy by up to 50%, making agent queries more precise. For instance, a chunk about "strike recommendations" could be enriched with context like "from the 7-day BTC options section in the 2023 regime analysis post," preventing vague matches and better supporting your swarm's compounding of insights.
+
+This fits seamlessly into your ElizaOS setup, especially with the shared Postgres state and async tasks. Below, I'll detail how to enable and use it specifically for your HTML files, assuming you've already installed the Knowledge Plugin (as outlined before). It adds minimal overhead but significant value for persistent, stateful interactions.
+
+#### Why Use Contextual Embeddings for Substack Exports?
+- **Relevance to Your Project**: Substack posts aren't isolated snippets; they build on historical depth (e.g., evolving macro overlays). Traditional embeddings might miss links between posts, but contextual ones add document-level details, improving semantic searches for tasks like regime aggregations or signal validation.
+- **Benefits**:
+  - **Accuracy Boost**: Retrieves more relevant chunks for queries like "refine 7-day BTC yields based on past regimes."
+  - **Cost Efficiency**: With caching (especially via OpenRouter), processing hundreds of posts drops costs by ~90% after the first chunk.
+  - **No Code Changes Needed**: It enhances the existing ingestion process without altering your upload scripts.
+- **Tradeoffs**: Slight increase in initial processing time (1-3s per chunk) and costs, but mitigated by caching. Use for high-value archives like yours.
+
+#### Step 1: Configure and Enable Contextual Embeddings
+Set this up in your `.env` file or agent config. Choose a provider based on your stack—OpenRouter is recommended for caching and cost savings, aligning with your agile MVP push.
+
+- **Recommended: OpenRouter Setup** (For cost-optimized caching with Claude/Gemini):
+  ```env
+  # Enable the feature
+  CTX_KNOWLEDGE_ENABLED=true
+
+  # Text generation (for context enrichment)
+  TEXT_PROVIDER=openrouter
+  TEXT_MODEL=anthropic/claude-3-haiku  # Fast, cheap; alternatives: google/gemini-1.5-flash for speed
+
+  # API Key
+  OPENROUTER_API_KEY=your-openrouter-key
+
+  # Embeddings (must match your existing setup; don't mix models)
+  OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-large  # Or qwen3-embedding for variety
+
+  # Optional tweaks for Substack narratives
+  EMBEDDING_CHUNK_SIZE=500  # Default; good for post sections
+  EMBEDDING_OVERLAP_SIZE=100  # Ensures narrative flow
+  ```
+  - Add to your `character.ts` if not already:
+    ```typescript
+    export const character = {
+      name: 'SwarmSignalVault',
+      plugins: [
+        '@elizaos/plugin-openrouter',  // Handles text + embeddings
+        '@elizaos/plugin-knowledge',   // Core RAG
+      ],
+    };
+    ```
+
+- **Alternative Providers** (If you prefer native integrations):
+  - **OpenAI**:
+    ```env
+    CTX_KNOWLEDGE_ENABLED=true
+    TEXT_PROVIDER=openai
+    TEXT_MODEL=gpt-4o-mini
+    OPENAI_API_KEY=your-openai-key
+    ```
+  - **Anthropic + OpenAI (for Embeddings)**:
+    ```env
+    CTX_KNOWLEDGE_ENABLED=true
+    TEXT_PROVIDER=anthropic
+    TEXT_MODEL=claude-3-haiku-20240307
+    ANTHROPIC_API_KEY=your-anthropic-key
+    OPENAI_API_KEY=your-openai-key  # For embeddings
+    ```
+  - **Google**:
+    ```env
+    CTX_KNOWLEDGE_ENABLED=true
+    TEXT_PROVIDER=google
+    TEXT_MODEL=gemini-1.5-flash
+    GOOGLE_API_KEY=your-google-key
+    ```
+
+- **Fallback for Offline/Testing**: Pair with Ollama for local runs:
+  ```env
+  OLLAMA_API_ENDPOINT=http://localhost:11434/api
+  ```
+  - Note: Embeddings must use the same model across all documents—stick to one provider.
+
+After updates, restart ElizaOS: `elizaos start`. Check logs for `"CTX enrichment ENABLED"`.
+
+#### Step 2: Ingest HTML Files with Contextual Embeddings
+Use the same upload methods as before (code, API, or web interface). The plugin now auto-applies enrichment during processing:
+
+- **Via Code (Batch Upload Example, Updated)**:
+  No changes needed—the service handles enrichment if enabled. But add metadata for better context generation:
+  ```typescript
+  // ... (from previous script)
+  await knowledgeService.addKnowledge({
+    content: base64Content,
+    originalFilename: file,
+    contentType: 'text/html',
+    agentId: agentId,
+    metadata: {
+      source: 'substack',
+      publishDate: extractDateFromFilename(file),
+      tags: ['btc-regime', 'macro-overlay'],  // Helps LLM identify content type
+      contentTypeHint: 'technical-documentation'  // Triggers specialized prompts for narratives
+    }
+  });
+  ```
+  - **Process Flow for HTML**:
+    1. Extract text from HTML (handles Substack structure like titles, bodies).
+    2. Chunk (500 tokens default).
+    3. Enrich: LLM analyzes full post, adds 60-200 tokens of context (e.g., "In this altcoin narrative post from 2024, discussing DeFi yields...").
+    4. Embed enriched chunks.
+    5. Store with metadata.
+  - For large batches: Process in groups of 30 for concurrency. Caching kicks in after the first chunk per document.
+
+- **Via Web Interface**: Upload HTML files at `/knowledge`. Monitor real-time status—logs show enrichment details.
+
+- **Re-Processing Existing Docs**: If you've already ingested without this, re-upload or use API to refresh: `POST /knowledge/documents/refresh?doc_id=your-doc-id`.
+
+#### Step 3: Query and Use in Agent Workflows
+- **Improved RAG**: Queries now retrieve enriched chunks. Example: For "play out regime aggregations," it pulls context-aware fragments, reducing hallucinations and enhancing multi-agent coordination.
+- **Explicit Search**: Same as before, but with better relevance scores.
+- **Integration Tips**:
+  - **Swarm Tasks**: In async jobs (e.g., daily BTC optimization), query the knowledge base—enriched context helps spawn sub-agents for gap-filling.
+  - **Slack Feedback**: Use hooks to share query results, with humans verifying enriched outputs.
+  - **On-Chain Vault**: Feed precise insights into oracles (UMA/Polymarket) for automated rolls.
+- **Monitoring**: Set `LOG_LEVEL=debug` to track:
+  - Cache hits (aim for 90% on multi-chunk posts).
+  - Token usage (e.g., small post: ~$0.002 with caching).
+  - Enrichment examples in logs.
+
+#### Step 4: Testing and Best Practices
+- **Test Setup**: Upload 1-2 sample Substack HTML files. Query: "Summarize BTC regimes from 2023." Compare with/without (temporarily disable CTX_KNOWLEDGE_ENABLED).
+- **Performance**:
+  - For your hundreds of posts (~50-200 pages equivalent), expect $0.01-$0.04 total with caching.
+  - If slow: Switch to Haiku/Flash models; batch off-peak.
+- **Best Practices**:
+  - Start with defaults—don't tweak chunk sizes unless needed.
+  - Use tags/metadata to guide content-aware templates (e.g., 'mathematical-content' if posts have yield formulas).
+  - Monitor costs: OpenRouter's caching is key for "relentless alpha" without burning budget.
+  - Common Fix: If no context added, verify env vars (case-sensitive) and API keys.
+
+This elevates your Substack base from basic storage to an intelligent, context-rich vault—perfect for your North Star of turning AI insights into DeFi yields. If issues arise (e.g., high costs), we can optimize further. For more docs, I can help browse the llms.txt index if needed.
+
+### Deep Dive: Leveraging ElizaOS Knowledge Plugin Architecture for Substack HTML Integration
+
+With the detailed "Architecture & Flow Diagrams" documentation you've shared, we can refine our approach to integrating exported Substack HTML files into ElizaOS's Knowledge Plugin. This visual guide illuminates how the system handles ingestion, processing, retrieval, and scaling—key for your swarm's needs like real-time crypto research, multi-agent coordination, and persistent tasks (e.g., 7-day BTC strike recs). The architecture emphasizes efficiency (e.g., 90% cost savings via caching), reliability (robust error handling), and scalability (horizontal node scaling with shared Postgres/pgvector), making it robust for your hundreds of Substack posts spanning BTC regimes, altcoin narratives, and macro overlays.
+
+I'll break this down by mapping the architecture to your use case, highlighting optimizations for HTML files. This builds on our prior steps (installation, ingestion, contextual embeddings) and ensures your setup aligns with the plugin's flows for compounding insights into "relentless alpha."
+
+#### 1. High-Level Architecture: Fitting Substack into the System
+From the Mermaid graph:
+- **User Interactions → Knowledge Plugin**: Your HTML exports enter via "File Uploads" (web interface or API) or "Direct Knowledge" (code-based ingestion). This routes to the Knowledge Service (KS), which orchestrates everything.
+- **Core Components**:
+  - **Document Processor (DP)**: Handles HTML text extraction (e.g., stripping tags, normalizing content).
+  - **Embedding Provider (EP)**: Generates vectors (e.g., via OpenRouter/OpenAI models).
+  - **Vector Store (VS)** & **Document Store (DS)**: Uses Postgres + pgvector for embeddings/metadata and raw docs—mirrors your shared Postgres for regimes/memory.
+  - **Web Interface (WI)**: For manual uploads/browsing; great for initial testing.
+- **Integration with Core Runtime**: Retrieved knowledge injects into Agent Memory (AM) for swarm use, enabling async tasks without blocking (e.g., regime aggregations while handling Slack feedback).
+- **Optimization Tip**: For batch HTML uploads, use the API layer to hit KS directly—avoids UI overhead for hundreds of files. Scale with the load balancer if your MVP grows.
+
+#### 2. Document Processing Flow: Ingesting HTML Efficiently
+The flowchart details a streamlined pipeline tailored for formats like HTML:
+- **Input → Extraction**: For HTML (detected as MIME "text/html"), it uses a parser (similar to the "Text Extraction Flow" for UTF-8 decode/clean). No custom code needed—plugin cleans/normalizes Substack-specific elements (e.g., titles, bodies, links).
+- **Hashing & Deduplication**: Generates content hashes to skip duplicates—crucial for re-exports or overlapping posts.
+- **Chunking**: Default 500-token chunks with 100 overlap (from "Chunking Strategy" sliding window). For narrative-heavy Substack, this preserves flow (e.g., linking regime analysis sections).
+  - **Boundary Adjustment**: Ensures chunks end at logical breaks (e.g., paragraphs), reducing fragmentation in posts.
+- **Enrichment (if CTX Enabled)**: As discussed, adds 60-200 tokens of context (e.g., "In this 2024 BTC regime post, discussing yield optimization..."). Template applies content-aware prompts (e.g., "technical documentation" for your research).
+- **Embedding & Storage**: Vectors go to VS; metadata (e.g., publish_date, tags) to DS. With caching (from "Caching Architecture"), processing a multi-post batch costs ~90% less after the first chunk.
+- **Edge for Your Use Case**: For large exports (10-50MB equivalent), expect 10-50s processing per "large doc" (from "Performance Characteristics" Gantt). Use `LOAD_DOCS_ON_STARTUP=true` to auto-process on agent boot for persistent state.
+
+- **Potential Challenges**: If HTML has corrupted text (rare for Substack), error handling retries 3x or reduces chunk size. Monitor with `LOG_LEVEL=debug` for logs like cache hits (aim for high % on similar posts).
+
+#### 3. Retrieval Flow: Querying for Swarm Insights
+This flow ensures accurate, context-grounded responses:
+- **Query → Embedding → Search**: Semantic similarity in VS (e.g., query "compound BTC signals" retrieves enriched chunks with scores >0.7).
+- **Filtering & Ranking**: Apply metadata filters (e.g., tags:'btc-regime', publish_date > '2023-01-01') to target historical depth.
+- **Threshold & Limiting**: Discards low-relevance; builds context up to your limit (default 5 fragments).
+- **Injection**: Auto-adds to agent context with `# Knowledge` header—ideal for sub-agents spawning (e.g., one for gap-filling in altcoin narratives).
+- **Why Powerful for You**: Handles concurrent swarm interactions without context loss (e.g., multi-user Slack interface). For regime aggregations, chain retrievals: First search broad, then refine with follow-up queries.
+
+- **Optimization**: Set a higher threshold (e.g., via config) for precision in DeFi yields. Use the "Data Flow Architecture" to extend: Fragment Memory (chunks) feeds Context Memory for ongoing tasks.
+
+#### 4. Component Interactions: End-to-End for Agents
+The sequence diagram shows a clean loop:
+- Agent queries KS → EP embeds → VS searches → DS fetches docs → Back to agent.
+- For your vault: Integrate with oracles (UMA/Polymarket) by exporting retrieved knowledge (e.g., via API) for automation.
+- **Rate Limiting & Concurrency**: 30 operations max, 150k tokens/min—fine for your scale, but batch uploads during off-peak for MVP validation.
+
+#### 5. Scaling and Performance: Ready for Growth
+- **Storage**: Expect 35% for embeddings, 40% for text—Postgres scales well for your archival body.
+- **Horizontal Scaling**: Add nodes sharing VS/DS (Postgres) and cache (Redis)—future-proof for full vault with dynamic spawning.
+- **Cost Savings**: Leverage OpenRouter caching for 90% reduction on repetitive processing (e.g., re-ingesting updated posts).
+- **Pie Chart Insights**: Indexes (10%) speed queries; plan DB capacity for growth.
+
+#### Next Steps for Your Setup
+- **Implement**: Use the flows to debug—e.g., if retrieval is slow, check "Processing Times" and reduce chunk size.
+- **Test**: Upload a sample HTML batch, enable CTX, and query via agent: Watch logs for flow traces.
+- **Extend**: For web content (e.g., fresh Substack via URLs), use "URL Processing" input—fetches and processes dynamically.
+- **Explore More**: If needed, I can help fetch the llms.txt index (via tools) for related docs like provider integrations.
+
+This architecture cements ElizaOS as your battle-tested framework, turning Substack into a scalable, intelligent base for autonomous signals. As you roll out products/demos, this keeps iterations agile—stay tuned for that alpha compounding!
