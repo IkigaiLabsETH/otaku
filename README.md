@@ -50,7 +50,7 @@ Measured by realized APR differential and win rate on hold vs. assignment.
 Small, validated edges — rolled relentlessly — compound fastest.
 
 ## Knowledge folder to provide logic and context
-
+```
 your-project/
 ├── README.md                       # Project overview — explains structure, how to use for elizaOS queries, contribution guidelines, and quick-start for agents
 ├── docs/                           # Enhanced auto-load folder: now with index.md in each subdir for quick summaries + cross-links
@@ -151,6 +151,8 @@ your-project/
     └── retrieval/                  # Custom: add embeddings config for better semantic search
         ├── custom-embeddings.py    # Script to fine-tune retrieval weights (e.g., boost asset-specific on queries)
         └── query-enhancer.py       # Pre-processes user queries to include context (e.g., current date, asset)
+```
+
 
 ## Enhancing the Ikigai Swarm with a Human Feedback Loop
 
