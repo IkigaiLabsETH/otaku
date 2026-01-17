@@ -1,3 +1,239 @@
+   ```
+├── docs/
+│   ├── index.md                    # Top-level docs index — lists all subdirs, key files, and search tips for retrieval
+│   ├── core-methodologies/         # Prioritized hub: add validation scripts + examples for real-time application
+│   │   ├── index.md                # Summarizes frameworks, with quick-reference tables for strike rules
+│   │   ├── strike-optimization-master.html
+│   │   ├── polymarket-for-strike-selection.html
+│   │   ├── vol-regime-strike-rules.html
+│   │   ├── monte-carlo-scenario-templates.html
+│   │   ├── assignment-regret-analysis.html
+│   │   └── strike-validation-examples.md   # Worked examples (e.g., $HYPE Jan 2026 calc) for training/eval
+│   ├── asset-specific/             # Scalable: add templates for new assets
+│   │   ├── index.md                # Asset overview table (e.g., current spot, IV, key risks) — updated to include ETH/SOL summaries
+│   │   ├── hype/                   # Expanded: add projections subdir for forward-looking models
+│   │   │   ├── index.md            # $HYPE quick facts + links to latest snapshots
+│   │   │   ├── hype-wheel-history-2025-2026.html
+│   │   │   ├── hype-jan-2026-polymarket-insights.html
+│   │   │   ├── hype-onchain-fundamentals.html
+│   │   │   ├── hype-unlock-overhang-analysis.html
+│   │   │   └── projections/        # Model outputs (e.g., DCF, vol forecasts)
+│   │   │       └── hype-2026-price-models.md
+│   │   ├── btc/
+│   │   │   ├── index.md            # BTC-specific regime quick-ref
+│   │   │   ├── 2023-btc-regime-analysis.html
+│   │   │   └── 2024-btc-options-optimization.html
+│   │   ├── eth/                    # Dedicated $ETH folder — mirrors hype/ structure for consistency
+│   │   │   ├── index.md            # ETH quick facts + links to latest snapshots
+│   │   │   ├── eth-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
+│   │   │   ├── eth-jan-2026-polymarket-insights.html
+│   │   │   ├── eth-onchain-fundamentals.html      # e.g., Gas fees, staking yields, L2 activity
+│   │   │   ├── eth-unlock-overhang-analysis.html  # e.g., Staking unlocks, EIP impacts
+│   │   │   └── projections/
+│   │   │       └── eth-2026-price-models.md       # e.g., Layer-1 dominance scenarios
+│   │   ├── sol/                    # Dedicated $SOL folder — mirrors hype/ structure for consistency
+│   │   │   ├── index.md            # SOL quick facts + links to latest snapshots
+│   │   │   ├── sol-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
+│   │   │   ├── sol-jan-2026-polymarket-insights.html
+│   │   │   ├── sol-onchain-fundamentals.html      # e.g., TPS, validator decentralization, memecoin ecosystem
+│   │   │   ├── sol-unlock-overhang-analysis.html  # e.g., Token unlocks, network upgrades
+│   │   │   └── projections/
+│   │   │       └── sol-2026-price-models.md       # e.g., High-throughput narrative scenarios
+│   │   ├── other-alts/             # Ready for expansion: add subdirs per alt (e.g., gmx/, pendle/)
+│   │   │   └── README.md           # Placeholder: instructions for adding new alts
+│   │   └── templates/              # Reusable asset doc templates (e.g., onchain-fundamentals-template.md)
+│   ├── regimes/
+│   │   ├── index.md                # Regime matrix table (cross-referencing assets + macros) — updated to include ETH/SOL columns
+│   │   ├── btc-regimes/
+│   │   ├── altcoin-narratives/
+│   │   │   ├── defi-yields-narrative.html
+│   │   │   └── altcoin-macro-overlays.html
+│   │   └── macro-overlays/
+│   │       ├── global-macro-impact.html
+│   │       └── economic-regime-shifts.html
+│   ├── defi-tools/                 # Expanded for all DeFi-related sources
+│   │   ├── index.md                # Overview table: Tool | Category | API? | Specialist Usage | Integration Notes
+│   │   ├── defillama.md            # DeFi analytics; Use plugin-defillama in defiFlowsSpecialist
+│   │   ├── debank.md               # EVM portfolio tracker; API via DeBank Cloud—use plugin-debank for onChainHealthSpecialist
+│   │   ├── infinit.md              # AI-powered DeFi strategies; No API—use web_search for strategy data in narrativeDetectorSpecialist
+│   │   ├── jupiter-portfolio.md    # Solana DeFi tracker; Beta API via Jupiter—use plugin-jupiter for liquiditySpecialist (Solana focus)
+│   │   ├── dexu-ai.md              # Social analytics; No API—use x_semantic_search/web_search in socialPsychologySpecialist
+│   │   ├── token-terminal.md       # Fundamentals tracker; API for metrics—use plugin-tokenterminal in fundamentalsSpecialist
+│   │   ├── tokenomist.md           # Token unlocks tracker; API for vestings—use plugin-tokenomist in whaleMonitorSpecialist
+│   │   ├── perpetualpulse.md       # Perps analytics; No API—use web_search for rankings in derivativesSpecialist
+│   │   ├── coinmarketcal.md        # Crypto calendar; API for events—use plugin-coinmarketcal in cycleContextSpecialist
+│   │   ├── artemis.md              # DeFi analytics; API for TVL/metrics—use plugin-artemis in defiFlowsSpecialist
+│   │   ├── rwa-xyz.md              # RWA analytics; API for tokenized assets—use plugin-rwa-xyz in projectAssessorSpecialist
+│   │   ├── dune-analytics.md       # Custom on-chain queries; Use plugin-dune for onChainHealthSpecialist
+│   │   ├── nansen.md               # On-chain analytics/whale tracking; Use plugin-nansen for whaleMonitorSpecialist
+│   │   ├── intotheblock.md         # Predictive on-chain indicators; Use plugin-intotheblock for onChainHealthSpecialist
+│   │   ├── dappradar.md            # dApp rankings/TVL; Use plugin-dappradar for defiFlowsSpecialist
+│   │   ├── zapper.md               # DeFi dashboard/automation; Use web_search or plugin-zapper for portfolioDesignerSpecialist
+│   │   ├── messari.md              # Token profiles/sector reports; Use plugin-messari for projectAssessorSpecialist
+│   │   ├── kamino-finance.md       # Solana yield vaults; Use plugin-kamino for liquiditySpecialist (Solana)
+│   │   ├── lunarcrush.md           # Social intelligence; Use plugin-lunarcrush for socialPsychologySpecialist
+│   │   ├── gmx.md                  # Decentralized perps; Use plugin-gmx for derivativesSpecialist
+│   │   └── centrifuge.md           # RWA tokenization; Use plugin-centrifuge for projectAssessorSpecialist
+│   ├── onchain-tools/              # New: For on-chain and mining sources
+│   │   ├── index.md                # Overview of on-chain sources and usage in specialists
+│   │   ├── cryptoquant.md          # On-chain health; Use plugin-cryptoquant in onChainHealthSpecialist
+│   │   ├── glassnode.md            # On-chain metrics; Use plugin-glassnode in onChainHealthSpecialist
+│   │   ├── coinmetrics.md          # Network data; Use plugin-coinmetrics in onChainHealthSpecialist
+│   │   ├── bitinfocharts.md        # On-chain stats/rich list; Use plugin-bitinfocharts in whaleMonitorSpecialist
+│   │   ├── blockchain-com.md       # Blockchain metrics; Use plugin-blockchain-com in onChainHealthSpecialist
+│   │   ├── mempool-space.md        # Tx/fee dynamics; Use plugin-mempool-space in onChainHealthSpecialist
+│   │   ├── tether-transparency.md  # Stablecoin flows; Use plugin-tether in defiFlowsSpecialist
+│   │   ├── ccaf-mining.md          # Mining map/sustainability; Use plugin-ccaf in miningSustainabilitySpecialist
+│   │   └── ... # Expand for more on-chain
+│   ├── sentiment-tools/            # New: For social and sentiment sources
+│   │   ├── index.md                # Overview of sentiment sources and integration
+│   │   ├── santiment.md            # Social sentiment/dev activity; Use plugin-santiment in socialPsychologySpecialist
+│   │   ├── lunarcrush.md           # Social intelligence; Use plugin-lunarcrush in socialPsychologySpecialist
+│   │   ├── google-trends.md        # Search interest; Use web_search in socialPsychologySpecialist
+│   │   └── ... # Expand for X, etc.
+│   ├── derivatives-tools/          # New: For derivatives and options sources
+│   │   ├── index.md                # Overview of derivatives sources
+│   │   ├── coinglass.md            # Derivatives leverage; Use plugin-coinglass in derivativesSpecialist
+│   │   ├── cme-group.md            # Futures data; Use plugin-cme in derivativesSpecialist
+│   │   ├── bitfinex.md             # Exchange volumes/lending; Use plugin-bitfinex in derivativesSpecialist
+│   │   ├── skew.md                 # Options skew; Use plugin-skew in derivativesSpecialist
+│   │   ├── deribit.md              # Options/futures OI; Use plugin-deribit in derivativesSpecialist
+│   │   ├── paradigm-genesis.md     # Vol surface reports; Use web_search in derivativesSpecialist
+│   │   └── ... # Expand for more
+│   ├── institutional-tools/        # New: For institutional and VC sources
+│   │   ├── index.md                # Overview of institutional flows/VC
+│   │   ├── nansen.md               # Smart money flows; Use plugin-nansen in institutionalSpecialist
+│   │   ├── arkham.md               # Wallet tracking; Use plugin-arkham in institutionalSpecialist
+│   │   ├── chainalysis.md          # Adoption/illicit flows; Use plugin-chainalysis in institutionalSpecialist
+│   │   ├── delphi-digital.md       # ETF flows; Use plugin-delphi in institutionalSpecialist
+│   │   ├── sosovalue.md            # ETF flows; Use plugin-sosovalue in institutionalSpecialist
+│   │   ├── pitchbook.md            # VC deals; Use plugin-pitchbook in vcFundingSpecialist
+│   │   └── grayscale.md            # Research/RWA; Use web_search in narrativeDetectorSpecialist
+│   ├── macro-tools/                # New: For macro and regulatory sources
+│   │   ├── index.md                # Overview of macro overlays
+│   │   ├── fred-zillow.md          # Macro data/housing; Use plugin-fred in macroOverlaysSpecialist
+│   │   ├── imf-liquidity.md        # Global liquidity; Use plugin-imf in macroOverlaysSpecialist
+│   │   ├── coindesk-messari-reg.md # Regulatory indices; Use web_search in institutionalSpecialist
+│   │   └── ... # Expand for more
+│   └── historical/                 # Archive: add purge script notes for old files
+│       ├── index.md                # Chronological timeline of archived docs
+│       └── README.md
+├── data-snapshots/                 # Enhanced: add automation notes + more sources (e.g., options chain pulls)
+│   ├── README.md                   # Explains snapshot format, update cadence, and how elizaOS agents consume them — updated for ETH/SOL pulls
+│   ├── polymarket/
+│   │   ├── hype-january-2026-ladder-2026-01-17.md
+│   │   ├── hype-2026-targets-2026-01-17.md
+│   │   ├── eth-january-2026-ladder-2026-01-17.md  # ETH-specific Polymarket data
+│   │   └── sol-2026-targets-2026-01-17.md         # SOL-specific Polymarket data
+│   ├── onchain/
+│   │   ├── hype-metrics-2026-01-17.json
+│   │   ├── eth-metrics-2026-01-17.json            # ETH onchain metrics (e.g., TVL, active addresses)
+│   │   ├── sol-metrics-2026-01-17.json            # SOL onchain metrics (e.g., Saga phone integrations, DEX vol)
+│   │   ├── cryptoquant-metrics-2026-01-17.json    # From plugin-cryptoquant
+│   │   ├── glassnode-metrics-2026-01-17.json      # From plugin-glassnode
+│   │   ├── dune-queries-2026-01-17.json           # Custom queries from plugin-dune
+│   │   ├── coinmetrics-network-2026-01-17.json    # From plugin-coinmetrics
+│   │   ├── intotheblock-indicators-2026-01-17.json # From plugin-intotheblock
+│   │   ├── bitinfocharts-richlist-2026-01-17.json # From plugin-bitinfocharts
+│   │   ├── blockchain-com-metrics-2026-01-17.json # From plugin-blockchain-com
+│   │   ├── mempool-space-fees-2026-01-17.json     # From plugin-mempool-space
+│   │   ├── tether-stablecoin-flows-2026-01-17.json # From plugin-tether
+│   │   ├── ccaf-mining-map-2026-01-17.json        # From plugin-ccaf
+│   │   └── ... # Expand for more on-chain snapshots
+│   ├── sentiment/
+│   │   ├── x-hype-sentiment-snapshot-2026-01-17.md
+│   │   ├── x-eth-sentiment-snapshot-2026-01-17.md # ETH X sentiment pulls
+│   │   ├── x-sol-sentiment-snapshot-2026-01-17.md # SOL X sentiment pulls
+│   │   ├── santiment-social-2026-01-17.json        # From plugin-santiment
+│   │   ├── lunarcrush-sentiment-2026-01-17.json    # From plugin-lunarcrush
+│   │   ├── google-trends-btc-2026-01-17.json       # From web_search
+│   │   └── ... # Expand for more sentiment
+│   ├── options-chains/             # Expanded to include ETH/SOL chains
+│   │   ├── hype-options-2026-01-17.csv
+│   │   ├── eth-options-2026-01-17.csv             # ETH options data
+│   │   ├── sol-options-2026-01-17.csv             # SOL options data
+│   │   ├── deribit-options-2026-01-17.json        # From plugin-deribit
+│   │   ├── skew-vol-skew-2026-01-17.json          # From plugin-skew
+│   │   ├── paradigm-genesis-vol-2026-01-17.md     # From web_search/reports
+│   │   └── ... # Expand for more options
+│   ├── defi-tools/
+│   │   ├── defillama-tvl-2026-01-17.json          # From plugin-defillama
+│   │   ├── debank-portfolio-metrics-2026-01-17.json # From plugin-debank
+│   │   ├── infinit-strategies-snapshot-2026-01-17.md # Via web_search
+│   │   ├── jupiter-portfolio-data-2026-01-17.json # From plugin-jupiter
+│   │   ├── dexu-ai-sentiment-2026-01-17.md        # Via x_semantic_search
+│   │   ├── tokenterminal-metrics-2026-01-17.json  # From plugin-tokenterminal
+│   │   ├── tokenomist-unlocks-2026-01-17.json     # From plugin-tokenomist
+│   │   ├── perpetualpulse-rankings-2026-01-17.md  # Via web_search
+│   │   ├── coinmarketcal-events-2026-01-17.json   # From plugin-coinmarketcal
+│   │   ├── artemis-tvl-2026-01-17.json            # From plugin-artemis
+│   │   ├── rwa-xyz-assets-2026-01-17.json         # From plugin-rwa-xyz
+│   │   ├── dune-analytics-queries-2026-01-17.json # From plugin-dune
+│   │   ├── nansen-whale-flows-2026-01-17.json     # From plugin-nansen
+│   │   ├── intotheblock-indicators-2026-01-17.json # From plugin-intotheblock
+│   │   ├── dappradar-tvl-2026-01-17.json          # From plugin-dappradar
+│   │   ├── zapper-portfolio-2026-01-17.md         # Via web_search
+│   │   ├── messari-profiles-2026-01-17.json       # From plugin-messari
+│   │   ├── kamino-yields-2026-01-17.json          # From plugin-kamino
+│   │   ├── lunarcrush-social-2026-01-17.json      # From plugin-lunarcrush
+│   │   ├── gmx-perps-2026-01-17.json              # From plugin-gmx
+│   │   ├── centrifuge-rwa-2026-01-17.json         # From plugin-centrifuge
+│   │   └── ... # Expand for more DeFi
+│   └── external/
+│       ├── macro-indicators-2026-01-17.json       # e.g., CPI, rates from reliable sources
+│       ├── coindesk-messari-reg-2026-01-17.json   # Regulatory indices
+│       ├── pitchbook-vc-2026-01-17.json           # VC deals
+│       ├── grayscale-research-2026-01-17.md       # RWA/BTC outlooks
+│       ├── coinapi-market-data-2026-01-17.json    # Aggregated feeds
+│       ├── sosovalue-etf-2026-01-17.json          # ETF flows
+│       ├── cryptorank-rankings-2026-01-17.json    # Sector/unlocks
+│       └── ... # Expand for more external
+├── src/
+│   ├── plugins/
+│   │   ├── plugin-defillama/  # Existing: Covers DeFiLlama analytics
+│   │   ├── plugin-debank/     # New: DeBank Cloud API for EVM portfolios (e.g., user balances, protocols)
+│   │   ├── plugin-jupiter/    # New: Jupiter API (incl. Portfolio beta) for Solana tracking (e.g., assets, claims)
+│   │   ├── plugin-tokenterminal/
+│   │   ├── plugin-tokenomist/
+│   │   ├── plugin-coinmarketcal/
+│   │   ├── plugin-artemis/
+│   │   ├── plugin-rwa-xyz/
+│   │   ├── plugin-dune/       # For custom on-chain queries
+│   │   ├── plugin-nansen/     # On-chain analytics/whale tracking
+│   │   ├── plugin-intotheblock/ # Predictive on-chain indicators
+│   │   ├── plugin-dappradar/  # dApp rankings/TVL
+│   │   ├── plugin-zapper/     # DeFi dashboard/automation
+│   │   ├── plugin-messari/    # Token profiles/sector reports
+│   │   ├── plugin-kamino/     # Solana yield vaults
+│   │   ├── plugin-lunarcrush/ # Social intelligence
+│   │   ├── plugin-gmx/        # Decentralized perps
+│   │   ├── plugin-centrifuge/ # RWA tokenization
+│   │   ├── plugin-cryptoquant/ # On-chain health
+│   │   ├── plugin-glassnode/  # On-chain metrics
+│   │   ├── plugin-coinmetrics/ # Network data
+│   │   ├── plugin-bitinfocharts/ # On-chain stats/rich list
+│   │   ├── plugin-blockchain-com/ # Blockchain metrics
+│   │   ├── plugin-mempool-space/ # Tx/fee dynamics
+│   │   ├── plugin-tether/     # Stablecoin flows
+│   │   ├── plugin-ccaf/       # Mining map/sustainability
+│   │   ├── plugin-santiment/  # Social sentiment/dev activity
+│   │   ├── plugin-lunarcrush/ # Social intelligence (dupe? consolidate if needed)
+│   │   ├── plugin-coinglass/  # Derivatives leverage
+│   │   ├── plugin-cme/        # Futures data
+│   │   ├── plugin-bitfinex/   # Exchange volumes/lending
+│   │   ├── plugin-skew/       # Options skew
+│   │   ├── plugin-deribit/    # Options/futures OI
+│   │   ├── plugin-fred/       # Macro data/housing
+│   │   ├── plugin-imf/        # Global liquidity
+│   │   ├── plugin-arkham/     # Wallet tracking
+│   │   ├── plugin-chainalysis/ # Adoption/illicit flows
+│   │   ├── plugin-delphi/     # ETF flows
+│   │   ├── plugin-sosovalue/  # ETF flows
+│   │   ├── plugin-pitchbook/  # VC deals
+│   │   ├── plugin-coinapi/    # Market data feeds
+│   │   ├── plugin-cryptorank/ # Rankings/unlocks
+│   │   └── ... # No plugins for non-API sources like INFINIT, Dexu AI, Perpetualpulse, Google Trends, Paradigm/Genesis, Coindesk/Messari Reg, Grayscale (use web_search/browse_page instead)
+   ```
 ### Additional DeFi Tools to Check Out
 
 Your list covers a solid mix of analytics, trackers, and specialized tools. Based on current trends in 2026 (focusing on AI integration, cross-chain capabilities, on-chain insights, and emerging niches like RWAs and perps), here are some complementary recommendations. I've prioritized ones that fill gaps, such as advanced on-chain querying, whale tracking, yield optimization, and broader ecosystem monitoring. These are drawn from reliable sources like CoinAPI, DappRadar, and DeFi-focused platforms.
