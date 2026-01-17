@@ -1892,3 +1892,354 @@ export const SWARM_ORACLE_ABI = [
   "function getLatestSignal(address asset) view returns (tuple(address asset, uint256 apr, uint256 probability) memory)"
 ];
 ```
+
+```typescript
+// src/coordinator.ts
+import { derivativesSpecialist } from './specialists/derivativesSpecialist';
+import { onChainHealthSpecialist } from './specialists/onChainHealthSpecialist';
+import { socialPsychologySpecialist } from './specialists/socialPsychologySpecialist';
+import { regimeAggregatorSpecialist } from './specialists/regimeAggregatorSpecialist';
+import { thesisValidatorSpecialist } from './specialists/thesisValidatorSpecialist';
+import { geopoliticsSpecialist } from './specialists/geopoliticsSpecialist';
+import { polymarketSpecialist } from './specialists/polymarketSpecialist';
+import { postToSlack } from './utils/slackUtils';
+import { logFeedback, analyzeFeedback } from './utils/dbUtils';
+import { CoinGeckoAPI } from 'coingecko-api-v3';
+import { retrieveAllMarketsAction } from '@elizaos/plugin-polymarket';
+import axios from 'axios';
+import crypto from 'crypto';
+import { ethers } from 'ethers';
+
+const CLOB_API = 'https://clob.polymarket.com';
+const CTF_ADDRESS = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045';
+
+interface Signal {
+  sellPrice: number;
+  apr: number;
+  holdProb: number;
+  rationale: string;
+  probability: number;
+}
+
+class SwarmCoordinator {
+  private specialists = [
+    derivativesSpecialist,
+    onChainHealthSpecialist,
+    socialPsychologySpecialist,
+    regimeAggregatorSpecialist,
+    thesisValidatorSpecialist,
+    geopoliticsSpecialist,
+    polymarketSpecialist,
+  ];
+  private cg = new CoinGeckoAPI();
+
+  private provider = new ethers.JsonRpcProvider(process.env.POLYGON_RPC);
+  private wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
+  private vault = new ethers.Contract(process.env.VAULT_ADDRESS, VAULT_ABI, this.wallet);
+  private swarmOracle = new ethers.Contract(process.env.SWARM_ORACLE_ADDRESS, SWARM_ORACLE_ABI, this.wallet);
+  private ctf = new ethers.Contract(CTF_ADDRESS, CTF_ABI, this.wallet);
+
+  async runSwarm(query = 'Bitcoin Up or Down') {
+    const refinement = await analyzeFeedback();
+    console.log(`Applying refinement: ${refinement}`);
+
+    const markets = await this.fetchMarkets(query);
+    const tables = { coveredCalls: [], cashSecuredPuts: [] };
+
+    for (const market of markets) {
+      const rawSignals = await Promise.all(this.specialists.map(spec => spec.generate(market)));
+      const aggregated = this.aggregateSignals(rawSignals, market);
+
+      const signal = { asset: '0x0000000000000000000000000000000000000000', apr: aggregated.apr, probability: aggregated.probability };
+      const txOracle = await this.swarmOracle.updateSignal(signal);
+      await txOracle.wait();
+
+      const side = aggregated.probability > 50 ? 'YES' : 'NO';
+      const result = await this.placeBet(market.condition_id, side, 100);
+      console.log(`Bet placed on ${market.question}: ${result}`);
+
+      const token = market.tokens.find(t => t.outcome.toUpperCase() === side);
+      const tokenId = token.token_id;
+
+      let balance = BigInt(0);
+      for (let i = 0; i < 10; i++) {
+        balance = await this.ctf.balanceOf(this.wallet.address, tokenId);
+        if (balance >= BigInt(100)) break;
+        await new Promise(r => setTimeout(r, 10000));
+      }
+      if (balance < BigInt(100)) throw new Error('Bet not filled');
+
+      const txTransfer = await this.ctf.safeTransferFrom(this.wallet.address, this.vault.address, tokenId, 100, '0x');
+      await txTransfer.wait();
+      console.log(`Position transferred to vault: ${txTransfer.hash}`);
+
+      const indexSet = side === 'YES' ? 1 : 2;
+      const txAdd = await this.vault.addPosition(market.condition_id, tokenId, 100, indexSet);
+      await txAdd.wait();
+      console.log(`Position added to vault: ${txAdd.hash}`);
+
+      if (aggregated.probability > 50) {
+        tables.coveredCalls.push(aggregated);
+      } else {
+        tables.cashSecuredPuts.push(aggregated);
+      }
+
+      await logFeedback(market.condition_id, true, 'Auto-log');
+    }
+
+    const output = this.formatTables(tables);
+    await postToSlack('#yield-optimizer', output);
+    return output;
+  }
+
+  async fetchMarkets(query: string) {
+    const marketsRes = await retrieveAllMarketsAction.handler(null, `GET_MARKETS ${query}`, null);
+    return marketsRes.data.markets.filter(m => m.question.includes('Bitcoin') && m.active);
+  }
+
+  aggregateSignals(raw: any[], market: any) {
+    const weights = [0.20, 0.15, 0.15, 0.10, 0.10, 0.10, 0.40];
+    let weightedProb = 0;
+    let weightedApr = 0;
+    const rationale = raw.map(s => s.rationale).join(' | ');
+
+    raw.forEach((s, i) => {
+      weightedProb += s.prob * weights[i];
+      weightedApr += s.apr * weights[i];
+    });
+
+    const strike = this.extractThreshold(market.question);
+    return { sellPrice: strike, apr: weightedApr, holdProb: weightedProb * 100, rationale, probability: weightedProb * 100 };
+  }
+
+  extractThreshold(question: string): number {
+    const match = question.match(/\d+(\.\d+)?c?/);
+    return match ? parseFloat(match[0].replace('c', '')) * 1000 : 0;
+  }
+
+  formatTables(tables: { coveredCalls: Signal[]; cashSecuredPuts: Signal[] }) {
+    let output = '📊 7-Day BTC Covered Calls\n| Sell Price | APR | Hold Prob. | Rationale |\n|------------|-----|------------|-----------|\n';
+    tables.coveredCalls.forEach(s => {
+      output += `| $${s.sellPrice} | ${s.apr}% | ${s.holdProb}% | ${s.rationale} |\n`;
+    });
+    output += '\n📊 Cash-Secured Puts\n| Sell Price | APR | Assignment Prob. | Rationale |\n|------------|-----|------------------|-----------|\n';
+    tables.cashSecuredPuts.forEach(s => {
+      output += `| $${s.sellPrice} | ${s.apr}% | ${100 - s.holdProb}% | ${s.rationale} |\n`;
+    });
+    return output;
+  }
+
+  async placeBet(market: string, side: string, amount: number) {
+    const path = '/order';
+    const body = JSON.stringify({
+      "market": market,
+      "side": side,
+      "size": amount,
+      "price": 0.5,
+      "type": "limit",
+    });
+    const timestamp = Math.floor(Date.now());
+    const message = timestamp + 'POST' + path + body;
+    const signature = crypto.createHmac('sha256', process.env.API_SECRET).update(message).digest('base64');
+    const headers = {
+      "POLY-ACCESS-KEY": process.env.API_KEY,
+      "POLY-SIGNATURE": signature,
+      "POLY-TIMESTAMP": timestamp.toString(),
+      "POLY-PASSPHRASE": process.env.PASSPHRASE,
+    };
+    const { data } = await axios.post(`${CLOB_API}${path}`, body, { headers });
+    return data;
+  }
+}
+
+export const coordinator = new SwarmCoordinator();
+```
+
+```typescript
+// src/ctfAbi.ts
+export const CTF_ABI = [
+  "function balanceOf(address account, uint256 id) external view returns (uint256)",
+  "function safeTransferFrom(address from, address to, uint256 id, uint256 value, bytes calldata data) external"
+];
+```
+
+```solidity
+// contracts/src/SwarmSignalVault.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IOracle} from "../interfaces/IOracle.sol";
+import {IConditionalTokens} from "../interfaces/IConditionalTokens.sol";
+
+contract SwarmSignalVault is ERC4626, Ownable, Pausable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    IOracle public immutable swarmOracle;
+    IConditionalTokens public immutable ctf;
+    IERC20 public usdc;
+    struct Position {
+        uint256 tokenId;
+        uint256 amount;
+        uint indexSet;
+    }
+    mapping(bytes32 => Position) public positions; // conditionId => Position
+    uint256 public minAPR = 15;
+    uint256 public protocolFee = 1000;
+    address public treasury;
+
+    error InvalidSignal();
+    error LowAPR(uint256 provided, uint256 required);
+    error NoPosition();
+
+    event PositionAdded(bytes32 conditionId, uint256 tokenId, uint256 amount, uint indexSet);
+    event BetSettled(bytes32 conditionId, bool won, uint256 proceeds);
+
+    constructor(
+        IERC20 _usdc,
+        string memory _name,
+        string memory _symbol,
+        IOracle _swarmOracle,
+        IConditionalTokens _ctf,
+        address _treasury
+    ) ERC4626(_usdc) Ownable(msg.sender) {
+        usdc = _usdc;
+        swarmOracle = _swarmOracle;
+        ctf = _ctf;
+        treasury = _treasury;
+    }
+
+    function addPosition(bytes32 conditionId, uint256 tokenId, uint256 amount, uint indexSet) external onlyOwner whenNotPaused {
+        IOracle.Signal memory signal = swarmOracle.getLatestSignal(address(0));
+        if (signal.apr < minAPR) revert LowAPR(signal.apr, minAPR);
+        positions[conditionId] = Position({tokenId: tokenId, amount: amount, indexSet: indexSet});
+        emit PositionAdded(conditionId, tokenId, amount, indexSet);
+    }
+
+    function settlePosition(bytes32 conditionId) external {
+        Position memory pos = positions[conditionId];
+        if (pos.amount == 0) revert NoPosition();
+
+        uint256 balanceBefore = usdc.balanceOf(address(this));
+
+        uint[] memory indexSets = new uint[](1);
+        indexSets[0] = pos.indexSet;
+        ctf.redeemPositions(usdc, bytes32(0), conditionId, indexSets, pos.amount);
+
+        uint256 proceeds = usdc.balanceOf(address(this)) - balanceBefore;
+        uint256 fee = (proceeds * protocolFee) / 10000;
+        usdc.safeTransfer(treasury, fee);
+
+        bool won = proceeds > 0;
+        emit BetSettled(conditionId, won, proceeds - fee);
+        delete positions[conditionId];
+    }
+
+    // Deposits/withdraws as before...
+}
+```
+
+```solidity
+// contracts/interfaces/IConditionalTokens.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+interface IConditionalTokens {
+    function redeemPositions(
+        IERC20 collateralToken,
+        bytes32 parentCollectionId,
+        bytes32 conditionId,
+        uint[] calldata indexSets,
+        uint amount
+    ) external;
+}
+```
+
+```typescript
+// src/vaultAbi.ts
+export const VAULT_ABI = [
+  "function addPosition(bytes32 conditionId, uint256 tokenId, uint256 amount, uint indexSet)",
+  "function settlePosition(bytes32 conditionId)"
+];
+```
+
+```solidity
+// contracts/src/SwarmOracle.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IOracle} from "../interfaces/IOracle.sol";
+
+contract SwarmOracle is IOracle, Ownable {
+    mapping(address => Signal) public latestSignals;
+
+    function updateSignal(Signal memory newSignal) external onlyOwner {
+        latestSignals[newSignal.asset] = newSignal;
+    }
+
+    function getLatestSignal(address asset) external view override returns (Signal memory) {
+        return latestSignals[asset];
+    }
+}
+```
+
+```solidity
+// contracts/interfaces/IOracle.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+interface IOracle {
+    struct Signal {
+        address asset;
+        uint256 apr;
+        uint256 probability;
+    }
+
+    function getLatestSignal(address asset) external view returns (Signal memory);
+}
+```
+
+```typescript
+// src/swarmOracleAbi.ts
+export const SWARM_ORACLE_ABI = [
+  "function updateSignal(tuple(address asset, uint256 apr, uint256 probability) memory newSignal)"
+];
+```
+
+```typescript
+// scripts/deploy.ts
+import { ethers } from "hardhat";
+
+async function main() {
+  const usdc = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // Polygon USDC.e
+  const name = "SwarmSignalVault";
+  const symbol = "SSV";
+  const treasury = "0xAE91CB00C413A8D6089Ba0bc8bF66fbA47A912Ea";
+  const ctf = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045";
+
+  const SwarmOracle = await ethers.getContractFactory("SwarmOracle");
+  const swarmOracle = await SwarmOracle.deploy();
+  await swarmOracle.waitForDeployment();
+  console.log(`SwarmOracle deployed to ${swarmOracle.target}`);
+
+  const SwarmSignalVault = await ethers.getContractFactory("SwarmSignalVault");
+  const vault = await SwarmSignalVault.deploy(usdc, name, symbol, swarmOracle.target, ctf, treasury);
+  await vault.waitForDeployment();
+  console.log(`SwarmSignalVault deployed to ${vault.target}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+```
+
+The other files remain the same as previous.
