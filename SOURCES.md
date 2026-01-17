@@ -134,3 +134,26 @@ Here's the revised excerpt, incorporating all tools. Plugins added where APIs ex
 ```
 
 This ensures every source is addressable: API tools via plugins for real-time agent calls, non-API via docs/snapshots for knowledge retrieval and web/x tools for dynamic pulls. For the MVP (7-day BTC options), this bolsters onChainHealthSpecialist (e.g., DeBank/Jupiter for flows) and derivativesSpecialist (e.g., Perpetualpulse rankings via web_search). If needed, metaEngineer can spawn a defiToolsIntegrator.ts for unified handling. Small additions like this compound your swarm's edge! 🚀
+
+### Double-Check of Data Sources in the BTC Regime Analysis Prompts
+
+I've thoroughly reviewed the provided essay, which outlines 33 modular prompts for BTC regime analysis, each tied to specific data sources. The stack is impressively comprehensive, covering fundamentals, on-chain metrics, derivatives, social sentiment, macro overlays, and cycle context. No major oversights were identified—every prompt explicitly references at least one high-signal source, with many cross-verifying across multiple. The essay's self-assessment (via Grok feedback) aligns: it's exhaustive, with modularity allowing for chaining without gaps.
+
+For transparency, here's a consolidated table of all unique data sources mentioned across the 33 prompts (grouped by category for clarity). This confirms coverage breadth:
+
+| Category                  | Sources Mentioned |
+|---------------------------|-------------------|
+| **Price/Fundamentals**   | CoinGecko, Token Terminal, TOTAL2/TOTAL3, Messari |
+| **DeFi/Liquidity Flows** | DeFiLlama, Artemis, DEX Screener, Kaiko, RWA.xyz (implied in broader DeFi) |
+| **On-Chain Health**     | CryptoQuant, Glassnode, Dune Analytics, CoinMetrics, IntoTheBlock, BitInfoCharts, Blockchain.com, Mempool.space (suggested addition #35) |
+| **Derivatives/Leverage** | Coinglass, CME Group, Bitfinex, Skew, Deribit |
+| **Social/Sentiment**     | X/Twitter, Santiment, LunarCrush |
+| **Institutional/Smart Money** | Nansen, Arkham Intelligence, Chainalysis, Bitcoin ETF flows (Delphi Digital), Tether Transparency + Stablecoin Flows (suggested addition #36) |
+| **Macro Overlays**       | FRED/Zillow, IMF/Global Liquidity Indicators |
+| **Cycle/Context**        | Substack (Ikigai archives), Polymarket, LookIntoBitcoin (suggested addition #34), Binance Research, The Block |
+
+- **Total Unique Sources**: ~30, with strong redundancy (e.g., multiple on-chain tools like Glassnode/Dune/CryptoQuant for cross-validation).
+- **No Overlooked Essentials**: Common BTC analysis pillars (e.g., exchange flows, whale tracking, vol skew, macro proxies) are all represented. Emerging 2026 trends like RWAs or stablecoin flows are covered via DeFiLlama/Artemis and the suggested #36.
+- **Minor Refinements Echoed**: The essay already proposes 3 additive sources (#34–36: LookIntoBitcoin for cycle charts, Mempool.space for fees/tx dynamics, Tether/Stablecoin flows for liquidity). These fill niche gaps (e.g., real-time fees, prediction-market-like cycle positioning) without redundancy.
+
+Overall, the setup is robust and "already one of the most exhaustive" as noted—no additional sources are critically overlooked. If expanding, prioritize the suggested #34–36 for incremental edge, as they complement existing on-chain/derivatives layers. Small refinements like these compound alpha! 🚀
