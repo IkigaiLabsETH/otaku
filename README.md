@@ -77,7 +77,7 @@ your-project/
 │   │   │   ├── index.md            # BTC-specific regime quick-ref
 │   │   │   ├── 2023-btc-regime-analysis.html
 │   │   │   └── 2024-btc-options-optimization.html
-│   │   ├── eth/                    # NEW: Dedicated $ETH folder — mirrors hype/ structure for consistency
+│   │   ├── eth/                    # Dedicated $ETH folder — mirrors hype/ structure for consistency
 │   │   │   ├── index.md            # ETH quick facts + links to latest snapshots
 │   │   │   ├── eth-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
 │   │   │   ├── eth-jan-2026-polymarket-insights.html
@@ -85,7 +85,7 @@ your-project/
 │   │   │   ├── eth-unlock-overhang-analysis.html  # e.g., Staking unlocks, EIP impacts
 │   │   │   └── projections/
 │   │   │       └── eth-2026-price-models.md       # e.g., Layer-1 dominance scenarios
-│   │   ├── sol/                    # NEW: Dedicated $SOL folder — mirrors hype/ structure for consistency
+│   │   ├── sol/                    # Dedicated $SOL folder — mirrors hype/ structure for consistency
 │   │   │   ├── index.md            # SOL quick facts + links to latest snapshots
 │   │   │   ├── sol-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
 │   │   │   ├── sol-jan-2026-polymarket-insights.html
@@ -113,20 +113,20 @@ your-project/
 │   ├── polymarket/
 │   │   ├── hype-january-2026-ladder-2026-01-17.md
 │   │   ├── hype-2026-targets-2026-01-17.md
-│   │   ├── eth-january-2026-ladder-2026-01-17.md  # NEW: ETH-specific Polymarket data
-│   │   └── sol-2026-targets-2026-01-17.md         # NEW: SOL-specific Polymarket data
+│   │   ├── eth-january-2026-ladder-2026-01-17.md  # ETH-specific Polymarket data
+│   │   └── sol-2026-targets-2026-01-17.md         # SOL-specific Polymarket data
 │   ├── onchain/
 │   │   ├── hype-metrics-2026-01-17.json
-│   │   ├── eth-metrics-2026-01-17.json            # NEW: ETH onchain metrics (e.g., TVL, active addresses)
-│   │   └── sol-metrics-2026-01-17.json            # NEW: SOL onchain metrics (e.g., Saga phone integrations, DEX vol)
+│   │   ├── eth-metrics-2026-01-17.json            # ETH onchain metrics (e.g., TVL, active addresses)
+│   │   └── sol-metrics-2026-01-17.json            # SOL onchain metrics (e.g., Saga phone integrations, DEX vol)
 │   ├── sentiment/
 │   │   ├── x-hype-sentiment-snapshot-2026-01-17.md
-│   │   ├── x-eth-sentiment-snapshot-2026-01-17.md # NEW: ETH X sentiment pulls
-│   │   └── x-sol-sentiment-snapshot-2026-01-17.md # NEW: SOL X sentiment pulls
+│   │   ├── x-eth-sentiment-snapshot-2026-01-17.md # ETH X sentiment pulls
+│   │   └── x-sol-sentiment-snapshot-2026-01-17.md # SOL X sentiment pulls
 │   ├── options-chains/             # Expanded to include ETH/SOL chains
 │   │   ├── hype-options-2026-01-17.csv
-│   │   ├── eth-options-2026-01-17.csv             # NEW: ETH options data
-│   │   └── sol-options-2026-01-17.csv             # NEW: SOL options data
+│   │   ├── eth-options-2026-01-17.csv             # ETH options data
+│   │   └── sol-options-2026-01-17.csv             # SOL options data
 │   └── external/
 │       └── macro-indicators-2026-01-17.json       # e.g., CPI, rates from reliable sources
 ├── scripts/                        # Automation hub — Python scripts for dynamic updates/integration with tools
@@ -143,14 +143,106 @@ your-project/
 │   AUTO_UPDATE_SNAPSHOTS=true      # Flag to trigger scripts/ on startup or via cron
 │   TOOL_INTEGRATION_ENABLED=true   # Enables agents to call web_search, x_semantic_search, etc., for real-time enrichment
 │   └── LOG_LEVEL=DEBUG             # For auditing retrieval hits/misses
-└── src/
-    ├── characters/                 # Agents: add specialized ones for elizaOS workflows
-    │   ├── strike-optimizer.py     # Persona that chains core-methodologies + data-snapshots for live recs — update for ETH/SOL optimization
-    │   ├── regime-analyst.py       # Detects shifts, pulls from regimes/ + external data — include ETH/SOL detection
-    │   └── sentiment-monitor.py    # Uses x_semantic_search for real-time hype tracking — add ETH/SOL monitoring
-    └── retrieval/                  # Custom: add embeddings config for better semantic search
-        ├── custom-embeddings.py    # Script to fine-tune retrieval weights (e.g., boost asset-specific on queries)
-        └── query-enhancer.py       # Pre-processes user queries to include context (e.g., current date, asset)
+├── src/                            # Aligned: Entry point for TS-based swarm orchestration, now integrated with knowledge retrieval (docs/data via plugins)
+│   ├── index.ts                    # Entry point: plugin loading, optional Slack client, swarm orchestration
+│   ├── coordinator.ts              # Swarm coordinator: routing, aggregation, scheduling, regime synthesis, dynamic agent loading
+│   ├── specialists/                # Research specialists (BTC-centric + altcoin-focused + meta + repo development roles)
+│   │   # BTC-Centric (33 prompts)
+│   │   ├── fundamentalsSpecialist.ts
+│   │   ├── defiFlowsSpecialist.ts
+│   │   ├── liquiditySpecialist.ts
+│   │   ├── onChainHealthSpecialist.ts
+│   │   ├── derivativesSpecialist.ts
+│   │   ├── socialPsychologySpecialist.ts
+│   │   ├── institutionalSpecialist.ts
+│   │   ├── macroOverlaysSpecialist.ts
+│   │   ├── cycleContextSpecialist.ts
+│   │   ├── polymarketSpecialist.ts
+│   │   └── regimeAggregatorSpecialist.ts
+│   │   # Altcoin Research (8 prompts)
+│   │   ├── altSentimentSpecialist.ts
+│   │   ├── gemHunterSpecialist.ts
+│   │   ├── projectAssessorSpecialist.ts
+│   │   ├── whaleMonitorSpecialist.ts
+│   │   ├── tradeTimingSpecialist.ts
+│   │   ├── narrativeDetectorSpecialist.ts
+│   │   ├── portfolioDesignerSpecialist.ts
+│   │   └── scamGuardSpecialist.ts
+│   │   # Meta / Self-Improvement
+│   │   └── metaEngineerSpecialist.ts   # Swarm architect: reflection, gap detection, agent spawning
+│   │   # Engineering (pruned for Slack-focused repo work)
+│   │   ├── engineering/
+│   │   │   ├── backendArchitect.ts      # Designs and architects backend systems
+│   │   │   ├── aiEngineer.ts            # Develops AI models and integrations
+│   │   │   ├── devopsAutomator.ts       # Automates DevOps processes, CI/CD pipelines
+│   │   │   └── rapidPrototyper.ts       # Quickly prototypes features and ideas
+│   │   ├── product/
+│   │   │   ├── trendResearcher.ts       # Researches market trends and user needs
+│   │   │   ├── feedbackSynthesizer.ts   # Synthesizes user feedback into actionable insights
+│   │   │   └── sprintPrioritizer.ts     # Prioritizes tasks for sprints and iterations
+│   │   ├── marketing/
+│   │   │   ├── contentCreator.ts        # Creates marketing content
+│   │   │   └── twitterEngager.ts        # Engages audiences on Twitter/X
+│   │   ├── projectManagement/
+│   │   │   ├── experimentTracker.ts     # Tracks experiments and A/B tests
+│   │   │   ├── projectShipper.ts        # Manages project delivery and shipping
+│   │   │   └── studioProducer.ts        # Oversees studio production workflows
+│   │   ├── studioOperations/
+│   │   │   ├── supportResponder.ts      # Handles support responses
+│   │   │   ├── analyticsReporter.ts     # Generates analytics reports
+│   │   │   ├── infrastructureMaintainer.ts # Maintains infrastructure
+│   │   │   ├── legalComplianceChecker.ts# Checks legal compliance
+│   │   │   └── financeTracker.ts        # Tracks finances and budgets
+│   │   └── testing/
+│   │       ├── toolEvaluator.ts         # Evaluates tools and technologies
+│   │       ├── apiTester.ts             # Tests APIs
+│   │       ├── workflowOptimizer.ts     # Optimizes workflows
+│   │       ├── performanceBenchmarker.ts# Benchmarks performance
+│   │       └── testResultsAnalyzer.ts   # Analyzes test results
+│   ├── character.ts                # Core Otaku character definition + swarm personality variants
+│   ├── frontend/                   # Retained React app (chat interface, dashboard, CDP wallet integration) - optional, can be disabled for Slack-only mode
+│   │   ├── App.tsx
+│   │   ├── components/
+│   │   │   ├── chat/               # Chat UI, message streaming, specialist selection
+│   │   │   ├── dashboard/          # Regime dashboard, charts, signal visualizations
+│   │   │   ├── agents/             # Agent cards, status indicators, swarm view
+│   │   │   ├── auth/               # Auth flows
+│   │   │   └── ui/                 # Shared UI components
+│   │   ├── lib/                    # API clients, utilities
+│   │   ├── hooks/                  # Custom React hooks
+│   │   ├── contexts/               # Global state (auth, swarm, regime)
+│   │   └── types/                  # TypeScript interfaces
+│   ├── plugins/                    # Core data-fetching plugins (extended for new data sources) — integrated with data-snapshots/ for caching
+│   │   ├── plugin-cdp/
+│   │   ├── plugin-coingecko/
+│   │   ├── plugin-defillama/
+│   │   ├── plugin-relay/
+│   │   ├── plugin-etherscan/
+│   │   ├── plugin-web-search/
+│   │   ├── plugin-bootstrap/
+│   │   ├── plugin-cryptoquant/
+│   │   ├── plugin-glassnode/
+│   │   ├── plugin-coinglass/
+│   │   ├── plugin-santiment/
+│   │   ├── plugin-arkham/
+│   │   ├── plugin-polymarket/
+│   │   ├── plugin-dune/
+│   │   └── plugin-github/          # GitHub API integration for repo management (pull, commit, PRs, etc.)
+│   ├── characters/                 # Agents: add specialized ones for elizaOS workflows — aligned with specialists/ for consistency
+│   │   ├── strike-optimizer.py     # Persona that chains core-methodologies + data-snapshots for live recs — update for ETH/SOL optimization
+│   │   ├── regime-analyst.py       # Detects shifts, pulls from regimes/ + external data — include ETH/SOL detection
+│   │   └── sentiment-monitor.py    # Uses x_semantic_search for real-time hype tracking — add ETH/SOL monitoring
+│   ├── retrieval/                  # Custom: add embeddings config for better semantic search — integrated with docs/ loading
+│   │   ├── custom-embeddings.py    # Script to fine-tune retrieval weights (e.g., boost asset-specific on queries)
+│   │   └── query-enhancer.py       # Pre-processes user queries to include context (e.g., current date, asset)
+│   └── utils/                      # Shared helpers: chart generation, regime scoring logic, prompt utilities, spawn tools
+├── dist/
+├── build.ts
+├── start-server.ts
+├── vite.config.ts
+├── tailwind.config.js
+├── turbo.json
+└── package.json
 ```
 
 
