@@ -519,6 +519,68 @@ Follow the "Real-World Setup Guide" tailored to your exports:
    ```
 
    - **HTML Handling**: The plugin auto-processes HTML (extracts text, chunks intelligently). Subfolders are supported, preserving your organization for metadata filtering.
+  
+Totally aligned — **optimal strike selection** is the absolute core of sustainable wheeling. It's where edge compounds: nail the strike in different regimes, and you print yield while minimizing assignment regret or missed upside. Your current structure is clean for thematic retrieval (BTC regimes, macro overlays, alt narratives), but it's a bit scattered for laser-focused strike decisions. Right now, strike logic lives implicitly across docs, so retrieval might miss key cross-references (e.g., Polymarket probs + vol regime + asset-specific history).
+
+Here’s an improved structure that puts **strike optimization front-and-center** without bloating the project. I added a dedicated core-methodologies/ section as the "source of truth" for strike frameworks, moved asset-specific stuff under a clearer hierarchy, created a data-snapshots/ folder for time-stamped exports (Polymarket pulls, on-chain metrics, sentiment snapshots — these age fast but are gold for regime calibration), and kept everything auto-load friendly.
+
+```
+your-project/
+├── docs/                           # Auto-load folder — now hierarchical for better retrieval relevance
+│   ├── core-methodologies/         # NEW: Central hub for strike decision frameworks (highest priority for retrieval)
+│   │   ├── strike-optimization-master.html         # Comprehensive framework: delta targets, IV rank, Polymarket skew, regime overlays
+│   │   ├── polymarket-for-strike-selection.html    # How to weight implied probs (short-term ladder vs long-term targets)
+│   │   ├── vol-regime-strike-rules.html            # High IV → tighter strikes, low IV → wider, etc.
+│   │   ├── monte-carlo-scenario-templates.html     # Reusable scenarios blending historical vol + crowd probs
+│   │   └── assignment-regret-analysis.html         # Math on "cost of being wrong" per $1 strike move
+│   ├── asset-specific/             # Grouped for faster asset-focused queries
+│   │   ├── hype/                   # Dedicated $HYPE folder — will grow fast
+│   │   │   ├── hype-wheel-history-2025-2026.html
+│   │   │   ├── hype-jan-2026-polymarket-insights.html  # Your latest pull + updates
+│   │   │   ├── hype-onchain-fundamentals.html
+│   │   │   └── hype-unlock-overhang-analysis.html
+│   │   ├── btc/
+│   │   │   ├── 2023-btc-regime-analysis.html
+│   │   │   └── 2024-btc-options-optimization.html
+│   │   └── other-alts/             # For GMX, Pendle, etc. when needed
+│   ├── regimes/
+│   │   ├── btc-regimes/            # Merged your existing
+│   │   ├── altcoin-narratives/
+│   │   │   ├── defi-yields-narrative.html
+│   │   │   └── altcoin-macro-overlays.html
+│   │   └── macro-overlays/
+│   │       ├── global-macro-impact.html
+│   │       └── economic-regime-shifts.html
+│   └── historical/                 # Archive older stuff to declutter active retrieval
+│       └── README.md
+├── data-snapshots/                 # NEW: Non-HTML quick-reference exports (JSON/CSV/Markdown) for fast facts
+│   ├── polymarket/
+│   │   ├── hype-january-2026-ladder-2026-01-17.md
+│   │   └── hype-2026-targets-2026-01-17.md
+│   ├── onchain/
+│   │   └── hype-metrics-2026-01-17.json  # Revenue, OI, TVL, buybacks, unstake queue
+│   └── sentiment/
+│       └── x-hype-sentiment-snapshot-2026-01-17.md
+├── .env
+│   OPENROUTER_API_KEY=your-key
+│   LOAD_DOCS_ON_STARTUP=true
+│   CTX_KNOWLEDGE_ENABLED=true
+│   PRIORITIZE_CORE_METHODOLOGIES=true      # Suggested new flag — boosts retrieval weight on strike docs
+│   └── MAX_CONTEXT_TOKENS=128k             # If your embedding setup supports it — more room for cross-references
+└── src/
+    ├── characters/                 # Your agents — maybe add a "StrikeOptimizer" persona?
+    └── retrieval/                  # Optional: custom scripts for dynamic queries (e.g., "optimal strike given current spot + Polymarket")
+```
+
+### Why this is better for optimal strikes
+- Core methodologies act as the decision tree → any query like "optimal $HYPE call strike today?" first pulls the master framework, then layers asset-specific + regime + fresh snapshots.
+- Asset-specific/hype/ gives instant context on what worked before (e.g., $26 vs $27 in Jan 2026 chop).
+- Data-snapshots/ keeps volatile inputs (Polymarket probs, revenue run rate, Tornado queue status) fresh without polluting narrative docs — update these weekly via script.
+- Retrieval relevance jumps: CTX_KNOWLEDGE_ENABLED already helps, but prioritizing the new core folder + hierarchical paths should give ~30-50% cleaner answers on strike questions.
+
+Quick application to our $HYPE setup (spot ~$24.90–$25.00 today, Polymarket January ladder still showing low teens % for ≥$30, symmetric mild downside, 50%+ conviction on 2026 ≥$38): the framework would likely still validate tight strikes for premium harvest, but might flag rolling the $26 call down to $25 if IV stays elevated post-Tornado clearance (Jan 21). Assignment at $25 would be even more attractive with current entry.
+
+Start by dropping your latest Polymarket pull + on-chain metrics into data-snapshots/, write a quick core-methodologies/strike-optimization-master.html synthesizing our past discussions, and you’ll have a system that actually reasons through strikes like we do manually — but faster and more exhaustive.
 
 2. **Step 2: Configure Auto-Loading**
    Use these env vars for optimization:
