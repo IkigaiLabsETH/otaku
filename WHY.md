@@ -353,3 +353,86 @@ The sequence diagram shows a clean loop:
 - **Explore More**: If needed, I can help fetch the llms.txt index (via tools) for related docs like provider integrations.
 
 This architecture cements ElizaOS as your battle-tested framework, turning Substack into a scalable, intelligent base for autonomous signals. As you roll out products/demos, this keeps iterations agile—stay tuned for that alpha compounding!
+
+### Troubleshooting Substack HTML Integration in ElizaOS Knowledge Plugin
+
+Continuing from our discussions on the Knowledge Plugin's core features, contextual embeddings, and architecture, the "Troubleshooting" section provides essential guidance for resolving common issues during setup and operation. This is particularly relevant for ingesting your exported Substack HTML files (e.g., batch uploads of narrative-rich posts on BTC regimes or macro overlays) and ensuring smooth RAG performance in your swarm agents. Issues like loading failures, suboptimal retrieval, or API limits can arise with large archives, but the plugin's design (e.g., deduplication, intelligent chunking) makes them fixable.
+
+Below, I'll map the troubleshooting advice to your project, including code snippets and configs tailored for HTML handling. This ensures your persistent knowledge base remains reliable for async tasks, multi-agent coordination, and compounding insights—keeping you agile toward MVP (7-day BTC signals) and full vault automation.
+
+#### Common Issues and Fixes for Your Setup
+
+1. **Documents Not Loading**:
+   - **Symptoms**: HTML files fail to ingest (e.g., no entries in the vector/document store after upload), or agents can't reference Substack content.
+   - **Causes**: File permissions, path issues, or MIME detection errors for HTML.
+   - **Fixes**:
+     - Verify permissions in your docs directory (where exports are stored):
+       ```bash
+       ls -la agent/docs/  # Or your custom path, e.g., ./substack_exports/
+       ```
+       Ensure read/write access (e.g., `chmod -R 755 agent/docs/` if needed).
+     - For batch uploads: Confirm file paths in your script (e.g., from earlier TypeScript example). Test with one file via web interface (`/knowledge`) to isolate.
+     - HTML-Specific: If extraction fails (Substack HTML might have unique structures), check logs for parse errors. The "Text Extraction Flow" (from architecture docs) uses UTF-8 decoding—ensure files are UTF-8 encoded (use `file -i your-file.html` to check).
+     - **Prevention**: Enable `LOAD_DOCS_ON_STARTUP=true` in `.env` to auto-load on agent restart, but start with a small subset to debug.
+
+2. **Poor Retrieval Quality**:
+   - **Symptoms**: Agents return vague or irrelevant chunks from Substack posts (e.g., missing context in regime aggregations or altcoin narratives).
+   - **Causes**: Default chunking doesn't suit long-form content; low relevance scores (<0.7 threshold from retrieval flow).
+   - **Fixes**:
+     - Adjust chunking for better overlap and size—Substack posts benefit from larger chunks to capture narratives:
+       ```env
+       # In .env
+       EMBEDDING_CHUNK_SIZE=800  # Increase for fuller sections (default 500)
+       EMBEDDING_OVERLAP_SIZE=200  # More overlap preserves historical links (default 100)
+       ```
+       Restart ElizaOS and re-ingest a test post (use API refresh endpoint).
+     - If using contextual embeddings (CTX_KNOWLEDGE_ENABLED=true), verify enrichment in logs— it boosts accuracy by 50% for interconnected insights.
+     - Test Retrieval: Query via API (`GET /knowledge/search?q="btc regime aggregation"`) and check scores/ranks. If low, add metadata filters (e.g., tags) during upload to aid the "Filtering & Ranking" step.
+     - **Swarm Tip**: For concurrent interactions, ensure shared Postgres (VS/DS) indexes are optimized (from scaling considerations)—query performance ties to your persistent state.
+
+3. **Rate Limiting Errors**:
+   - **Symptoms**: API calls (e.g., OpenRouter embeddings) fail during batch ingestion of hundreds of posts, with errors like "429 Too Many Requests."
+   - **Causes**: High concurrency or token bursts (plugin limits: 60 req/min, 150k tokens/min from rate limiting diagram).
+   - **Fixes**:
+     - Implement exponential backoff in your upload script—wrap the `addKnowledge` call:
+       ```typescript
+       // In your batch upload function
+       async function withRetry(fn: () => Promise<any>, maxRetries = 3): Promise<any> {
+         for (let i = 0; i < maxRetries; i++) {
+           try {
+             return await fn();
+           } catch (error) {
+             if (i === maxRetries - 1) throw error;
+             await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));  // Sleep
+           }
+         }
+       }
+
+       // Usage in loop
+       await withRetry(() => knowledgeService.addKnowledge({ /* params */ }));
+       ```
+       This aligns with the "Error Handling Flow" (retry 3x for network/rate issues).
+     - Batch in smaller groups (e.g., 30 files, per concurrency limit diagram) and use OpenRouter caching—reduces costs 90% and avoids limits for multi-chunk posts.
+     - **Provider Tip**: If using Anthropic/Claude, leverage 5-min cache duration; process during off-peak for your us-based setup (current time: Jan 16, 2026, 06:26 PM CST).
+
+4. **Debug Logging**:
+   - **Enable**: Always start here for any issue—set in `.env`:
+     ```env
+     LOG_LEVEL=debug
+     ```
+     Restart: `elizaos start`. Logs will detail:
+       - Processing: Text extraction, chunking progress, enrichment (if CTX enabled).
+       - Retrieval: Cache hits/misses, token usage, error traces.
+       - Examples: "CTX enrichment ENABLED", cache rates (aim for 90%), or dedupe skips.
+   - **For Your Use Case**: Monitor during ingestion (e.g., "Processing Complete" per file) and queries (e.g., "Injected into Agent Context"). If issues persist, check "Monitoring" from contextual embeddings docs for token breakdowns.
+
+#### Summary: Aligning with Plugin Features
+As the docs summarize, the Knowledge Plugin excels at turning your Substack exports into a robust RAG base:
+- **Processes Documents**: Auto-extracts from HTML (with PDF/Word support if mixed exports).
+- **Manages Deduplication**: Content hashes prevent re-processing overlapping posts.
+- **Chunks Intelligently**: Configurable for your archival depth.
+- **Retrieves Semantically**: Vector search with metadata tracking enhances agent responses.
+- **Enhances Conversations**: Auto-injects knowledge for Slack-native feedback.
+- **Tracks Usage**: Logs RAG metadata in conversation history—useful for auditing BTC signal validations.
+
+This troubleshooting ensures reliability in your evolving swarm—modular for extensions like character knowledge or REST API management. If you encounter a specific error (e.g., share logs), we can dive deeper. For more docs, consider using tools to fetch llms.txt if needed, but this covers the essentials for your North Star.
