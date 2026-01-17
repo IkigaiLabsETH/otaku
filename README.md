@@ -49,6 +49,109 @@ Measured by realized APR differential and win rate on hold vs. assignment.
 
 Small, validated edges — rolled relentlessly — compound fastest.
 
+## Knowledge folder to provide logic and context
+
+your-project/
+├── README.md                       # Project overview — explains structure, how to use for elizaOS queries, contribution guidelines, and quick-start for agents
+├── docs/                           # Enhanced auto-load folder: now with index.md in each subdir for quick summaries + cross-links
+│   ├── index.md                    # Top-level docs index — lists all subdirs, key files, and search tips for retrieval
+│   ├── core-methodologies/         # Prioritized hub: add validation scripts + examples for real-time application
+│   │   ├── index.md                # Summarizes frameworks, with quick-reference tables for strike rules
+│   │   ├── strike-optimization-master.html
+│   │   ├── polymarket-for-strike-selection.html
+│   │   ├── vol-regime-strike-rules.html
+│   │   ├── monte-carlo-scenario-templates.html
+│   │   ├── assignment-regret-analysis.html
+│   │   └── strike-validation-examples.md   # Worked examples (e.g., $HYPE Jan 2026 calc) for training/eval
+│   ├── asset-specific/             # Scalable: add templates for new assets
+│   │   ├── index.md                # Asset overview table (e.g., current spot, IV, key risks) — updated to include ETH/SOL summaries
+│   │   ├── hype/                   # Expanded: add projections subdir for forward-looking models
+│   │   │   ├── index.md            # $HYPE quick facts + links to latest snapshots
+│   │   │   ├── hype-wheel-history-2025-2026.html
+│   │   │   ├── hype-jan-2026-polymarket-insights.html
+│   │   │   ├── hype-onchain-fundamentals.html
+│   │   │   ├── hype-unlock-overhang-analysis.html
+│   │   │   └── projections/        # Model outputs (e.g., DCF, vol forecasts)
+│   │   │       └── hype-2026-price-models.md
+│   │   ├── btc/
+│   │   │   ├── index.md            # BTC-specific regime quick-ref
+│   │   │   ├── 2023-btc-regime-analysis.html
+│   │   │   └── 2024-btc-options-optimization.html
+│   │   ├── eth/                    # NEW: Dedicated $ETH folder — mirrors hype/ structure for consistency
+│   │   │   ├── index.md            # ETH quick facts + links to latest snapshots
+│   │   │   ├── eth-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
+│   │   │   ├── eth-jan-2026-polymarket-insights.html
+│   │   │   ├── eth-onchain-fundamentals.html      # e.g., Gas fees, staking yields, L2 activity
+│   │   │   ├── eth-unlock-overhang-analysis.html  # e.g., Staking unlocks, EIP impacts
+│   │   │   └── projections/
+│   │   │       └── eth-2026-price-models.md       # e.g., Layer-1 dominance scenarios
+│   │   ├── sol/                    # NEW: Dedicated $SOL folder — mirrors hype/ structure for consistency
+│   │   │   ├── index.md            # SOL quick facts + links to latest snapshots
+│   │   │   ├── sol-wheel-history-2025-2026.html   # Placeholder: Historical price/vol data
+│   │   │   ├── sol-jan-2026-polymarket-insights.html
+│   │   │   ├── sol-onchain-fundamentals.html      # e.g., TPS, validator decentralization, memecoin ecosystem
+│   │   │   ├── sol-unlock-overhang-analysis.html  # e.g., Token unlocks, network upgrades
+│   │   │   └── projections/
+│   │   │       └── sol-2026-price-models.md       # e.g., High-throughput narrative scenarios
+│   │   ├── other-alts/             # Ready for expansion: add subdirs per alt (e.g., gmx/, pendle/)
+│   │   │   └── README.md           # Placeholder: instructions for adding new alts
+│   │   └── templates/              # Reusable asset doc templates (e.g., onchain-fundamentals-template.md)
+│   ├── regimes/
+│   │   ├── index.md                # Regime matrix table (cross-referencing assets + macros) — updated to include ETH/SOL columns
+│   │   ├── btc-regimes/
+│   │   ├── altcoin-narratives/
+│   │   │   ├── defi-yields-narrative.html
+│   │   │   └── altcoin-macro-overlays.html
+│   │   └── macro-overlays/
+│   │       ├── global-macro-impact.html
+│   │       └── economic-regime-shifts.html
+│   └── historical/                 # Archive: add purge script notes for old files
+│       ├── index.md                # Chronological timeline of archived docs
+│       └── README.md
+├── data-snapshots/                 # Enhanced: add automation notes + more sources (e.g., options chain pulls)
+│   ├── README.md                   # Explains snapshot format, update cadence, and how elizaOS agents consume them — updated for ETH/SOL pulls
+│   ├── polymarket/
+│   │   ├── hype-january-2026-ladder-2026-01-17.md
+│   │   ├── hype-2026-targets-2026-01-17.md
+│   │   ├── eth-january-2026-ladder-2026-01-17.md  # NEW: ETH-specific Polymarket data
+│   │   └── sol-2026-targets-2026-01-17.md         # NEW: SOL-specific Polymarket data
+│   ├── onchain/
+│   │   ├── hype-metrics-2026-01-17.json
+│   │   ├── eth-metrics-2026-01-17.json            # NEW: ETH onchain metrics (e.g., TVL, active addresses)
+│   │   └── sol-metrics-2026-01-17.json            # NEW: SOL onchain metrics (e.g., Saga phone integrations, DEX vol)
+│   ├── sentiment/
+│   │   ├── x-hype-sentiment-snapshot-2026-01-17.md
+│   │   ├── x-eth-sentiment-snapshot-2026-01-17.md # NEW: ETH X sentiment pulls
+│   │   └── x-sol-sentiment-snapshot-2026-01-17.md # NEW: SOL X sentiment pulls
+│   ├── options-chains/             # Expanded to include ETH/SOL chains
+│   │   ├── hype-options-2026-01-17.csv
+│   │   ├── eth-options-2026-01-17.csv             # NEW: ETH options data
+│   │   └── sol-options-2026-01-17.csv             # NEW: SOL options data
+│   └── external/
+│       └── macro-indicators-2026-01-17.json       # e.g., CPI, rates from reliable sources
+├── scripts/                        # Automation hub — Python scripts for dynamic updates/integration with tools
+│   ├── update-snapshots.py         # Cron-friendly: pulls Polymarket, onchain, sentiment via web_search/x_keyword_search — updated to handle ETH/SOL
+│   ├── strike-optimizer.py         # Interactive: takes spot/IV inputs, outputs via core-methodologies — add ETH/SOL examples
+│   ├── regime-detector.py          # Analyzes current data vs historical regimes using code_execution (e.g., numpy/scipy) — extend for ETH/SOL regimes
+│   └── validate-docs.py            # Checks for outdated refs, suggests updates
+├── .env
+│   OPENROUTER_API_KEY=your-key
+│   LOAD_DOCS_ON_STARTUP=true
+│   CTX_KNOWLEDGE_ENABLED=true
+│   PRIORITIZE_CORE_METHODOLOGIES=true
+│   MAX_CONTEXT_TOKENS=128k
+│   AUTO_UPDATE_SNAPSHOTS=true      # Flag to trigger scripts/ on startup or via cron
+│   TOOL_INTEGRATION_ENABLED=true   # Enables agents to call web_search, x_semantic_search, etc., for real-time enrichment
+│   └── LOG_LEVEL=DEBUG             # For auditing retrieval hits/misses
+└── src/
+    ├── characters/                 # Agents: add specialized ones for elizaOS workflows
+    │   ├── strike-optimizer.py     # Persona that chains core-methodologies + data-snapshots for live recs — update for ETH/SOL optimization
+    │   ├── regime-analyst.py       # Detects shifts, pulls from regimes/ + external data — include ETH/SOL detection
+    │   └── sentiment-monitor.py    # Uses x_semantic_search for real-time hype tracking — add ETH/SOL monitoring
+    └── retrieval/                  # Custom: add embeddings config for better semantic search
+        ├── custom-embeddings.py    # Script to fine-tune retrieval weights (e.g., boost asset-specific on queries)
+        └── query-enhancer.py       # Pre-processes user queries to include context (e.g., current date, asset)
+
 ## Enhancing the Ikigai Swarm with a Human Feedback Loop
 
 Hey @ikigailabsETH—love that you're drawing from your 2015 Slack-based AI training days. That HITL (human-in-the-loop) setup was ahead of its time, especially with ML iteratively improving from simple "happy/not happy" signals. It's a perfect fit for the swarm's philosophy: small edges (like feedback-driven refinements) compound into relentless alpha.
